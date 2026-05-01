@@ -104,3 +104,4 @@ python -m filter_pattern.cli combine-report \
   --out "$COMBINED_OUT"
 
 echo "Done: $COMBINED_OUT"
+
