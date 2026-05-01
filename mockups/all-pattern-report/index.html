@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>All Pattern Scanner Report Mockup</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #111827;
+      --muted: #64748b;
+      --line: #d8dee7;
+      --line-strong: #aeb8c7;
+      --blue: #2563eb;
+      --green: #15803d;
+      --red: #b91c1c;
+      --amber: #b45309;
+      --violet: #6d28d9;
+      --cyan: #0e7490;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 264px minmax(0, 1fr);
+    }
+
+    aside {
+      background: #101827;
+      color: #e5e7eb;
+      padding: 22px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      border-right: 1px solid #0f172a;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border: 2px solid #93c5fd;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #bfdbfe;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .brand strong { display: block; font-size: 15px; }
+    .brand span { color: #9ca3af; font-size: 12px; }
+
+    .side-section {
+      border-top: 1px solid rgba(229, 231, 235, 0.14);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+
+    .side-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .nav-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 7px;
+      color: #d1d5db;
+      font-size: 13px;
+      margin: 4px 0;
+      background: transparent;
+    }
+
+    .nav-pill.active {
+      background: #1e293b;
+      color: #ffffff;
+      outline: 1px solid rgba(147, 197, 253, 0.25);
+    }
+
+    .count {
+      font-size: 11px;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 7px;
+      border-radius: 999px;
+    }
+
+    main {
+      min-width: 0;
+      padding: 22px 28px 40px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .run-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 320px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: #334155;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      min-height: 78px;
+    }
+
+    .stat small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .stat .delta {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--green);
+    }
+
+    .filters {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.6fr) repeat(5, minmax(130px, 1fr));
+      gap: 10px;
+      align-items: end;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line-strong);
+      background: #ffffff;
+      color: var(--ink);
+      border-radius: 7px;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      padding: 3px;
+      background: #eef2f7;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+
+    .segmented button {
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #475569;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .segmented button.active {
+      background: #ffffff;
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 6px 0 10px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .section-title span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .result-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .result {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      min-height: 230px;
+    }
+
+    .chart {
+      background: #f8fafc;
+      border-right: 1px solid var(--line);
+      padding: 12px;
+      display: grid;
+      align-content: center;
+    }
+
+    .chart svg {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      display: block;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+    }
+
+    .detail {
+      padding: 14px;
+      min-width: 0;
+    }
+
+    .card-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+
+    .symbol {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .score {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      border: 5px solid #22c55e;
+      font-weight: 800;
+      font-size: 17px;
+      background: #f0fdf4;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 11px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 7px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+
+    .b-vcp { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+    .b-pa { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+    .b-wait { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+    .b-trigger { background: #ecfdf5; color: #15803d; border-color: #bbf7d0; }
+    .b-short { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .b-long { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 11px;
+    }
+
+    .metric {
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      padding: 8px;
+      background: #fbfdff;
+      min-height: 58px;
+    }
+
+    .metric small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 5px;
+    }
+
+    .metric strong {
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .reasons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+      color: #334155;
+    }
+
+    .reasons ul {
+      margin: 0;
+      padding: 9px 9px 9px 23px;
+      border-radius: 7px;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+    }
+
+    .side-panel {
+      display: grid;
+      gap: 12px;
+      position: sticky;
+      top: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+    }
+
+    .setup-row, .coverage-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 30px;
+      font-size: 12px;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .setup-row:last-child, .coverage-row:last-child { border-bottom: 0; }
+
+    .bar {
+      height: 7px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--blue);
+      border-radius: inherit;
+    }
+
+    .coverage-row strong {
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1180px) {
+      .app { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      .content-grid { grid-template-columns: 1fr; }
+      .side-panel { position: static; }
+      .stats { grid-template-columns: repeat(3, 1fr); }
+      .filter-grid { grid-template-columns: repeat(3, 1fr); }
+      .result { grid-template-columns: 1fr; }
+      .chart { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+
+    @media (max-width: 760px) {
+      main { padding: 16px; }
+      .topbar { grid-template-columns: 1fr; }
+      .run-meta { justify-content: flex-start; min-width: 0; }
+      .stats, .filter-grid, .metrics, .reasons { grid-template-columns: 1fr; }
+      .segmented { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="mark">FP</div>
+        <div>
+          <strong>Filter Pattern</strong>
+          <span>D1 multi-setup scanner</span>
+        </div>
+      </div>
+
+      <div class="side-section">
+        <div class="side-label">Pattern Groups</div>
+        <div class="nav-pill active"><span>All Qualified</span><span class="count">86</span></div>
+        <div class="nav-pill"><span>Original VCP</span><span class="count">7</span></div>
+        <div class="nav-pill"><span>Nhật Hoài VCP</span><span class="count">11</span></div>
+        <div class="nav-pill"><span>Bob Volman Setups</span><span class="count">35</span></div>
+        <div class="nav-pill"><span>Pivot EMA21 Compression</span><span class="count">33</span></div>
+      </div>
+
+      <div class="side-section">
+        <div class="side-label">Bob Volman</div>
+        <div class="nav-pill"><span>ARB</span><span class="count">4</span></div>
+        <div class="nav-pill"><span>DD</span><span class="count">3</span></div>
+        <div class="nav-pill"><span>SB</span><span class="count">8</span></div>
+        <div class="nav-pill"><span>BB</span><span class="count">9</span></div>
+        <div class="nav-pill"><span>RB</span><span class="count">5</span></div>
+        <div class="nav-pill"><span>IRB</span><span class="count">6</span></div>
+      </div>
+
+      <div class="side-section">
+        <div class="side-label">Markets</div>
+        <div class="nav-pill"><span>US Stock</span><span class="count">24</span></div>
+        <div class="nav-pill"><span>Vietnam Stock</span><span class="count">31</span></div>
+        <div class="nav-pill"><span>Forex</span><span class="count">16</span></div>
+        <div class="nav-pill"><span>Crypto</span><span class="count">10</span></div>
+        <div class="nav-pill"><span>Commodity</span><span class="count">5</span></div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>All Pattern Scanner Report</h1>
+          <p class="subtitle">D1 results grouped by setup, market, status, direction, score, and proof chart.</p>
+        </div>
+        <div class="run-meta">
+          <span class="tag">Run: 2026-05-01 22:40</span>
+          <span class="tag">Universe: Broad</span>
+          <span class="tag">Data: Yahoo / CSV-ready</span>
+          <span class="tag">Broker: Exness filter optional</span>
+        </div>
+      </div>
+
+      <section class="stats">
+        <div class="stat"><small>Scanned</small><strong>1,033</strong><div class="delta">all markets</div></div>
+        <div class="stat"><small>Qualified</small><strong>86</strong><div class="delta">ready/watch</div></div>
+        <div class="stat"><small>Triggered</small><strong>24</strong><div class="delta">fresh break</div></div>
+        <div class="stat"><small>Waiting</small><strong>62</strong><div class="delta">near trigger</div></div>
+        <div class="stat"><small>Avg Score</small><strong>91</strong><div class="delta">strict filters</div></div>
+        <div class="stat"><small>Data Errors</small><strong>34</strong><div class="delta" style="color:var(--amber)">coverage list</div></div>
+      </section>
+
+      <section class="filters">
+        <div class="filter-grid">
+          <div>
+            <label>Search</label>
+            <input value="" placeholder="Symbol, market, setup, TradingView id">
+          </div>
+          <div>
+            <label>Market</label>
+            <select><option>All markets</option><option>US stock</option><option>Vietnam stock</option><option>Forex</option><option>Crypto</option><option>Commodity</option></select>
+          </div>
+          <div>
+            <label>Setup</label>
+            <select><option>All setups</option><option>Original VCP</option><option>NH VCP</option><option>ARB</option><option>DD</option><option>SB</option><option>BB</option><option>RB</option><option>IRB</option><option>Compression</option></select>
+          </div>
+          <div>
+            <label>Status</label>
+            <select><option>Waiting + Triggered</option><option>WAITING</option><option>TRIGGERED</option><option>NEAR_PIVOT</option><option>WATCH</option></select>
+          </div>
+          <div>
+            <label>Direction</label>
+            <select><option>Long + Short</option><option>Long</option><option>Short</option></select>
+          </div>
+          <div>
+            <label>Score</label>
+            <select><option>80+</option><option>85+</option><option>90+</option><option>95+</option></select>
+          </div>
+        </div>
+        <div class="segmented">
+          <button class="active">Qualified</button>
+          <button>Near Match</button>
+          <button>Rejected</button>
+          <button>Coverage</button>
+        </div>
+      </section>
+
+      <div class="content-grid">
+        <section>
+          <div class="section-title">
+            <h2>Ranked Candidates</h2>
+            <span>sorted by score, freshness, distance to trigger</span>
+          </div>
+
+          <div class="result-list">
+            <article class="result">
+              <div class="chart">
+                <svg viewBox="0 0 520 320" role="img" aria-label="Sample compression chart">
+                  <defs>
+                    <pattern id="grid" width="40" height="32" patternUnits="userSpaceOnUse">
+                      <path d="M 40 0 L 0 0 0 32" fill="none" stroke="#e5e7eb" stroke-width="1"/>
+                    </pattern>
+                  </defs>
+                  <rect width="520" height="320" fill="url(#grid)"/>
+                  <path d="M34 248 C95 236 128 251 182 224 S280 176 334 172 S428 168 486 150" fill="none" stroke="#7c3aed" stroke-width="3"/>
+                  <path d="M304 214 L484 138" stroke="#111827" stroke-width="4" stroke-dasharray="10 8"/>
+                  <rect x="372" y="112" width="118" height="128" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 6" opacity=".78"/>
+                  <line x1="0" y1="158" x2="520" y2="158" stroke="#16a34a" stroke-width="3"/>
+                  <line x1="0" y1="132" x2="520" y2="132" stroke="#111827" stroke-width="2" stroke-dasharray="7 6"/>
+                  <line x1="0" y1="96" x2="520" y2="96" stroke="#dc2626" stroke-width="2" stroke-dasharray="8 6"/>
+                  <g stroke-width="2">
+                    <line x1="374" y1="210" x2="374" y2="178" stroke="#16a34a"/><rect x="368" y="186" width="12" height="17" fill="#16a34a"/>
+                    <line x1="396" y1="218" x2="396" y2="174" stroke="#dc2626"/><rect x="390" y="181" width="12" height="25" fill="#dc2626"/>
+                    <line x1="418" y1="204" x2="418" y2="166" stroke="#16a34a"/><rect x="412" y="178" width="12" height="18" fill="#16a34a"/>
+                    <line x1="440" y1="192" x2="440" y2="154" stroke="#16a34a"/><rect x="434" y="165" width="12" height="21" fill="#16a34a"/>
+                    <line x1="462" y1="178" x2="462" y2="140" stroke="#16a34a"/><rect x="456" y="148" width="12" height="24" fill="#16a34a"/>
+                  </g>
+                  <text x="386" y="122" fill="#b45309" font-size="14" font-weight="700">squeeze</text>
+                </svg>
+              </div>
+              <div class="detail">
+                <div class="card-head">
+                  <div>
+                    <div class="symbol">XOM</div>
+                    <div class="meta">US stock · NYSE:XOM · D1 · chart proof included</div>
+                  </div>
+                  <div class="score">100</div>
+                </div>
+                <div class="badges">
+                  <span class="badge b-pa">Compression</span>
+                  <span class="badge b-short">Short</span>
+                  <span class="badge b-wait">WAITING</span>
+                  <span class="badge b-pa">Diagonal pivot</span>
+                </div>
+                <div class="metrics">
+                  <div class="metric"><small>Trigger</small><strong>150.93</strong></div>
+                  <div class="metric"><small>Current</small><strong>154.33</strong></div>
+                  <div class="metric"><small>Distance</small><strong>2.25%</strong></div>
+                  <div class="metric"><small>Stop</small><strong>157.75</strong></div>
+                </div>
+                <div class="reasons">
+                  <ul>
+                    <li>Pivot line has two clear reactions.</li>
+                    <li>EMA21 is the opposite wall.</li>
+                    <li>Candles stay inside the squeeze zone.</li>
+                  </ul>
+                  <ul>
+                    <li>Distance is under 1 ATR.</li>
+                    <li>Stop is above the zone.</li>
+                    <li>Manual review before entry.</li>
+                  </ul>
+                </div>
+              </div>
+            </article>
+
+            <article class="result">
+              <div class="chart">
+                <svg viewBox="0 0 520 320" role="img" aria-label="Sample VCP chart">
+                  <rect width="520" height="320" fill="#fff"/>
+                  <path d="M0 280 H520 M0 224 H520 M0 168 H520 M0 112 H520 M0 56 H520" stroke="#e5e7eb"/>
+                  <path d="M34 228 C74 176 102 108 146 88 C184 70 206 138 240 158 C286 184 310 124 344 112 C384 98 404 128 430 132 C452 136 466 118 486 102" fill="none" stroke="#111827" stroke-width="3"/>
+                  <rect x="136" y="80" width="82" height="92" fill="#fde68a" opacity=".35"/>
+                  <rect x="254" y="106" width="64" height="56" fill="#fde68a" opacity=".35"/>
+                  <rect x="368" y="118" width="50" height="28" fill="#fde68a" opacity=".45"/>
+                  <line x1="0" y1="96" x2="520" y2="96" stroke="#2563eb" stroke-width="3"/>
+                  <rect x="418" y="96" width="70" height="34" fill="#dbeafe" opacity=".55"/>
+                  <text x="145" y="190" fill="#92400e" font-size="13" font-weight="700">C1 24%</text>
+                  <text x="260" y="180" fill="#92400e" font-size="13" font-weight="700">C2 12%</text>
+                  <text x="370" y="163" fill="#92400e" font-size="13" font-weight="700">C3 5%</text>
+                </svg>
+              </div>
+              <div class="detail">
+                <div class="card-head">
+                  <div>
+                    <div class="symbol">BTCUSDT</div>
+                    <div class="meta">Crypto · BINANCE:BTCUSDT · D1 · separate NH VCP logic</div>
+                  </div>
+                  <div class="score">94</div>
+                </div>
+                <div class="badges">
+                  <span class="badge b-vcp">Nhật Hoài VCP</span>
+                  <span class="badge b-long">Long</span>
+                  <span class="badge b-trigger">TRIGGERED</span>
+                </div>
+                <div class="metrics">
+                  <div class="metric"><small>Pivot</small><strong>71,946</strong></div>
+                  <div class="metric"><small>Current</small><strong>72,380</strong></div>
+                  <div class="metric"><small>Volume</small><strong>1.42x</strong></div>
+                  <div class="metric"><small>Stop</small><strong>68,420</strong></div>
+                </div>
+                <div class="reasons">
+                  <ul>
+                    <li>Prior uptrend exists.</li>
+                    <li>Contractions shrink clearly.</li>
+                    <li>Right side is tight near pivot.</li>
+                  </ul>
+                  <ul>
+                    <li>Breakout is fresh.</li>
+                    <li>Volume confirms.</li>
+                    <li>Stop below final contraction.</li>
+                  </ul>
+                </div>
+              </div>
+            </article>
+
+            <article class="result">
+              <div class="chart">
+                <svg viewBox="0 0 520 320" role="img" aria-label="Sample ARB chart">
+                  <rect width="520" height="320" fill="#fff"/>
+                  <path d="M0 280 H520 M0 224 H520 M0 168 H520 M0 112 H520 M0 56 H520" stroke="#e5e7eb"/>
+                  <rect x="32" y="144" width="230" height="90" fill="#f3f4f6" stroke="#111827" stroke-width="2" stroke-dasharray="8 6" opacity=".7"/>
+                  <line x1="32" y1="144" x2="486" y2="144" stroke="#111827" stroke-width="2" stroke-dasharray="8 6"/>
+                  <path d="M42 198 C90 214 132 170 170 198 S236 180 262 144 C292 92 310 88 324 100 C348 116 374 118 404 118 C432 118 452 106 478 82" fill="none" stroke="#111827" stroke-width="3"/>
+                  <rect x="320" y="96" width="100" height="48" fill="#dcfce7" stroke="#16a34a" stroke-width="2" stroke-dasharray="8 6" opacity=".65"/>
+                  <line x1="0" y1="92" x2="520" y2="92" stroke="#16a34a" stroke-width="3"/>
+                  <text x="54" y="164" fill="#111827" font-size="13" font-weight="700">old range</text>
+                  <text x="330" y="112" fill="#15803d" font-size="13" font-weight="700">build-up</text>
+                </svg>
+              </div>
+              <div class="detail">
+                <div class="card-head">
+                  <div>
+                    <div class="symbol">CTG</div>
+                    <div class="meta">Vietnam stock · HOSE:CTG · Bob Volman ARB</div>
+                  </div>
+                  <div class="score">88</div>
+                </div>
+                <div class="badges">
+                  <span class="badge b-pa">ARB</span>
+                  <span class="badge b-long">Long</span>
+                  <span class="badge b-wait">WAITING</span>
+                  <span class="badge b-pa">Type 1 build-up</span>
+                </div>
+                <div class="metrics">
+                  <div class="metric"><small>Old High</small><strong>35,100</strong></div>
+                  <div class="metric"><small>Trigger</small><strong>35,450</strong></div>
+                  <div class="metric"><small>Current</small><strong>35,000</strong></div>
+                  <div class="metric"><small>Stop</small><strong>34,400</strong></div>
+                </div>
+                <div class="reasons">
+                  <ul>
+                    <li>Old range is visible.</li>
+                    <li>First breakout already happened.</li>
+                    <li>New build-up sits near boundary.</li>
+                  </ul>
+                  <ul>
+                    <li>EMA21 supports direction.</li>
+                    <li>Second trigger is clear.</li>
+                    <li>Not the first breakout entry.</li>
+                  </ul>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <aside class="side-panel" aria-label="Report side panels">
+          <section class="panel">
+            <h3>Setup Distribution</h3>
+            <div class="setup-row"><div>Compression<div class="bar"><span style="width: 78%"></span></div></div><strong>33</strong></div>
+            <div class="setup-row"><div>Nhật Hoài VCP<div class="bar"><span style="width: 40%"></span></div></div><strong>11</strong></div>
+            <div class="setup-row"><div>BB<div class="bar"><span style="width: 34%"></span></div></div><strong>9</strong></div>
+            <div class="setup-row"><div>SB<div class="bar"><span style="width: 30%"></span></div></div><strong>8</strong></div>
+            <div class="setup-row"><div>Original VCP<div class="bar"><span style="width: 26%"></span></div></div><strong>7</strong></div>
+            <div class="setup-row"><div>IRB / RB / ARB / DD<div class="bar"><span style="width: 48%"></span></div></div><strong>18</strong></div>
+          </section>
+
+          <section class="panel">
+            <h3>Market Coverage</h3>
+            <div class="coverage-row"><span>US stock</span><strong>506 scanned</strong></div>
+            <div class="coverage-row"><span>Vietnam stock</span><strong>312 scanned</strong></div>
+            <div class="coverage-row"><span>Forex</span><strong>81 scanned</strong></div>
+            <div class="coverage-row"><span>Crypto</span><strong>67 scanned</strong></div>
+            <div class="coverage-row"><span>Commodity</span><strong>34 scanned</strong></div>
+            <div class="coverage-row"><span>Commodity ETF</span><strong>33 scanned</strong></div>
+          </section>
+
+          <section class="panel">
+            <h3>Priority Queue</h3>
+            <div class="coverage-row"><span>Fresh triggered</span><strong>24</strong></div>
+            <div class="coverage-row"><span>Near trigger below 1%</span><strong>19</strong></div>
+            <div class="coverage-row"><span>Exness supported</span><strong>51</strong></div>
+            <div class="coverage-row"><span>Needs manual chart check</span><strong>86</strong></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

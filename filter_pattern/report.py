@@ -1,0 +1,1263 @@
+from __future__ import annotations
+
+import json
+from collections import defaultdict
+from datetime import datetime, timezone
+from html import escape
+from os.path import relpath
+from pathlib import Path
+from urllib.parse import quote
+
+from .exness import is_exness_supported_symbol
+
+
+def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:
+    results_file = Path(results_path)
+    output_file = Path(output_path)
+    payload = json.loads(results_file.read_text())
+    return write_html_payload(payload, output_file)
+
+
+def apply_watchlist_changes(payload: dict, previous_results_path: str | Path | None) -> dict:
+    if previous_results_path is None:
+        _mark_first_run(payload)
+        return payload
+
+    previous_path = Path(previous_results_path)
+    if not previous_path.exists():
+        _mark_first_run(payload)
+        return payload
+
+    previous_payload = json.loads(previous_path.read_text())
+    previous_candidates = previous_payload.get("candidates", [])
+    previous_by_key = {_watchlist_key(item): item for item in previous_candidates}
+    current_keys: set[tuple[str, ...]] = set()
+    counts: dict[str, int] = defaultdict(int)
+
+    for candidate in payload.get("candidates", []):
+        key = _watchlist_key(candidate)
+        current_keys.add(key)
+        previous = previous_by_key.get(key)
+        change = _candidate_change(candidate, previous)
+        candidate["watchlist_change"] = change
+        if previous is not None:
+            candidate["previous_score"] = previous.get("evidence", {}).get("score")
+            candidate["previous_status"] = previous.get("evidence", {}).get("status")
+        counts[change] += 1
+
+    dropped = []
+    for key, previous in previous_by_key.items():
+        if key in current_keys:
+            continue
+        dropped_item = _dropped_watchlist_item(previous)
+        dropped.append(dropped_item)
+        counts["DROPPED"] += 1
+
+    dropped.sort(key=lambda item: (str(item.get("timeframe", "")), str(item.get("symbol", "")), str(item.get("setup", ""))))
+    payload["watchlist_dropped"] = dropped
+    payload["watchlist_changes"] = {
+        "previous_results": str(previous_path),
+        "previous_available": True,
+        "counts": dict(sorted(counts.items())),
+    }
+    return payload
+
+
+def write_combined_html_report(results_paths: list[str | Path], output_path: str | Path) -> Path:
+    payloads = []
+    for results_path in results_paths:
+        results_file = Path(results_path)
+        if not results_file.exists():
+            raise FileNotFoundError(f"Results file not found: {results_file}")
+        payloads.append(json.loads(results_file.read_text()))
+    if not payloads:
+        raise ValueError("at least one results.json input is required")
+    return write_html_payload(_combined_payload(payloads, results_paths), output_path)
+
+
+def write_html_payload(payload: dict, output_path: str | Path) -> Path:
+    output_file = Path(output_path)
+    candidates = payload.get("candidates", [])
+    near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
+    not_configured = _not_configured_rows(payload.get("rejected", []))
+    dropped = payload.get("watchlist_dropped", [])
+    watchlist_changes = payload.get("watchlist_changes", {})
+    change_counts = watchlist_changes.get("counts", {})
+    scanned_by_market = payload.get("scanned_symbols_by_market") or _scanned_symbols_by_market(
+        candidates + payload.get("rejected", [])
+    )
+    data_errors_by_market = payload.get("data_errors_by_market") or _data_errors_by_market(payload.get("rejected", []))
+    markets = sorted(scanned_by_market)
+    market_options = "\n".join(f'<option value="{escape(market)}">{escape(market)}</option>' for market in markets)
+    technique_options = "\n".join(
+        f'<option value="{escape(technique_name)}">{escape(technique_name)}</option>'
+        for technique_name in _techniques_in_rows(candidates + near_matches + not_configured + payload.get("rejected", []))
+    )
+    setup_options = "\n".join(
+        f'<option value="{escape(setup_name)}">{escape(setup_name.upper())}</option>'
+        for setup_name in _setups_in_rows(candidates + near_matches + not_configured + payload.get("rejected", []))
+    )
+    timeframe_options = "\n".join(
+        f'<option value="{escape(timeframe)}">{escape(timeframe)}</option>'
+        for timeframe in _timeframes_in_rows(candidates + near_matches + not_configured + payload.get("rejected", []), payload)
+    )
+    change_options = "\n".join(
+        f'<option value="{escape(change)}">{escape(_change_label(change))}</option>'
+        for change in _changes_in_rows(candidates, dropped)
+    )
+
+    rows = "\n".join(_candidate_card(candidate, output_file.parent) for candidate in candidates)
+    setup = payload.get("config", {}).get("setup", "all")
+    timeframe = str(payload.get("timeframe") or payload.get("config", {}).get("timeframe", "D1"))
+    if not rows:
+        rows = (
+            f'<section class="empty">No qualified {escape(timeframe)} {escape(str(payload.get("config", {}).get("technique", "vcp")))} '
+            f'candidate(s) found.</section>'
+        )
+    near_rows = "\n".join(_near_match_card(candidate, output_file.parent) for candidate in near_matches)
+    if near_rows:
+        near_rows = f"""
+    <h2>Near Matches</h2>
+    <p class="section-note">These are not qualified entry setups. They passed many checks but failed at least one strict VCP rule.</p>
+    {near_rows}
+"""
+    not_configured_rows = "\n".join(_not_configured_card(item) for item in not_configured)
+    if not_configured_rows:
+        not_configured_rows = f"""
+    <h2>Not Configured</h2>
+    <p class="section-note">These setup buckets were evaluated as placeholders. They are shown so setup filtering is visible before exact rules are implemented.</p>
+    {not_configured_rows}
+"""
+    coverage_rows = _coverage_section(scanned_by_market, data_errors_by_market)
+    dropped_rows = "\n".join(_dropped_card(item) for item in dropped)
+    if dropped_rows:
+        dropped_rows = f"""
+    <h2>Dropped Since Last Run</h2>
+    <p class="section-note">These were qualified in the previous run but are no longer on the active watchlist.</p>
+    {dropped_rows}
+"""
+    broker_filter = payload.get("config", {}).get("broker_filter", "all")
+    technique = payload.get("config", {}).get("technique", "vcp")
+    data_errors = sum(data_errors_by_market.values())
+    exness_count = _exness_supported_count(candidates)
+    avg_score = _average_candidate_score(candidates)
+    triggered = sum(1 for item in candidates if str(item.get("evidence", {}).get("status", "")).upper() == "TRIGGERED")
+    waiting = sum(
+        1
+        for item in candidates
+        if str(item.get("evidence", {}).get("status", "")).upper() in {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT"}
+    )
+    setup_panel = _setup_distribution_panel(candidates)
+    market_panel = _market_distribution_panel(scanned_by_market, data_errors_by_market)
+    new_count = int(change_counts.get("NEW", 0))
+    dropped_count = len(dropped)
+    changed_count = sum(int(change_counts.get(key, 0)) for key in ("NEW", "TRIGGERED", "IMPROVED", "WEAKER", "STATUS_CHANGED"))
+
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(timeframe)} Pattern Scanner Report</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --text: #111827;
+      --muted: #64748b;
+      --line: #d8dee7;
+      --line-strong: #aeb8c7;
+      --panel: #ffffff;
+      --bg: #f4f6f8;
+      --accent: #2563eb;
+      --good: #15803d;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }}
+    .app {{
+      min-height: 100vh;
+      display: block;
+    }}
+    aside.nav {{
+      display: none;
+      background: #101827;
+      color: #e5e7eb;
+      padding: 22px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }}
+    .brand {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+    }}
+    .mark {{
+      width: 34px;
+      height: 34px;
+      border: 2px solid #93c5fd;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #bfdbfe;
+      font-weight: 800;
+    }}
+    .brand strong {{ display: block; font-size: 15px; }}
+    .brand span {{ display: block; color: #9ca3af; font-size: 12px; }}
+    .side-section {{
+      border-top: 1px solid rgba(229, 231, 235, 0.14);
+      padding-top: 16px;
+      margin-top: 16px;
+    }}
+    .side-label {{
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }}
+    .nav-pill {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 34px;
+      padding: 0 10px;
+      border-radius: 7px;
+      color: #d1d5db;
+      font-size: 13px;
+      margin: 4px 0;
+    }}
+    .nav-pill.active {{
+      background: #1e293b;
+      color: #ffffff;
+      outline: 1px solid rgba(147, 197, 253, 0.25);
+    }}
+    .count {{
+      font-size: 11px;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 7px;
+      border-radius: 999px;
+    }}
+    .page {{
+      min-width: 0;
+      padding: 18px 24px 40px;
+      max-width: 1720px;
+      margin: 0 auto;
+    }}
+    header {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 18px;
+    }}
+    h1 {{ margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }}
+    .summary {{ color: var(--muted); font-size: 13px; }}
+    .run-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: 520px;
+    }}
+    .tag {{
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: #334155;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }}
+    .stats {{
+      display: grid;
+      grid-template-columns: repeat(8, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }}
+    .stat {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+      min-height: 76px;
+    }}
+    .stat strong {{ display: block; font-size: 24px; line-height: 1; margin-bottom: 8px; }}
+    .stat span {{ color: var(--muted); font-size: 13px; }}
+    .toolbar {{
+      display: grid;
+      grid-template-columns: minmax(260px, 2fr) repeat(9, minmax(118px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(244, 246, 248, 0.98);
+      padding: 14px 0 12px;
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }}
+    input, select {{
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      padding: 0 10px;
+      background: #ffffff;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+    }}
+    .filter-count {{
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .layout {{
+      display: block;
+    }}
+    .main-column {{ min-width: 0; }}
+    .side-panel {{
+      display: none;
+      gap: 12px;
+      position: sticky;
+      top: 70px;
+    }}
+    .panel {{
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }}
+    .panel h3 {{ margin: 0 0 12px; font-size: 14px; }}
+    .dist-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 30px;
+      font-size: 12px;
+      border-bottom: 1px solid #eef2f7;
+    }}
+    .dist-row:last-child {{ border-bottom: 0; }}
+    .bar {{
+      height: 7px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }}
+    .bar span {{ display: block; height: 100%; background: var(--accent); border-radius: inherit; }}
+    article {{
+      background: var(--panel);
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      margin-bottom: 18px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }}
+    .card-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }}
+    .symbol {{ font-size: 19px; font-weight: 800; }}
+    .meta, .reasons, .metrics {{ color: var(--muted); font-size: 13px; }}
+    .score {{
+      min-width: 70px;
+      height: 54px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      font-size: 18px;
+      font-weight: 800;
+      text-align: center;
+    }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #eff6ff;
+      color: #1d4ed8;
+      margin-left: 8px;
+    }}
+    .badge.near-badge {{ background: #fffbeb; color: var(--warn); }}
+    .badge.triggered {{ background: #ecfdf5; color: var(--good); }}
+    .badge.waiting {{ background: #fffbeb; color: var(--warn); }}
+    .badge.short {{ background: #fef2f2; color: var(--bad); }}
+    .badge.long {{ background: #eff6ff; color: #1d4ed8; }}
+    .badge.change-new {{ background: #ecfdf5; color: var(--good); }}
+    .badge.change-triggered {{ background: #eff6ff; color: #1d4ed8; }}
+    .badge.change-improved {{ background: #f0fdf4; color: #166534; }}
+    .badge.change-weaker {{ background: #fff7ed; color: #c2410c; }}
+    .badge.change-dropped {{ background: #fef2f2; color: var(--bad); }}
+    .badge.change-unchanged, .badge.change-first_run {{ background: #f8fafc; color: #475569; }}
+    img {{
+      display: block;
+      width: 100%;
+      height: auto;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }}
+    .body {{ padding: 14px 16px; }}
+    .metrics {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(110px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }}
+    .metric {{
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      padding: 8px;
+      background: #fbfdff;
+      min-height: 54px;
+    }}
+    .metric strong {{ display: block; color: var(--text); margin-top: 4px; }}
+    ul {{ margin: 8px 0 0; padding-left: 20px; }}
+    a {{ color: var(--accent); text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+    .empty {{
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      color: var(--muted);
+    }}
+    h2 {{ margin: 36px 0 8px; font-size: 22px; }}
+    .main-column > h2:first-child {{ margin-top: 0; }}
+    .section-note {{ margin: 0 0 16px; color: var(--muted); }}
+    .near {{
+      overflow: hidden;
+    }}
+    .near .failures {{ color: #991b1b; }}
+    details.coverage {{
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }}
+    details.coverage summary {{
+      cursor: pointer;
+      font-weight: 700;
+    }}
+    .coverage-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }}
+    .coverage-market {{
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }}
+    .coverage-market h3 {{
+      margin: 0 0 8px;
+      font-size: 15px;
+    }}
+    .symbols {{
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }}
+    .symbol-chip {{
+      display: inline-block;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 2px 6px;
+      margin: 2px;
+      background: #f9fafb;
+    }}
+    .data-errors {{
+      margin-top: 12px;
+      color: #991b1b;
+      font-size: 13px;
+    }}
+    @media (max-width: 1180px) {{
+      .app {{ grid-template-columns: 1fr; }}
+      aside.nav {{ position: static; height: auto; }}
+      .layout {{ grid-template-columns: 1fr; }}
+      .side-panel {{ position: static; }}
+      .stats {{ grid-template-columns: repeat(4, 1fr); }}
+      .toolbar {{ grid-template-columns: repeat(2, 1fr); }}
+    }}
+    @media (max-width: 720px) {{
+      .page {{ padding: 16px; }}
+      header {{ grid-template-columns: 1fr; }}
+      .run-meta {{ justify-content: flex-start; }}
+      .toolbar {{ grid-template-columns: 1fr; position: static; }}
+      .card-head {{ flex-direction: column; }}
+      .score {{ text-align: left; }}
+      .stats, .metrics {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="nav">
+      <div class="brand"><div class="mark">FP</div><div><strong>Filter Pattern</strong><span>{escape(timeframe)} multi-setup scanner</span></div></div>
+      <div class="side-section">
+        <div class="side-label">Report</div>
+        <div class="nav-pill active"><span>All Qualified</span><span class="count">{len(candidates)}</span></div>
+        <div class="nav-pill"><span>Triggered</span><span class="count">{triggered}</span></div>
+        <div class="nav-pill"><span>Waiting</span><span class="count">{waiting}</span></div>
+      <div class="nav-pill"><span>Near Match</span><span class="count">{len(near_matches)}</span></div>
+      <div class="nav-pill"><span>Exness Supported</span><span class="count">{exness_count}</span></div>
+      </div>
+      <div class="side-section">
+        <div class="side-label">Setups</div>
+        {_setup_nav_items(candidates)}
+      </div>
+      <div class="side-section">
+        <div class="side-label">Markets</div>
+        {_market_nav_items(scanned_by_market)}
+      </div>
+    </aside>
+    <main class="page">
+      <header>
+        <div>
+          <h1>All Pattern Scanner Report</h1>
+          <div class="summary">
+            {escape(timeframe)} Scanner Report · Generated {escape(payload.get("generated_at", ""))} ·
+            Technique: {escape(technique)} · Setup: {escape(setup)}
+          </div>
+        </div>
+        <div class="run-meta">
+          <span class="tag">Universe: {escape(str(payload.get("config", {}).get("universe", "csv")))}</span>
+          <span class="tag">Timeframe: {escape(timeframe)}</span>
+          <span class="tag">Broker: {escape(broker_filter)}</span>
+          <span class="tag">Source: {escape(str(payload.get("config", {}).get("data_source", "CSV")))}</span>
+        </div>
+      </header>
+      <section class="stats">
+        <div class="stat"><strong>{escape(str(payload.get("scanned_symbols", 0)))}</strong><span>Scanned</span></div>
+        <div class="stat"><strong>{escape(str(len(candidates)))}</strong><span>Qualified</span></div>
+        <div class="stat"><strong>{escape(str(triggered))}</strong><span>Triggered</span></div>
+        <div class="stat"><strong>{escape(str(waiting))}</strong><span>Waiting / near pivot</span></div>
+        <div class="stat"><strong>{escape(str(new_count))}</strong><span>New since last run</span></div>
+        <div class="stat"><strong>{escape(str(changed_count))}</strong><span>Changed</span></div>
+        <div class="stat"><strong>{escape(str(dropped_count))}</strong><span>Dropped</span></div>
+        <div class="stat"><strong>{escape(avg_score)}</strong><span>Average score</span></div>
+        <div class="stat"><strong>{escape(str(data_errors))}</strong><span>Data unavailable</span></div>
+      </section>
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Search symbol, setup, market, TradingView id">
+        <select id="timeframeFilter"><option value="all">All timeframes</option>{timeframe_options}</select>
+        <select id="marketFilter"><option value="all">All markets</option>{market_options}</select>
+        <select id="brokerFilter"><option value="all">All broker support</option><option value="exness">Exness supported</option><option value="not-exness">Not Exness supported</option></select>
+        <select id="statusFilter">
+          <option value="all">All statuses</option>
+          <option value="qualified">Qualified</option>
+          <option value="near">Near match</option>
+          <option value="dropped">Dropped</option>
+          <option value="not_configured">Not configured</option>
+          <option value="coverage">Coverage</option>
+        </select>
+        <select id="techniqueFilter"><option value="all">All techniques</option>{technique_options}</select>
+        <select id="setupFilter"><option value="all">All setups</option>{setup_options}</select>
+        <select id="directionFilter"><option value="all">Long + Short</option><option value="long">Long</option><option value="short">Short</option></select>
+        <select id="changeFilter"><option value="all">All changes</option>{change_options}</select>
+        <select id="scoreFilter"><option value="0">Score 0+</option><option value="80">Score 80+</option><option value="85">Score 85+</option><option value="90">Score 90+</option><option value="95">Score 95+</option></select>
+      </div>
+      <div id="filterCount" class="filter-count"></div>
+      <div class="layout">
+        <section class="main-column">
+          {coverage_rows}
+          <h2>Candidates</h2>
+          {rows}
+          {dropped_rows}
+          {near_rows}
+          {not_configured_rows}
+        </section>
+        <aside class="side-panel">
+          <section class="panel"><h3>Setup Distribution</h3>{setup_panel}</section>
+          <section class="panel"><h3>Market Coverage</h3>{market_panel}</section>
+          <section class="panel"><h3>Priority Queue</h3>
+            <div class="dist-row"><span>Fresh triggered</span><strong>{triggered}</strong></div>
+            <div class="dist-row"><span>Waiting / near pivot</span><strong>{waiting}</strong></div>
+            <div class="dist-row"><span>Needs manual chart review</span><strong>{len(candidates)}</strong></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+  <script>
+    const search = document.getElementById('search');
+    const timeframeFilter = document.getElementById('timeframeFilter');
+    const marketFilter = document.getElementById('marketFilter');
+    const brokerFilter = document.getElementById('brokerFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const techniqueFilter = document.getElementById('techniqueFilter');
+    const setupFilter = document.getElementById('setupFilter');
+    const directionFilter = document.getElementById('directionFilter');
+    const changeFilter = document.getElementById('changeFilter');
+    const scoreFilter = document.getElementById('scoreFilter');
+    const filterCount = document.getElementById('filterCount');
+    const coverageSection = document.getElementById('coverageSection');
+    const filterable = Array.from(document.querySelectorAll('[data-filterable="true"]'));
+
+    function applyFilters() {{
+      const text = search.value.trim().toLowerCase();
+      const timeframe = timeframeFilter.value;
+      const market = marketFilter.value;
+      const broker = brokerFilter.value;
+      const status = statusFilter.value;
+      const technique = techniqueFilter.value;
+      const setup = setupFilter.value;
+      const direction = directionFilter.value;
+      const change = changeFilter.value;
+      const minimumScore = Number(scoreFilter.value || '0');
+      const filtersActive = Boolean(text) || timeframe !== 'all' || market !== 'all' || broker !== 'all' || status !== 'all' || technique !== 'all' || setup !== 'all' || direction !== 'all' || change !== 'all' || minimumScore > 0;
+      let visibleResults = 0;
+      for (const node of filterable) {{
+        const nodeTimeframe = node.dataset.timeframe || '';
+        const nodeMarket = node.dataset.market || '';
+        const nodeStatus = node.dataset.status || '';
+        const nodeExness = node.dataset.exness || '';
+        const nodeTechnique = node.dataset.technique || '';
+        const nodeSetup = node.dataset.setup || '';
+        const nodeDirection = node.dataset.direction || '';
+        const nodeChange = node.dataset.change || '';
+        const nodeScore = Number(node.dataset.score || '0');
+        const haystack = (node.dataset.symbols || node.textContent || '').toLowerCase();
+        const matchesTimeframe = timeframe === 'all' || nodeStatus === 'coverage' || nodeTimeframe === timeframe;
+        const matchesMarket = market === 'all' || nodeMarket === market;
+        const matchesBroker = broker === 'all' || nodeStatus === 'coverage' || (broker === 'exness' && nodeExness === 'true') || (broker === 'not-exness' && nodeExness !== 'true');
+        const matchesStatus = status === 'all' || nodeStatus === status;
+        const matchesTechnique = technique === 'all' || nodeStatus === 'coverage' || nodeTechnique === technique;
+        const matchesSetup = setup === 'all' || nodeStatus === 'coverage' || nodeSetup === setup;
+        const matchesDirection = direction === 'all' || nodeStatus === 'coverage' || nodeDirection === direction;
+        const matchesChange = change === 'all' || nodeStatus === 'coverage' || nodeChange === change;
+        const matchesScore = nodeStatus === 'coverage' || nodeScore >= minimumScore;
+        const matchesText = !text || haystack.includes(text);
+        const visible = matchesTimeframe && matchesMarket && matchesBroker && matchesStatus && matchesTechnique && matchesSetup && matchesDirection && matchesChange && matchesScore && matchesText;
+        node.style.display = visible ? '' : 'none';
+        if (visible && node.classList.contains('result-card')) {{
+          visibleResults += 1;
+        }}
+      }}
+      if (coverageSection) {{
+        coverageSection.style.display = status === 'coverage' || !filtersActive ? '' : 'none';
+      }}
+      filterCount.textContent = `${{visibleResults}} result card(s) visible`;
+    }}
+
+    search.addEventListener('input', applyFilters);
+    timeframeFilter.addEventListener('change', applyFilters);
+    marketFilter.addEventListener('change', applyFilters);
+    brokerFilter.addEventListener('change', applyFilters);
+    statusFilter.addEventListener('change', applyFilters);
+    techniqueFilter.addEventListener('change', applyFilters);
+    setupFilter.addEventListener('change', applyFilters);
+    directionFilter.addEventListener('change', applyFilters);
+    changeFilter.addEventListener('change', applyFilters);
+    scoreFilter.addEventListener('change', applyFilters);
+    applyFilters();
+  </script>
+</body>
+</html>
+"""
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(html)
+    return output_file
+
+
+def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -> dict:
+    near_matches = _near_matches(rejected)
+    scanned = candidates + rejected
+    scanned_by_market = _scanned_symbols_by_market(scanned)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "timeframe": config.get("timeframe", "D1"),
+        "scanned_symbols": sum(len(symbols) for symbols in scanned_by_market.values()),
+        "evaluation_count": len(scanned),
+        "qualified_count": len(candidates),
+        "candidates": candidates,
+        "near_matches": near_matches,
+        "scanned_symbols_by_market": scanned_by_market,
+        "data_errors_by_market": _data_errors_by_market(rejected),
+        "rejected": rejected,
+        "config": config,
+    }
+
+
+def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> dict:
+    candidates: list[dict] = []
+    rejected: list[dict] = []
+    dropped: list[dict] = []
+    for payload in payloads:
+        candidates.extend(payload.get("candidates", []))
+        rejected.extend(payload.get("rejected", []))
+        dropped.extend(payload.get("watchlist_dropped", []))
+
+    timeframes = sorted(
+        {
+            str(item.get("timeframe", payload.get("timeframe", payload.get("config", {}).get("timeframe", "D1"))))
+            for payload in payloads
+            for item in payload.get("candidates", []) + payload.get("rejected", [])
+        }
+    )
+    config = {
+        "timeframe": "Mixed" if len(timeframes) > 1 else (timeframes[0] if timeframes else "D1"),
+        "technique": "combined",
+        "setup": "all",
+        "report_sources": [str(path) for path in source_paths],
+        "source_count": len(source_paths),
+    }
+    payload = result_payload(candidates, rejected, config)
+    payload["near_matches"] = _near_matches(rejected, limit=50)
+    payload["watchlist_dropped"] = dropped
+    payload["watchlist_changes"] = _watchlist_change_summary(candidates, dropped)
+    return payload
+
+
+def _mark_first_run(payload: dict) -> None:
+    counts: dict[str, int] = defaultdict(int)
+    for candidate in payload.get("candidates", []):
+        candidate["watchlist_change"] = "FIRST_RUN"
+        counts["FIRST_RUN"] += 1
+    payload["watchlist_dropped"] = []
+    payload["watchlist_changes"] = {
+        "previous_results": None,
+        "previous_available": False,
+        "counts": dict(sorted(counts.items())),
+    }
+
+
+def _watchlist_change_summary(candidates: list[dict], dropped: list[dict]) -> dict:
+    counts: dict[str, int] = defaultdict(int)
+    previous_available = False
+    for candidate in candidates:
+        change = str(candidate.get("watchlist_change") or "UNKNOWN")
+        counts[change] += 1
+        if change != "FIRST_RUN":
+            previous_available = True
+    if dropped:
+        previous_available = True
+        counts["DROPPED"] += len(dropped)
+    return {
+        "previous_results": "combined source reports",
+        "previous_available": previous_available,
+        "counts": dict(sorted(counts.items())),
+    }
+
+
+def _watchlist_key(item: dict) -> tuple[str, ...]:
+    evidence = item.get("evidence", {})
+    return (
+        str(item.get("timeframe", "")),
+        str(item.get("market", "")),
+        str(item.get("symbol", "")),
+        str(item.get("technique", "")),
+        str(item.get("setup", "")),
+        _direction_from_evidence(evidence),
+    )
+
+
+def _candidate_change(candidate: dict, previous: dict | None) -> str:
+    if previous is None:
+        return "NEW"
+    current_status = str(candidate.get("evidence", {}).get("status", "")).upper()
+    previous_status = str(previous.get("evidence", {}).get("status", "")).upper()
+    if current_status == "TRIGGERED" and previous_status != "TRIGGERED":
+        return "TRIGGERED"
+
+    current_score = _score_value(candidate)
+    previous_score = _score_value(previous)
+    if current_score is not None and previous_score is not None:
+        delta = current_score - previous_score
+        if delta >= 5:
+            return "IMPROVED"
+        if delta <= -5:
+            return "WEAKER"
+    if current_status != previous_status:
+        return "STATUS_CHANGED"
+    return "UNCHANGED"
+
+
+def _score_value(item: dict) -> float | None:
+    score = item.get("evidence", {}).get("score")
+    if isinstance(score, int | float):
+        return float(score)
+    return None
+
+
+def _dropped_watchlist_item(previous: dict) -> dict:
+    evidence = previous.get("evidence", {})
+    return {
+        "symbol": previous.get("symbol", ""),
+        "market": previous.get("market", ""),
+        "tradingview_symbol": previous.get("tradingview_symbol", ""),
+        "timeframe": previous.get("timeframe", ""),
+        "technique": previous.get("technique", ""),
+        "setup": previous.get("setup", ""),
+        "direction": _direction_from_evidence(evidence),
+        "previous_score": evidence.get("score"),
+        "previous_status": evidence.get("status"),
+        "watchlist_change": "DROPPED",
+    }
+
+
+def _average_candidate_score(candidates: list[dict]) -> str:
+    scores = [
+        item.get("evidence", {}).get("score")
+        for item in candidates
+        if isinstance(item.get("evidence", {}).get("score"), int | float)
+    ]
+    if not scores:
+        return "n/a"
+    return f"{sum(scores) / len(scores):.0f}"
+
+
+def _setup_nav_items(candidates: list[dict]) -> str:
+    counts: dict[str, int] = defaultdict(int)
+    for item in candidates:
+        counts[_display_setup(item)] += 1
+    return "".join(
+        f'<div class="nav-pill"><span>{escape(setup)}</span><span class="count">{counts.get(setup, 0)}</span></div>'
+        for setup in _all_setup_labels()
+    )
+
+
+def _market_nav_items(scanned_by_market: dict[str, list[str]]) -> str:
+    return "".join(
+        f'<div class="nav-pill"><span>{escape(market)}</span><span class="count">{len(symbols)}</span></div>'
+        for market, symbols in sorted(scanned_by_market.items())
+    )
+
+
+def _setup_distribution_panel(candidates: list[dict]) -> str:
+    counts: dict[str, int] = defaultdict(int)
+    for item in candidates:
+        counts[_display_setup(item)] += 1
+    maximum = max(counts.values() or [1])
+    return "".join(
+        f"""<div class="dist-row"><div>{escape(setup)}<div class="bar"><span style="width: {max(3, counts.get(setup, 0) / maximum * 100):.0f}%"></span></div></div><strong>{counts.get(setup, 0)}</strong></div>"""
+        for setup in _all_setup_labels()
+    )
+
+
+def _market_distribution_panel(scanned_by_market: dict[str, list[str]], data_errors_by_market: dict[str, int]) -> str:
+    if not scanned_by_market:
+        return '<div class="dist-row"><span>No symbols</span><strong>0</strong></div>'
+    return "".join(
+        f"""<div class="dist-row"><span>{escape(market)}</span><strong>{len(symbols)} scanned{_data_error_suffix(data_errors_by_market.get(market, 0))}</strong></div>"""
+        for market, symbols in sorted(scanned_by_market.items())
+    )
+
+
+def _data_error_suffix(count: int) -> str:
+    return "" if count <= 0 else f" / {count} errors"
+
+
+def _exness_supported_count(rows: list[dict]) -> int:
+    return sum(1 for row in rows if _is_row_exness_supported(row))
+
+
+def _is_row_exness_supported(row: dict) -> bool:
+    market = str(row.get("market", ""))
+    if market not in {"Commodity", "Forex", "US stock"}:
+        return False
+    return is_exness_supported_symbol(str(row.get("symbol", "")), market)
+
+
+def _all_setup_labels() -> tuple[str, ...]:
+    return (
+        "Original VCP",
+        "VCP 1C",
+        "VCP 2C",
+        "VCP 3C",
+        "NH VCP",
+        "ARB",
+        "DD",
+        "SB",
+        "BB",
+        "RB",
+        "IRB",
+        "Compression",
+        "FB",
+    )
+
+
+def _candidate_card(candidate: dict, report_dir: Path) -> str:
+    evidence = candidate["evidence"]
+    tv_symbol = candidate["tradingview_symbol"]
+    chart_path = candidate.get("chart_path") or ""
+    chart_src = escape(_relative_path(chart_path, report_dir))
+    reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
+    pivot = _fmt(evidence.get("pivot"))
+    close = _fmt(evidence.get("current_close"))
+    distance = _fmt(evidence.get("distance_to_pivot_pct"), suffix="%")
+    volume_ratio = _fmt(evidence.get("volume_dry_up_ratio"))
+    technique = candidate.get("technique", "vcp")
+    setup = candidate.get("setup", "all")
+    timeframe = str(candidate.get("timeframe", "D1"))
+    status = str(evidence.get("status", "qualified"))
+    direction = _direction_from_evidence(evidence)
+    direction_badge = f'<span class="badge {escape(direction)}">{escape(direction.title())}</span>' if direction else ""
+    status_class = "triggered" if status.upper() == "TRIGGERED" else "waiting"
+    display_setup = _display_setup(candidate)
+    change = str(candidate.get("watchlist_change", "FIRST_RUN"))
+    change_badge = _change_badge(change)
+    previous_score = candidate.get("previous_score")
+    previous_status = candidate.get("previous_status")
+    previous_text = ""
+    if previous_score is not None or previous_status is not None:
+        previous_text = f' · Previous: {escape(_fmt(previous_score))} / {escape(str(previous_status or "n/a"))}'
+
+    exness_supported = _is_row_exness_supported(candidate)
+
+    return f"""<article class="result-card" data-filterable="true" data-status="qualified" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(candidate["symbol"])} <span class="badge">{escape(display_setup)}</span>{direction_badge}<span class="badge {status_class}">{escape(status)}</span>{change_badge}{_exness_badge(exness_supported)}</div>
+      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{previous_text} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+    </div>
+    <div class="score">{escape(str(evidence.get("score", 0)))}</div>
+  </div>
+  <img src="{chart_src}" alt="{escape(candidate["symbol"])} proof chart">
+  <div class="body">
+    <div class="metrics">
+      <div class="metric"><span>Trigger / pivot</span><strong>{pivot}</strong></div>
+      <div class="metric"><span>Current</span><strong>{close}</strong></div>
+      <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+      <div class="metric"><span>Volume ratio</span><strong>{volume_ratio}</strong></div>
+    </div>
+    <div class="reasons">Candidate evidence:</div>
+    <ul>{reasons}</ul>
+  </div>
+</article>"""
+
+
+def _near_match_card(candidate: dict, report_dir: Path) -> str:
+    evidence = candidate["evidence"]
+    tv_symbol = candidate["tradingview_symbol"]
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
+    chart_path = candidate.get("chart_path") or ""
+    chart_html = ""
+    if chart_path:
+        chart_src = escape(_relative_path(chart_path, report_dir))
+        chart_html = f'<img src="{chart_src}" alt="{escape(candidate["symbol"])} near-match VCP chart">'
+    reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
+    failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:4])
+    distance = _fmt(evidence.get("distance_to_pivot_pct"), suffix="%")
+    score = _fmt(candidate.get("near_match_score"))
+    technique = candidate.get("technique", "vcp")
+    setup = candidate.get("setup", "all")
+    timeframe = str(candidate.get("timeframe", "D1"))
+    direction = _direction_from_evidence(evidence)
+    display_setup = _display_setup(candidate)
+    change = str(candidate.get("watchlist_change", ""))
+
+    exness_supported = _is_row_exness_supported(candidate)
+
+    return f"""<article class="near result-card" data-filterable="true" data-status="near" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Near</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
+      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+    </div>
+    <div class="score">{score}</div>
+  </div>
+  {chart_html}
+  <div class="body">
+    <div class="metrics">
+      <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+      <div class="metric"><span>Status</span><strong>Near</strong></div>
+    </div>
+    <div class="reasons">Passed checks:</div>
+    <ul>{reasons}</ul>
+    <div class="reasons failures">Failed checks:</div>
+    <ul class="failures">{failures}</ul>
+  </div>
+</article>"""
+
+
+def _not_configured_card(item: dict) -> str:
+    evidence = item.get("evidence", {})
+    tv_symbol = item["tradingview_symbol"]
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
+    technique = item.get("technique", "unknown")
+    setup = item.get("setup", "all")
+    timeframe = str(item.get("timeframe", "D1"))
+    failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:4])
+
+    exness_supported = _is_row_exness_supported(item)
+
+    return f"""<article class="near result-card" data-filterable="true" data-status="not_configured" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="" data-score="0" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + ("exness" if exness_supported else ""))}">
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(item["symbol"])} <span class="badge near-badge">Not Configured</span></div>
+      <div class="meta">{escape(item["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+    </div>
+    <div class="score">Setup {escape(setup.upper())}</div>
+  </div>
+  <div class="body">
+    <div class="metrics">
+      <span><strong>Status</strong> not configured</span>
+    </div>
+    <div class="reasons failures">Reason:</div>
+    <ul class="failures">{failures}</ul>
+  </div>
+</article>"""
+
+
+def _exness_badge(supported: bool) -> str:
+    if not supported:
+        return ""
+    return '<span class="badge">Exness</span>'
+
+
+def _change_badge(change: str) -> str:
+    if not change:
+        return ""
+    label = _change_label(change)
+    css = change.lower().replace("_", "-")
+    return f'<span class="badge change-{escape(css)}">{escape(label)}</span>'
+
+
+def _change_label(change: str) -> str:
+    labels = {
+        "FIRST_RUN": "First run",
+        "NEW": "New",
+        "TRIGGERED": "Triggered change",
+        "IMPROVED": "Improved",
+        "WEAKER": "Weaker",
+        "STATUS_CHANGED": "Status changed",
+        "UNCHANGED": "Unchanged",
+        "DROPPED": "Dropped",
+    }
+    return labels.get(change, change.replace("_", " ").title())
+
+
+def _changes_in_rows(candidates: list[dict], dropped: list[dict]) -> list[str]:
+    preferred = ["NEW", "TRIGGERED", "IMPROVED", "WEAKER", "STATUS_CHANGED", "UNCHANGED", "DROPPED", "FIRST_RUN"]
+    present = {str(item.get("watchlist_change", "")) for item in candidates + dropped if item.get("watchlist_change")}
+    return [change for change in preferred if change in present]
+
+
+def _dropped_card(item: dict) -> str:
+    tv_symbol = str(item.get("tradingview_symbol", ""))
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
+    technique = str(item.get("technique", ""))
+    setup = str(item.get("setup", ""))
+    timeframe = str(item.get("timeframe", ""))
+    market = str(item.get("market", ""))
+    direction = str(item.get("direction", ""))
+    symbol = str(item.get("symbol", ""))
+    exness_supported = _is_row_exness_supported(item)
+    display_setup = _display_setup(item)
+    score = _fmt(item.get("previous_score"))
+    status = str(item.get("previous_status") or "n/a")
+    change = str(item.get("watchlist_change", "DROPPED"))
+    return f"""<article class="near result-card" data-filterable="true" data-status="dropped" data-timeframe="{escape(timeframe)}" data-market="{escape(market)}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(item.get("previous_score") or 0))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(symbol + " " + tv_symbol + " " + market + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " DROPPED " + ("exness" if exness_supported else ""))}">
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(symbol)} <span class="badge">{escape(display_setup)}</span>{_change_badge(change)}{_exness_badge(exness_supported)}</div>
+      <div class="meta">{escape(market)} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+    </div>
+    <div class="score">{score}</div>
+  </div>
+  <div class="body">
+    <div class="metrics">
+      <div class="metric"><span>Previous status</span><strong>{escape(status)}</strong></div>
+      <div class="metric"><span>Previous score</span><strong>{score}</strong></div>
+    </div>
+    <div class="reasons failures">Dropped reason:</div>
+    <ul class="failures"><li>Qualified in the previous run, but not qualified in the current run.</li></ul>
+  </div>
+</article>"""
+
+
+def _near_matches(rejected: list[dict], limit: int = 20) -> list[dict]:
+    scored = []
+    for item in rejected:
+        evidence = item.get("evidence", {})
+        if evidence.get("status") == "data_error":
+            continue
+        score = _near_match_score(evidence)
+        if score <= 0:
+            continue
+        enriched = dict(item)
+        enriched["near_match_score"] = round(score, 2)
+        scored.append(enriched)
+    scored.sort(key=lambda item: item["near_match_score"], reverse=True)
+    return scored[:limit]
+
+
+def _not_configured_rows(rejected: list[dict]) -> list[dict]:
+    return [item for item in rejected if item.get("evidence", {}).get("status") == "not_configured"]
+
+
+def _coverage_section(scanned_by_market: dict[str, list[str]], data_errors_by_market: dict[str, int]) -> str:
+    total = sum(len(symbols) for symbols in scanned_by_market.values())
+    markets = []
+    for market, symbols in sorted(scanned_by_market.items()):
+        symbol_text = "".join(f'<span class="symbol-chip">{escape(symbol)}</span>' for symbol in symbols)
+        data_errors = data_errors_by_market.get(market, 0)
+        data_error_text = ""
+        if data_errors:
+            data_error_text = f'<div class="data-errors">Data unavailable for {data_errors} symbol(s) from this provider.</div>'
+        markets.append(
+            f"""<div class="coverage-market" data-filterable="true" data-status="coverage" data-timeframe="" data-market="{escape(market)}" data-technique="" data-setup="" data-symbols="{escape(" ".join(symbols) + " " + market)}">
+  <h3>{escape(market)} ({len(symbols)})</h3>
+  <div class="symbols">{symbol_text}</div>
+  {data_error_text}
+</div>"""
+        )
+    return f"""<details id="coverageSection" class="coverage" open>
+  <summary>Scanned Universe ({total} symbols)</summary>
+  <div class="coverage-grid">
+    {"".join(markets)}
+  </div>
+</details>"""
+
+
+def _scanned_symbols_by_market(rows: list[dict]) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for row in rows:
+        grouped[row.get("market", "unknown")].append(row.get("symbol", "unknown"))
+    return {market: sorted(set(symbols)) for market, symbols in sorted(grouped.items())}
+
+
+def _setups_in_rows(rows: list[dict]) -> list[str]:
+    setups = sorted({str(row.get("setup", "all")) for row in rows if row.get("setup")})
+    return [setup for setup in setups if setup != "all"]
+
+
+def _techniques_in_rows(rows: list[dict]) -> list[str]:
+    return sorted({str(row.get("technique", "unknown")) for row in rows if row.get("technique")})
+
+
+def _timeframes_in_rows(rows: list[dict], payload: dict) -> list[str]:
+    fallback = str(payload.get("timeframe") or payload.get("config", {}).get("timeframe", "D1"))
+    timeframes = sorted({str(row.get("timeframe", fallback)) for row in rows if row.get("timeframe", fallback)})
+    return timeframes or [fallback]
+
+
+def _data_errors_by_market(rejected: list[dict]) -> dict[str, int]:
+    grouped: dict[str, set[str]] = defaultdict(set)
+    for row in rejected:
+        if row.get("evidence", {}).get("status") == "data_error":
+            grouped[row.get("market", "unknown")].add(row.get("symbol", "unknown"))
+    return {market: len(symbols) for market, symbols in sorted(grouped.items())}
+
+
+def _display_setup(row: dict) -> str:
+    technique = str(row.get("technique", ""))
+    setup = str(row.get("setup", "all"))
+    if technique == "minervini-vcp":
+        if setup == "vcp-1c":
+            return "VCP 1C"
+        if setup == "vcp-2c":
+            return "VCP 2C"
+        if setup == "vcp-3c":
+            return "VCP 3C"
+        return "Original VCP"
+    if technique == "experimental-ema21-compression" or setup == "compression":
+        return "Compression"
+    if setup == "vcp" and technique == "nhathoai":
+        return "NH VCP"
+    if setup and setup != "all":
+        return setup.upper()
+    return technique or "unknown"
+
+
+def _direction_from_evidence(evidence: dict) -> str:
+    lines = evidence.get("reasons", []) + evidence.get("failures", [])
+    direction = _line_value(lines, "Direction:")
+    if direction:
+        normalized = direction.strip().lower()
+        if normalized in {"long", "short"}:
+            return normalized
+    status = str(evidence.get("status", "")).lower()
+    if "_long" in status:
+        return "long"
+    if "_short" in status:
+        return "short"
+    return ""
+
+
+def _clean_evidence_lines(lines: list[str]) -> list[str]:
+    cleaned = []
+    skip_prefixes = (
+        "Pattern:",
+        "Direction:",
+        "Status:",
+        "Score:",
+        "Reason:",
+        "Manual review note:",
+    )
+    for line in lines:
+        stripped = str(line).strip()
+        if not stripped or stripped.startswith(skip_prefixes):
+            continue
+        if stripped.startswith("- "):
+            stripped = stripped[2:].strip()
+        cleaned.append(stripped)
+    return cleaned
+
+
+def _line_value(lines: list[str], prefix: str) -> str | None:
+    for line in lines:
+        stripped = str(line).strip()
+        if stripped.startswith(prefix):
+            return stripped.removeprefix(prefix).strip()
+    return None
+
+
+def _near_match_score(evidence: dict) -> float:
+    reasons = evidence.get("reasons", [])
+    failures = evidence.get("failures", [])
+    distance = evidence.get("distance_to_pivot_pct")
+    proximity_bonus = 0.0
+    if isinstance(distance, int | float):
+        proximity_bonus = max(0.0, 10 - abs(distance))
+    return len(reasons) * 10 - len(failures) * 5 + proximity_bonus
+
+
+def _relative_path(path: str, report_dir: Path) -> str:
+    if not path:
+        return ""
+    path_obj = Path(path)
+    if path_obj.is_absolute():
+        return relpath(path_obj, report_dir.resolve())
+    resolved = path_obj.resolve()
+    if resolved.exists():
+        return relpath(resolved, report_dir.resolve())
+    try:
+        return str(resolved.relative_to(report_dir.resolve()))
+    except ValueError:
+        return path
+
+
+def _fmt(value: object, suffix: str = "") -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        return f"{value:.2f}{suffix}"
+    return f"{value}{suffix}"

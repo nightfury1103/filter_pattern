@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filter-pattern"
+version = "0.1.0"
+description = "D1 VCP scanner and proof report for TradingView-compatible OHLCV CSV data."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12",
+    "ccxt>=4.4",
+    "matplotlib>=3.8",
+    "PyYAML>=6.0",
+    "requests>=2.31",
+    "yfinance>=0.2.55",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+filter-pattern = "filter_pattern.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["filter_pattern*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

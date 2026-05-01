@@ -1,0 +1,63 @@
+timeframe: H4
+technique: minervini-vcp
+setup: all
+
+vcp:
+  min_history_days: 120
+  max_base_days: 90
+  pre_base_days: 60
+  min_contractions: 2
+  max_contractions: 4
+  min_contraction_depth_pct: 3.0
+  max_first_contraction_depth_pct: 35.0
+  max_later_contraction_depth_pct: 22.0
+  max_final_contraction_depth_pct: 12.0
+  depth_tolerance_pct: 1.0
+  low_tolerance_pct: 1.5
+  max_pivot_spread_pct: 10.0
+  max_base_depth_pct: 45.0
+  near_pivot_pct: 5.0
+  min_prior_uptrend_pct: 20.0
+  min_avg_volume: 0
+  volume_dry_up_ratio: 0.70
+  swing_window: 2
+  ema_period: 21
+  ema_slope_lookback: 10
+  compression_lookback: 12
+  setup_lookback: 35
+  max_ema_distance_pct: 4.0
+  max_compression_range_pct: 8.0
+  max_boundary_distance_pct: 3.0
+  boundary_touch_tolerance_pct: 1.5
+  min_boundary_touches: 2
+  doji_body_ratio: 0.30
+  trend_above_ema_ratio: 0.55
+  max_pullback_ema_distance_pct: 3.5
+  max_signal_range_pct: 5.0
+  max_double_level_spread_pct: 1.5
+  min_range_depth_pct: 6.0
+  max_block_range_pct: 10.0
+  max_inside_range_pct: 12.0
+  max_retest_distance_pct: 2.5
+
+symbols:
+  - symbol: AAPL
+    market: US stock
+    tradingview_symbol: NASDAQ:AAPL
+    csv_path: data/AAPL_H4.csv
+  - symbol: FPT
+    market: Vietnam stock
+    tradingview_symbol: HOSE:FPT
+    csv_path: data/FPT_H4.csv
+  - symbol: XAUUSD
+    market: Commodity
+    tradingview_symbol: OANDA:XAUUSD
+    csv_path: data/XAUUSD_H4.csv
+  - symbol: EURUSD
+    market: Forex
+    tradingview_symbol: OANDA:EURUSD
+    csv_path: data/EURUSD_H4.csv
+  - symbol: BTCUSDT
+    market: Crypto
+    tradingview_symbol: BINANCE:BTCUSDT
+    csv_path: data/BTCUSDT_H4.csv

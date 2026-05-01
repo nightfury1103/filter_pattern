@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# filter_pattern local inputs and generated reports
+config.yml
+data/
+reports/
+.DS_Store

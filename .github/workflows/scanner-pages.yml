@@ -1,0 +1,185 @@
+name: Scanner Pages
+
+on:
+  schedule:
+    # H4 watchlist refresh. Cron is UTC.
+    - cron: "20 */4 * * *"
+    # D1 watchlist refresh after the US daily candle is normally available.
+    - cron: "30 23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "Which report to refresh"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - d1
+          - h4
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: scanner-pages
+  cancel-in-progress: false
+
+env:
+  DATA_PROVIDER: yahoo
+  BROKER: exness
+  D1_PERIOD: 180d
+  H4_PERIOD: 60d
+  D1_UNIVERSE: default
+  H4_UNIVERSE: default
+  D1_MARKETS: all
+  H4_MARKETS: "US stock,Commodity,Forex,Crypto"
+  NEAR_MATCH_CHART_LIMIT: "5"
+
+jobs:
+  scan-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout scanner source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install scanner
+        run: python -m pip install -e .
+
+      - name: Restore current published site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git archive origin/gh-pages | tar -x -C public
+          fi
+
+      - name: Decide scan scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested="${{ github.event.inputs.timeframe || '' }}"
+          run_d1=0
+          run_h4=0
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "$requested" in
+              all) run_d1=1; run_h4=1 ;;
+              d1) run_d1=1 ;;
+              h4) run_h4=1 ;;
+              *) echo "Unknown timeframe input: $requested" >&2; exit 2 ;;
+            esac
+          elif [[ "${{ github.event.schedule }}" == "30 23 * * 1-5" ]]; then
+            run_d1=1
+          else
+            run_h4=1
+          fi
+
+          echo "run_d1=$run_d1" >> "$GITHUB_OUTPUT"
+          echo "run_h4=$run_h4" >> "$GITHUB_OUTPUT"
+          echo "RUN_D1=$run_d1"
+          echo "RUN_H4=$run_h4"
+
+      - name: Scan D1
+        if: steps.scope.outputs.run_d1 == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m filter_pattern.cli scan-all-market \
+            --timeframe D1 \
+            --out public/d1 \
+            --period "$D1_PERIOD" \
+            --universe "$D1_UNIVERSE" \
+            --broker "$BROKER" \
+            --data-provider "$DATA_PROVIDER" \
+            --markets "$D1_MARKETS" \
+            --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
+            --previous-results public/d1/results.json
+
+      - name: Scan H4
+        if: steps.scope.outputs.run_h4 == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m filter_pattern.cli scan-all-market \
+            --timeframe H4 \
+            --out public/h4 \
+            --period "$H4_PERIOD" \
+            --universe "$H4_UNIVERSE" \
+            --broker "$BROKER" \
+            --data-provider "$DATA_PROVIDER" \
+            --markets "$H4_MARKETS" \
+            --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
+            --previous-results public/h4/results.json
+
+      - name: Build site entry report
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch public/.nojekyll
+          if [[ -f public/d1/results.json && -f public/h4/results.json ]]; then
+            python -m filter_pattern.cli combine-report \
+              --inputs public/d1/results.json public/h4/results.json \
+              --out public/index.html
+          elif [[ -f public/d1/index.html ]]; then
+            cp public/d1/index.html public/index.html
+          elif [[ -f public/h4/index.html ]]; then
+            cp public/h4/index.html public/index.html
+          else
+            printf '%s\n' \
+              '<!doctype html>' \
+              '<html lang="en">' \
+              '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Filter Pattern</title></head>' \
+              '<body><h1>Filter Pattern</h1><p>No report has been generated yet. Run the workflow manually with timeframe = all.</p></body>' \
+              '</html>' \
+              > public/index.html
+          fi
+
+      - name: Save generated site branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cd public
+          git init
+          git add .
+          if git diff --cached --quiet; then
+            echo "No generated site changes to save."
+          else
+            git commit -m "Update scanner report"
+            git branch -M gh-pages
+            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git push --force origin gh-pages
+          fi
+          rm -rf .git
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
