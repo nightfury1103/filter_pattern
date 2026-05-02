@@ -3,9 +3,9 @@ name: Scanner Pages
 on:
   schedule:
     # H4 watchlist refresh. Cron is UTC.
-    - cron: "20 */4 * * *"
+    - cron: "0 */4 * * *"
     # D1 watchlist refresh after the US daily candle is normally available.
-    - cron: "30 23 * * 1-5"
+    - cron: "0 23 * * 1-5"
   workflow_dispatch:
     inputs:
       timeframe:
