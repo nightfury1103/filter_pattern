@@ -245,7 +245,7 @@ def scan_market(
     downloaded = _download_market_data(universe, period, active_timeframe, data_provider)
 
     for item in universe:
-        symbol = _symbol_from_universe(item)
+        symbol = _symbol_from_universe(item, data_provider)
         data = downloaded.get(item.yahoo_symbol)
         if isinstance(data, Exception):
             rejected.append(
@@ -405,7 +405,7 @@ def scan_all_market(
     downloaded = _download_market_data(universe, period, active_timeframe, data_provider)
 
     for item in universe:
-        symbol = _symbol_from_universe(item)
+        symbol = _symbol_from_universe(item, data_provider)
         data = downloaded.get(item.yahoo_symbol)
         if isinstance(data, Exception):
             rejected.append(
@@ -627,10 +627,14 @@ def _result_key(item: dict) -> str:
     )
 
 
-def _symbol_from_universe(item: UniverseSymbol) -> SymbolSpec:
+def _symbol_from_universe(item: UniverseSymbol, data_provider: str = "yahoo") -> SymbolSpec:
+    provider = data_provider.lower()
+    source_path = f"yahoo:{item.yahoo_symbol}"
+    if item.market == "Crypto" and provider in {"mixed", "ccxt"}:
+        source_path = f"ccxt:{item.symbol}"
     return SymbolSpec(
         symbol=item.symbol,
         market=item.market,
         tradingview_symbol=item.tradingview_symbol,
-        csv_path=Path(f"yahoo:{item.yahoo_symbol}"),
+        csv_path=Path(source_path),
     )

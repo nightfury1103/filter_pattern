@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from filter_pattern.models import Candle
-from filter_pattern.providers import _resample_to_h4
+from filter_pattern.providers import _exchange_ids, _resample_to_h4
 
 
 def test_resample_to_h4_aggregates_hourly_candles() -> None:
@@ -23,3 +23,8 @@ def test_resample_to_h4_aggregates_hourly_candles() -> None:
     assert h4[0].close == 12
     assert h4[0].volume == 220
     assert h4[1].datetime == datetime(2026, 1, 1, 4)
+
+
+def test_exchange_ids_allows_crypto_exchange_fallbacks() -> None:
+    assert _exchange_ids("binance, bybit,okx") == ["binance", "bybit", "okx"]
+    assert _exchange_ids("") == ["binance"]

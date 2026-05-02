@@ -81,7 +81,7 @@ def load_ccxt_ohlcv_many(
     symbols: list[str],
     period: str = "2y",
     timeframe: str = "D1",
-    exchange_id: str = "binance",
+    exchange_id: str = "binance,bybit,okx",
 ) -> dict[str, list[Candle] | Exception]:
     active_timeframe = _normalize_timeframe(timeframe)
     unique_symbols = list(dict.fromkeys(symbols))
@@ -96,31 +96,50 @@ def load_ccxt_ohlcv_many(
             for symbol in unique_symbols
         }
 
-    exchange_class = getattr(ccxt, exchange_id, None)
-    if exchange_class is None:
-        return {symbol: ValueError(f"Unknown CCXT exchange: {exchange_id}") for symbol in unique_symbols}
-
-    exchange = exchange_class({"enableRateLimit": True})
     results: dict[str, list[Candle] | Exception] = {}
-    try:
-        exchange.load_markets()
-        ccxt_timeframe = _ccxt_timeframe(active_timeframe)
-        limit = _ccxt_limit(period, active_timeframe)
-        for raw_symbol in unique_symbols:
+    unresolved = set(unique_symbols)
+    exchange_errors: list[str] = []
+    ccxt_timeframe = _ccxt_timeframe(active_timeframe)
+    limit = _ccxt_limit(period, active_timeframe)
+
+    for active_exchange_id in _exchange_ids(exchange_id):
+        if not unresolved:
+            break
+        exchange_class = getattr(ccxt, active_exchange_id, None)
+        if exchange_class is None:
+            exchange_errors.append(f"Unknown CCXT exchange: {active_exchange_id}")
+            continue
+
+        exchange = exchange_class({"enableRateLimit": True})
+        try:
+            exchange.load_markets()
+        except Exception as exc:  # noqa: BLE001 - keep fallback exchanges available.
+            exchange_errors.append(f"{active_exchange_id}: {exc}")
+            close = getattr(exchange, "close", None)
+            if callable(close):
+                close()
+            continue
+
+        for raw_symbol in list(unresolved):
             try:
                 ccxt_symbol = _ccxt_symbol(raw_symbol)
                 if ccxt_symbol not in exchange.markets:
-                    raise ValueError(f"{ccxt_symbol} is not available on CCXT exchange {exchange_id}")
+                    raise ValueError(f"{ccxt_symbol} is not available on CCXT exchange {active_exchange_id}")
                 rows = exchange.fetch_ohlcv(ccxt_symbol, timeframe=ccxt_timeframe, limit=limit)
                 if not rows:
-                    raise ValueError(f"No CCXT {active_timeframe} data returned for {raw_symbol} on {exchange_id}")
+                    raise ValueError(f"No CCXT {active_timeframe} data returned for {raw_symbol} on {active_exchange_id}")
                 results[raw_symbol] = [_ccxt_candle(row) for row in rows]
+                unresolved.remove(raw_symbol)
             except Exception as exc:  # noqa: BLE001 - returned per symbol for scanner reporting.
                 results[raw_symbol] = exc
-    finally:
         close = getattr(exchange, "close", None)
         if callable(close):
             close()
+
+    for raw_symbol in unresolved:
+        last_error = results.get(raw_symbol)
+        detail = str(last_error) if isinstance(last_error, Exception) else "; ".join(exchange_errors)
+        results[raw_symbol] = ValueError(f"No CCXT {active_timeframe} data returned for {raw_symbol}. {detail}")
     return results
 
 
@@ -234,6 +253,11 @@ def _ccxt_symbol(symbol: str) -> str:
     if normalized.endswith("USD"):
         return f"{normalized[:-3]}/USDT"
     return symbol
+
+
+def _exchange_ids(exchange_id: str) -> list[str]:
+    ids = [item.strip() for item in exchange_id.split(",") if item.strip()]
+    return ids or ["binance"]
 
 
 def _ccxt_candle(row: list[float]) -> Candle:

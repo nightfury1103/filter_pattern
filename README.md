@@ -95,7 +95,7 @@ Filter commodities, forex, and US stocks to symbols supported by Exness:
 filter-pattern scan-market --config config.yml --timeframe D1 --out reports/market --universe broad --broker exness --technique minervini-vcp
 ```
 
-Use CCXT for crypto market data instead of Yahoo Finance:
+Use exchange data for crypto instead of Yahoo Finance:
 
 ```bash
 filter-pattern scan-all-market --timeframe H4 --out reports/market-h4 --period 60d --universe default --data-provider mixed
@@ -103,9 +103,11 @@ filter-pattern scan-all-market --timeframe H4 --out reports/market-h4 --period 6
 
 Provider options:
 
-- `--data-provider yahoo`: default, uses Yahoo Finance for every market.
-- `--data-provider mixed`: uses CCXT for crypto, Yahoo Finance for US stocks, Vietnam stocks, forex, and commodities.
+- `--data-provider mixed`: recommended, uses CCXT exchange data for crypto and Yahoo Finance for US stocks, Vietnam stocks, forex, and commodities.
+- `--data-provider yahoo`: uses Yahoo Finance for every market. This is faster, but crypto candles may not match TradingView `BINANCE:*USDT` charts.
 - `--data-provider ccxt`: crypto-only data source; non-crypto symbols are reported as unsupported for this provider.
+
+For crypto, CCXT tries Binance first, then Bybit, then OKX. This keeps the scanner closer to TradingView USDT-pair charts than Yahoo's `*-USD` crypto data.
 
 Technique behavior:
 
@@ -194,7 +196,7 @@ Use the report's **All changes** filter to review only symbols that changed sinc
 The workflow uses these defaults:
 
 ```text
-DATA_PROVIDER=yahoo
+DATA_PROVIDER=mixed
 BROKER=exness
 D1_PERIOD=180d
 H4_PERIOD=60d

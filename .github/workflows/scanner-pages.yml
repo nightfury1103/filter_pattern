@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DATA_PROVIDER: yahoo
+  DATA_PROVIDER: mixed
   BROKER: exness
   D1_PERIOD: 180d
   H4_PERIOD: 60d

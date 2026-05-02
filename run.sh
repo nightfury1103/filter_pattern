@@ -8,14 +8,14 @@ set -euo pipefail
 # - full = broad D1 universe, including S&P 500. Slower.
 #
 # Data provider:
-# - yahoo = Yahoo Finance for every market. Fastest default.
-# - mixed = CCXT for crypto, Yahoo Finance for stocks/forex/commodities. Slower.
+# - mixed = CCXT exchange data for crypto, Yahoo Finance for stocks/forex/commodities. Recommended.
+# - yahoo = Yahoo Finance for every market. Faster, but crypto symbols may not match TradingView USDT pairs.
 # - ccxt = crypto only.
 # Broker filter:
 # - exness = only Exness-supported commodities/forex/US stocks, plus Vietnam/crypto.
 # - all = every symbol in the selected universe.
 MODE="${MODE:-fast}"
-DATA_PROVIDER="${DATA_PROVIDER:-yahoo}"
+DATA_PROVIDER="${DATA_PROVIDER:-mixed}"
 BROKER="${BROKER:-exness}"
 RUN_D1="${RUN_D1:-1}"
 RUN_H4="${RUN_H4:-1}"
@@ -104,4 +104,3 @@ python -m filter_pattern.cli combine-report \
   --out "$COMBINED_OUT"
 
 echo "Done: $COMBINED_OUT"
-
