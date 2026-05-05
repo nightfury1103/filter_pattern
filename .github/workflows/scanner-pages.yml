@@ -5,7 +5,7 @@ on:
     # H4 watchlist refresh. Cron is UTC.
     - cron: "0 */4 * * *"
     # D1 watchlist refresh after the US daily candle is normally available.
-    - cron: "0 23 * * 1-5"
+    - cron: "0 */8 * * *"
   workflow_dispatch:
     inputs:
       timeframe:
