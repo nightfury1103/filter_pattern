@@ -566,13 +566,24 @@ def _download_market_data(
             item for item in vietnam_items if _needs_vnstock_fallback(yahoo_vietnam_results.get(item.yahoo_symbol), timeframe)
         ]
         if vietnam_fallback_items:
+            print(
+                "Yahoo Vietnam fallback: trying VNStock for "
+                f"{len(vietnam_fallback_items)} symbol(s): {', '.join(item.symbol for item in vietnam_fallback_items[:20])}"
+                f"{'...' if len(vietnam_fallback_items) > 20 else ''}"
+            )
             vnstock_results = load_vnstock_ohlcv_many(
                 [item.symbol for item in vietnam_fallback_items], period=period, timeframe=timeframe
             )
+            recovered = 0
+            failed = 0
             for item in vietnam_fallback_items:
                 fallback = vnstock_results.get(item.symbol, ValueError(f"No VNStock data returned for {item.symbol}"))
                 if not isinstance(fallback, Exception):
                     results[item.yahoo_symbol] = fallback
+                    recovered += 1
+                else:
+                    failed += 1
+            print(f"Yahoo Vietnam fallback: VNStock recovered {recovered}, still failed {failed}")
         ccxt_results = load_ccxt_ohlcv_many([item.symbol for item in crypto_items], period=period, timeframe=timeframe)
         for item in crypto_items:
             results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
