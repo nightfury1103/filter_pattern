@@ -11,6 +11,9 @@ from urllib.parse import quote
 from .exness import is_exness_supported_symbol
 
 
+TRIGGER_WARNING_DISTANCE_PCT = 5.0
+
+
 def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:
     results_file = Path(results_path)
     output_file = Path(output_path)
@@ -21,11 +24,13 @@ def write_html_report(results_path: str | Path, output_path: str | Path) -> Path
 def apply_watchlist_changes(payload: dict, previous_results_path: str | Path | None) -> dict:
     if previous_results_path is None:
         _mark_first_run(payload)
+        refresh_trigger_warnings(payload)
         return payload
 
     previous_path = Path(previous_results_path)
     if not previous_path.exists():
         _mark_first_run(payload)
+        refresh_trigger_warnings(payload)
         return payload
 
     previous_payload = json.loads(previous_path.read_text())
@@ -60,6 +65,13 @@ def apply_watchlist_changes(payload: dict, previous_results_path: str | Path | N
         "previous_available": True,
         "counts": dict(sorted(counts.items())),
     }
+    refresh_trigger_warnings(payload)
+    return payload
+
+
+def refresh_trigger_warnings(payload: dict) -> dict:
+    near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
+    payload["trigger_warnings"] = _trigger_warnings(payload.get("candidates", []) + near_matches)
     return payload
 
 
@@ -79,6 +91,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     output_file = Path(output_path)
     candidates = payload.get("candidates", [])
     near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
+    trigger_warnings = _trigger_warnings(candidates + near_matches)
     not_configured = _not_configured_rows(payload.get("rejected", []))
     dropped = payload.get("watchlist_dropped", [])
     watchlist_changes = payload.get("watchlist_changes", {})
@@ -91,15 +104,21 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     market_options = "\n".join(f'<option value="{escape(market)}">{escape(market)}</option>' for market in markets)
     technique_options = "\n".join(
         f'<option value="{escape(technique_name)}">{escape(technique_name)}</option>'
-        for technique_name in _techniques_in_rows(candidates + near_matches + not_configured + payload.get("rejected", []))
+        for technique_name in _techniques_in_rows(
+            candidates + near_matches + trigger_warnings + not_configured + payload.get("rejected", [])
+        )
     )
     setup_options = "\n".join(
         f'<option value="{escape(setup_name)}">{escape(setup_name.upper())}</option>'
-        for setup_name in _setups_in_rows(candidates + near_matches + not_configured + payload.get("rejected", []))
+        for setup_name in _setups_in_rows(
+            candidates + near_matches + trigger_warnings + not_configured + payload.get("rejected", [])
+        )
     )
     timeframe_options = "\n".join(
         f'<option value="{escape(timeframe)}">{escape(timeframe)}</option>'
-        for timeframe in _timeframes_in_rows(candidates + near_matches + not_configured + payload.get("rejected", []), payload)
+        for timeframe in _timeframes_in_rows(
+            candidates + near_matches + trigger_warnings + not_configured + payload.get("rejected", []), payload
+        )
     )
     change_options = "\n".join(
         f'<option value="{escape(change)}">{escape(_change_label(change))}</option>'
@@ -118,8 +137,15 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     if near_rows:
         near_rows = f"""
     <h2>Near Matches</h2>
-    <p class="section-note">These are not qualified entry setups. They passed many checks but failed at least one strict VCP rule.</p>
+    <p class="section-note">These are not qualified entry setups. They passed many checks but failed at least one strict setup rule.</p>
     {near_rows}
+"""
+    warning_rows = "\n".join(_trigger_warning_card(item, output_file.parent) for item in trigger_warnings)
+    if warning_rows:
+        warning_rows = f"""
+    <h2>Near Break / Trigger Warnings</h2>
+    <p class="section-note">Symbols whose current price is close to the trigger/pivot, or whose setup has just triggered. Strict-failed rows remain manual-review only.</p>
+    {warning_rows}
 """
     not_configured_rows = "\n".join(_not_configured_card(item) for item in not_configured)
     if not_configured_rows:
@@ -402,6 +428,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       margin-left: 8px;
     }}
     .badge.near-badge {{ background: #fffbeb; color: var(--warn); }}
+    .badge.warning-badge {{ background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }}
     .badge.triggered {{ background: #ecfdf5; color: var(--good); }}
     .badge.waiting {{ background: #fffbeb; color: var(--warn); }}
     .badge.short {{ background: #fef2f2; color: var(--bad); }}
@@ -524,6 +551,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <div class="nav-pill active"><span>All Qualified</span><span class="count">{len(candidates)}</span></div>
         <div class="nav-pill"><span>Triggered</span><span class="count">{triggered}</span></div>
         <div class="nav-pill"><span>Waiting</span><span class="count">{waiting}</span></div>
+      <div class="nav-pill"><span>Warnings</span><span class="count">{len(trigger_warnings)}</span></div>
       <div class="nav-pill"><span>Near Match</span><span class="count">{len(near_matches)}</span></div>
       <div class="nav-pill"><span>Exness Supported</span><span class="count">{exness_count}</span></div>
       </div>
@@ -555,6 +583,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       <section class="stats">
         <div class="stat"><strong>{escape(str(payload.get("scanned_symbols", 0)))}</strong><span>Scanned</span></div>
         <div class="stat"><strong>{escape(str(len(candidates)))}</strong><span>Qualified</span></div>
+        <div class="stat"><strong>{escape(str(len(trigger_warnings)))}</strong><span>Near break warnings</span></div>
         <div class="stat"><strong>{escape(str(triggered))}</strong><span>Triggered</span></div>
         <div class="stat"><strong>{escape(str(waiting))}</strong><span>Waiting / near pivot</span></div>
         <div class="stat"><strong>{escape(str(new_count))}</strong><span>New since last run</span></div>
@@ -570,6 +599,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <select id="brokerFilter"><option value="all">All broker support</option><option value="exness">Exness supported</option><option value="not-exness">Not Exness supported</option></select>
         <select id="statusFilter">
           <option value="all">All statuses</option>
+          <option value="warning">Near break warning</option>
           <option value="qualified">Qualified</option>
           <option value="near">Near match</option>
           <option value="dropped">Dropped</option>
@@ -586,6 +616,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       <div class="layout">
         <section class="main-column">
           {coverage_rows}
+          {warning_rows}
           <h2>Candidates</h2>
           {rows}
           {dropped_rows}
@@ -689,6 +720,7 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
     near_matches = _near_matches(rejected)
     scanned = candidates + rejected
     scanned_by_market = _scanned_symbols_by_market(scanned)
+    trigger_warnings = _trigger_warnings(candidates + near_matches)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "timeframe": config.get("timeframe", "D1"),
@@ -697,6 +729,7 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
         "qualified_count": len(candidates),
         "candidates": candidates,
         "near_matches": near_matches,
+        "trigger_warnings": trigger_warnings,
         "scanned_symbols_by_market": scanned_by_market,
         "data_errors_by_market": _data_errors_by_market(rejected),
         "rejected": rejected,
@@ -729,6 +762,7 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
     }
     payload = result_payload(candidates, rejected, config)
     payload["near_matches"] = _near_matches(rejected, limit=50)
+    payload["trigger_warnings"] = _trigger_warnings(candidates + payload["near_matches"])
     payload["watchlist_dropped"] = dropped
     payload["watchlist_changes"] = _watchlist_change_summary(candidates, dropped)
     return payload
@@ -803,6 +837,15 @@ def _score_value(item: dict) -> float | None:
     if isinstance(score, int | float):
         return float(score)
     return None
+
+
+def _numeric(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    try:
+        return float(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _dropped_watchlist_item(previous: dict) -> dict:
@@ -997,6 +1040,58 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
 </article>"""
 
 
+def _trigger_warning_card(item: dict, report_dir: Path) -> str:
+    evidence = item["evidence"]
+    warning = item.get("trigger_warning", {})
+    tv_symbol = item["tradingview_symbol"]
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
+    chart_path = item.get("chart_path") or ""
+    chart_html = ""
+    if chart_path:
+        chart_src = escape(_relative_path(chart_path, report_dir))
+        chart_html = f'<img src="{chart_src}" alt="{escape(item["symbol"])} near break warning chart">'
+    technique = item.get("technique", "vcp")
+    setup = item.get("setup", "all")
+    timeframe = str(item.get("timeframe", "D1"))
+    direction = _direction_from_evidence(evidence)
+    display_setup = _display_setup(item)
+    exness_supported = _is_row_exness_supported(item)
+    score = _fmt(evidence.get("score"))
+    trigger = _fmt(warning.get("trigger_level") or evidence.get("pivot"))
+    current = _fmt(evidence.get("current_close"))
+    distance = _fmt(warning.get("distance_pct"), suffix="%")
+    warning_label = str(warning.get("label") or "Near break")
+    note = str(warning.get("note") or "Price is close to the trigger/pivot.")
+    reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:4])
+    failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:3])
+    failure_html = ""
+    if failures:
+        failure_html = f"""
+    <div class="reasons failures">Strict warning:</div>
+    <ul class="failures">{failures}</ul>"""
+    return f"""<article class="near result-card" data-filterable="true" data-status="warning" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(str(item.get("watchlist_change", "")))}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " warning near break triggered " + ("exness" if exness_supported else ""))}">
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(item["symbol"])} <span class="badge warning-badge">{escape(warning_label)}</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
+      <div class="meta">{escape(item["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+    </div>
+    <div class="score">{score}</div>
+  </div>
+  {chart_html}
+  <div class="body">
+    <div class="metrics">
+      <div class="metric"><span>Trigger / pivot</span><strong>{trigger}</strong></div>
+      <div class="metric"><span>Current</span><strong>{current}</strong></div>
+      <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+      <div class="metric"><span>Warning</span><strong>{escape(warning_label)}</strong></div>
+    </div>
+    <div class="reasons">Warning reason:</div>
+    <ul><li>{escape(note)}</li>{reasons}</ul>
+    {failure_html}
+  </div>
+</article>"""
+
+
 def _not_configured_card(item: dict) -> str:
     evidence = item.get("evidence", {})
     tv_symbol = item["tradingview_symbol"]
@@ -1107,6 +1202,74 @@ def _near_matches(rejected: list[dict], limit: int = 20) -> list[dict]:
         scored.append(enriched)
     scored.sort(key=lambda item: item["near_match_score"], reverse=True)
     return scored[:limit]
+
+
+def _trigger_warnings(rows: list[dict], limit: int = 60) -> list[dict]:
+    warnings = []
+    for row in rows:
+        warning = _trigger_warning(row)
+        if warning is None:
+            continue
+        enriched = dict(row)
+        enriched["trigger_warning"] = warning
+        warnings.append(enriched)
+    warnings.sort(
+        key=lambda item: (
+            item["trigger_warning"]["priority"],
+            abs(float(item["trigger_warning"].get("distance_pct") or 999)),
+            -(_score_value(item) or 0.0),
+            str(item.get("market", "")),
+            str(item.get("symbol", "")),
+        )
+    )
+    return warnings[:limit]
+
+
+def _trigger_warning(row: dict) -> dict | None:
+    evidence = row.get("evidence", {})
+    status = str(evidence.get("status", "")).upper()
+    if status in {"DATA_ERROR", "NOT_CONFIGURED", "LATE", "FAILED"}:
+        return None
+
+    trigger = _numeric(evidence.get("pivot"))
+    current = _numeric(evidence.get("current_close"))
+    distance = _numeric(evidence.get("distance_to_pivot_pct"))
+    if distance is None and trigger and current is not None:
+        distance = ((trigger - current) / trigger) * 100
+    if trigger is None or current is None or distance is None:
+        return None
+
+    if status == "TRIGGERED":
+        return {
+            "label": "Triggered",
+            "note": "Second trigger / pivot break has already closed and price is still being tracked.",
+            "distance_pct": round(distance, 2),
+            "trigger_level": trigger,
+            "priority": 0,
+        }
+
+    active_wait_statuses = {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT", "FORMING"}
+    near_strict_failure = row.get("near_match_score") is not None
+    if (status in active_wait_statuses or near_strict_failure) and abs(distance) <= TRIGGER_WARNING_DISTANCE_PCT:
+        label = "Near break"
+        note = f"Current price is within {TRIGGER_WARNING_DISTANCE_PCT:.1f}% of the trigger/pivot."
+        priority = 1
+        if near_strict_failure:
+            label = "Near break, strict-failed"
+            note = (
+                f"Current price is within {TRIGGER_WARNING_DISTANCE_PCT:.1f}% of the trigger/pivot, "
+                "but at least one strict setup rule failed."
+            )
+            priority = 2
+        return {
+            "label": label,
+            "note": note,
+            "distance_pct": round(distance, 2),
+            "trigger_level": trigger,
+            "priority": priority,
+        }
+
+    return None
 
 
 def _not_configured_rows(rejected: list[dict]) -> list[dict]:

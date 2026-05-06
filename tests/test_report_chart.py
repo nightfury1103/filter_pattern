@@ -122,6 +122,28 @@ def test_report_renders_not_configured_setup_rows_for_filtering(tmp_path: Path) 
     assert 'data-setup="rb"' in html
 
 
+def test_report_renders_near_break_warning_filter(tmp_path: Path) -> None:
+    waiting_candidate = _candidate("AAPL", "dd", 84, "WAITING")
+    triggered_candidate = _candidate("MSFT", "bb", 88, "TRIGGERED")
+    payload = result_payload(
+        [waiting_candidate, triggered_candidate],
+        [],
+        {"timeframe": "D1", "technique": "nhathoai", "setup": "all"},
+    )
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert len(payload["trigger_warnings"]) == 2
+    assert "Near Break / Trigger Warnings" in html
+    assert '<option value="warning">Near break warning</option>' in html
+    assert 'data-status="warning"' in html
+    assert "Near break" in html
+    assert "Triggered" in html
+
+
 def test_watchlist_change_tracking_marks_new_unchanged_and_dropped(tmp_path: Path) -> None:
     previous_candidate = _candidate("AAPL", "dd", 84, "WAITING")
     previous_payload = result_payload([previous_candidate], [], {"timeframe": "D1"})

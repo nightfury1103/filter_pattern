@@ -9,7 +9,7 @@ from .detector import detect_pattern
 from .exness import filter_exness_supported
 from .models import ScanResult, SymbolSpec, VCPConfig, VCPEvidence
 from .providers import load_ccxt_ohlcv_many, load_yahoo_ohlcv_many
-from .report import apply_watchlist_changes, result_payload, write_html_report
+from .report import apply_watchlist_changes, refresh_trigger_warnings, result_payload, write_html_report
 from .techniques import MINERVINI_VCP_SCAN_SETUPS, NHATHOAI_SCAN_SETUPS, normalize_setup, normalize_technique
 from .universe import UniverseSymbol, get_universe
 
@@ -617,6 +617,7 @@ def _payload_with_near_match_charts(
             if _result_key(rejected_item) == _result_key(near_match):
                 rejected_item["chart_path"] = str(chart_path)
                 break
+    refresh_trigger_warnings(payload)
     return payload
 
 
