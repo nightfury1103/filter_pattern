@@ -59,8 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     market_parser.add_argument(
         "--data-provider",
         default="yahoo",
-        choices=["yahoo", "mixed", "ccxt"],
-        help="market data provider: yahoo, mixed (CCXT for crypto), or ccxt (crypto only)",
+        choices=["yahoo", "mixed", "ccxt", "vnstock"],
+        help="market data provider: yahoo, mixed (VNStock for Vietnam + CCXT for crypto), ccxt, or vnstock",
     )
     market_parser.add_argument(
         "--markets",
@@ -114,8 +114,8 @@ def main(argv: list[str] | None = None) -> int:
     all_market_parser.add_argument(
         "--data-provider",
         default="yahoo",
-        choices=["yahoo", "mixed", "ccxt"],
-        help="market data provider: yahoo, mixed (CCXT for crypto), or ccxt (crypto only)",
+        choices=["yahoo", "mixed", "ccxt", "vnstock"],
+        help="market data provider: yahoo, mixed (VNStock for Vietnam + CCXT for crypto), ccxt, or vnstock",
     )
     all_market_parser.add_argument(
         "--markets",

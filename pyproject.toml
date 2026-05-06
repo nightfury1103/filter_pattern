@@ -14,6 +14,7 @@ dependencies = [
     "matplotlib>=3.8",
     "PyYAML>=6.0",
     "requests>=2.31",
+    "vnstock>=4.0",
     "yfinance>=0.2.55",
 ]
 

@@ -8,9 +8,10 @@ set -euo pipefail
 # - full = broad D1 universe, including S&P 500. Slower.
 #
 # Data provider:
-# - mixed = CCXT exchange data for crypto, Yahoo Finance for stocks/forex/commodities. Recommended.
+# - mixed = Yahoo first, VNStock fallback for Vietnam stocks, CCXT exchange data for crypto. Recommended.
 # - yahoo = Yahoo Finance for every market. Faster, but crypto symbols may not match TradingView USDT pairs.
 # - ccxt = crypto only.
+# - vnstock = Vietnam stock only.
 # Broker filter:
 # - exness = only Exness-supported commodities/forex/US stocks, plus Vietnam/crypto.
 # - all = every symbol in the selected universe.
@@ -43,8 +44,7 @@ D1_UNIVERSE="${D1_UNIVERSE:-$DEFAULT_D1_UNIVERSE}"
 H4_UNIVERSE="${H4_UNIVERSE:-$DEFAULT_H4_UNIVERSE}"
 D1_MARKETS="${D1_MARKETS:-all}"
 
-# Yahoo intraday is slow/unavailable for many Vietnam symbols. Keep D1 broad,
-# but make H4 focus on markets with usable Yahoo intraday data by default.
+# H4 can include Vietnam stock through VNStock fallback, but it is rate-limited.
 H4_MARKETS="${H4_MARKETS:-US stock,Commodity,Forex,Crypto}"
 
 D1_OUT="${D1_OUT:-reports/market-d1}"

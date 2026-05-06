@@ -103,11 +103,13 @@ filter-pattern scan-all-market --timeframe H4 --out reports/market-h4 --period 6
 
 Provider options:
 
-- `--data-provider mixed`: recommended, uses CCXT exchange data for crypto and Yahoo Finance for US stocks, Vietnam stocks, forex, and commodities.
+- `--data-provider mixed`: recommended, uses Yahoo Finance first, VNStock as a Vietnam-stock fallback when Yahoo is missing/too short, and CCXT exchange data for crypto.
 - `--data-provider yahoo`: uses Yahoo Finance for every market. This is faster, but crypto candles may not match TradingView `BINANCE:*USDT` charts.
 - `--data-provider ccxt`: crypto-only data source; non-crypto symbols are reported as unsupported for this provider.
+- `--data-provider vnstock`: Vietnam-stock-only source for direct VNStock testing.
 
 For crypto, CCXT tries Binance first, then Bybit, then OKX. This keeps the scanner closer to TradingView USDT-pair charts than Yahoo's `*-USD` crypto data.
+VNStock guest access is rate-limited, so the scanner throttles fallback calls with `VNSTOCK_REQUESTS_PER_MINUTE=18` by default. Use a lower value if the API rejects requests, or a higher value only if your VNStock account allows it.
 
 Technique behavior:
 

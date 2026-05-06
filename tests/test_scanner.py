@@ -103,6 +103,7 @@ def test_scan_market_mixed_provider_uses_ccxt_for_crypto_and_yahoo_for_other_mar
 ) -> None:
     universe = [
         UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL"),
+        UniverseSymbol("FPT", "Vietnam stock", "HOSE:FPT", "FPT.VN"),
         UniverseSymbol("BTCUSDT", "Crypto", "BINANCE:BTCUSDT", "BTC-USD"),
     ]
     seen: dict[str, list[str]] = {}
@@ -118,18 +119,53 @@ def test_scan_market_mixed_provider_uses_ccxt_for_crypto_and_yahoo_for_other_mar
         seen["ccxt"] = symbols
         return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
 
+    def fake_vnstock(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        seen["vnstock"] = symbols
+        return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
+
     monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
     monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
     monkeypatch.setattr("filter_pattern.scanner.load_ccxt_ohlcv_many", fake_ccxt)
+    monkeypatch.setattr("filter_pattern.scanner.load_vnstock_ohlcv_many", fake_vnstock)
 
     results_path = scan_market(tmp_path / "reports/mixed", data_provider="mixed")
     payload = json.loads(results_path.read_text())
 
-    assert seen["yahoo"] == ["AAPL"]
+    assert seen["yahoo"] == ["AAPL", "FPT.VN"]
     assert seen["ccxt"] == ["BTCUSDT"]
+    assert "vnstock" not in seen
     assert payload["config"]["data_provider"] == "mixed"
-    assert payload["config"]["data_source"] == "Yahoo Finance + CCXT"
-    assert payload["scanned_symbols"] == 2
+    assert payload["config"]["data_source"] == "Yahoo Finance + VNStock + CCXT"
+    assert payload["scanned_symbols"] == 3
+
+
+def test_mixed_provider_falls_back_to_vnstock_for_missing_vietnam_data(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("FPT", "Vietnam stock", "HOSE:FPT", "FPT.VN"),
+    ]
+    seen: dict[str, list[str]] = {}
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_yahoo(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        seen["yahoo"] = symbols
+        return {symbol: ValueError("missing yahoo data") for symbol in symbols}
+
+    def fake_vnstock(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        seen["vnstock"] = symbols
+        return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
+    monkeypatch.setattr("filter_pattern.scanner.load_vnstock_ohlcv_many", fake_vnstock)
+
+    results_path = scan_market(tmp_path / "reports/mixed-vn", data_provider="mixed")
+    payload = json.loads(results_path.read_text())
+
+    assert seen["yahoo"] == ["FPT.VN"]
+    assert seen["vnstock"] == ["FPT"]
+    assert payload["candidates"][0]["symbol"] == "FPT"
 
 
 def test_scan_all_market_can_filter_markets_before_download(tmp_path: Path, monkeypatch) -> None:

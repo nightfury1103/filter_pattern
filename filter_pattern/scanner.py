@@ -8,7 +8,7 @@ from .data import config_to_json, load_config, load_ohlcv_csv
 from .detector import detect_pattern
 from .exness import filter_exness_supported
 from .models import ScanResult, SymbolSpec, VCPConfig, VCPEvidence
-from .providers import load_ccxt_ohlcv_many, load_yahoo_ohlcv_many
+from .providers import load_ccxt_ohlcv_many, load_vnstock_ohlcv_many, load_yahoo_ohlcv_many
 from .report import apply_watchlist_changes, refresh_trigger_warnings, result_payload, write_html_report
 from .techniques import MINERVINI_VCP_SCAN_SETUPS, NHATHOAI_SCAN_SETUPS, normalize_setup, normalize_technique
 from .universe import UniverseSymbol, get_universe
@@ -541,16 +541,43 @@ def _download_market_data(
         for item in crypto_items:
             results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
         return results
+    if provider == "vnstock":
+        vietnam_items = [item for item in universe if item.market == "Vietnam stock"]
+        results = {
+            item.yahoo_symbol: ValueError("VNStock provider only supports Vietnam stock symbols in this scanner")
+            for item in universe
+            if item.market != "Vietnam stock"
+        }
+        vnstock_results = load_vnstock_ohlcv_many([item.symbol for item in vietnam_items], period=period, timeframe=timeframe)
+        for item in vietnam_items:
+            results[item.yahoo_symbol] = vnstock_results.get(item.symbol, ValueError(f"No VNStock data returned for {item.symbol}"))
+        return results
     if provider == "mixed":
         crypto_items = [item for item in universe if item.market == "Crypto"]
-        non_crypto_items = [item for item in universe if item.market != "Crypto"]
+        vietnam_items = [item for item in universe if item.market == "Vietnam stock"]
+        yahoo_items = [item for item in universe if item.market not in {"Crypto", "Vietnam stock"}]
         results: dict[str, list | Exception] = {}
-        results.update(load_yahoo_ohlcv_many([item.yahoo_symbol for item in non_crypto_items], period=period, timeframe=timeframe))
+        yahoo_symbols = [item.yahoo_symbol for item in yahoo_items + vietnam_items]
+        yahoo_results = load_yahoo_ohlcv_many(yahoo_symbols, period=period, timeframe=timeframe)
+        results.update(yahoo_results)
+        yahoo_vietnam_results = {item.yahoo_symbol: yahoo_results.get(item.yahoo_symbol) for item in vietnam_items}
+        results.update(yahoo_vietnam_results)
+        vietnam_fallback_items = [
+            item for item in vietnam_items if _needs_vnstock_fallback(yahoo_vietnam_results.get(item.yahoo_symbol), timeframe)
+        ]
+        if vietnam_fallback_items:
+            vnstock_results = load_vnstock_ohlcv_many(
+                [item.symbol for item in vietnam_fallback_items], period=period, timeframe=timeframe
+            )
+            for item in vietnam_fallback_items:
+                fallback = vnstock_results.get(item.symbol, ValueError(f"No VNStock data returned for {item.symbol}"))
+                if not isinstance(fallback, Exception):
+                    results[item.yahoo_symbol] = fallback
         ccxt_results = load_ccxt_ohlcv_many([item.symbol for item in crypto_items], period=period, timeframe=timeframe)
         for item in crypto_items:
             results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
         return results
-    raise ValueError("unknown data provider. Choose one of: yahoo, mixed, ccxt")
+    raise ValueError("unknown data provider. Choose one of: yahoo, mixed, ccxt, vnstock")
 
 
 def _filter_markets(universe: list[UniverseSymbol], markets: str | None) -> list[UniverseSymbol]:
@@ -567,12 +594,21 @@ def _filter_markets(universe: list[UniverseSymbol], markets: str | None) -> list
     return filtered
 
 
+def _needs_vnstock_fallback(data: list | Exception | None, timeframe: str) -> bool:
+    if not isinstance(data, list):
+        return True
+    minimum = 80 if timeframe == "D1" else 60
+    return len(data) < minimum
+
+
 def _data_source_label(data_provider: str) -> str:
     provider = data_provider.lower()
     if provider == "mixed":
-        return "Yahoo Finance + CCXT"
+        return "Yahoo Finance + VNStock + CCXT"
     if provider == "ccxt":
         return "CCXT"
+    if provider == "vnstock":
+        return "VNStock"
     return "Yahoo Finance"
 
 
@@ -631,6 +667,8 @@ def _result_key(item: dict) -> str:
 def _symbol_from_universe(item: UniverseSymbol, data_provider: str = "yahoo") -> SymbolSpec:
     provider = data_provider.lower()
     source_path = f"yahoo:{item.yahoo_symbol}"
+    if item.market == "Vietnam stock" and provider == "vnstock":
+        source_path = f"vnstock:{item.symbol}"
     if item.market == "Crypto" and provider in {"mixed", "ccxt"}:
         source_path = f"ccxt:{item.symbol}"
     return SymbolSpec(

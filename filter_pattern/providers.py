@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import io
+import os
+import time
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import date, datetime, timedelta, timezone
 from math import isnan
 
 from .models import Candle
@@ -143,6 +147,62 @@ def load_ccxt_ohlcv_many(
     return results
 
 
+def load_vnstock_ohlcv_many(
+    symbols: list[str],
+    period: str = "2y",
+    timeframe: str = "D1",
+    source: str | None = None,
+    requests_per_minute: int | None = None,
+) -> dict[str, list[Candle] | Exception]:
+    active_timeframe = _normalize_timeframe(timeframe)
+    unique_symbols = list(dict.fromkeys(symbols))
+    if not unique_symbols:
+        return {}
+
+    try:
+        from vnstock import Quote
+    except ImportError:
+        return {
+            symbol: RuntimeError("vnstock is required for Vietnam market scans. Run: python -m pip install -e .")
+            for symbol in unique_symbols
+        }
+
+    active_source = (source or os.environ.get("VNSTOCK_SOURCE") or "VCI").upper()
+    rpm = _vnstock_requests_per_minute(requests_per_minute)
+    delay_seconds = 60.0 / rpm if rpm > 0 else 0.0
+    results: dict[str, list[Candle] | Exception] = {}
+    last_request_at: float | None = None
+
+    for symbol in unique_symbols:
+        if last_request_at is not None and delay_seconds > 0:
+            elapsed = time.monotonic() - last_request_at
+            if elapsed < delay_seconds:
+                time.sleep(delay_seconds - elapsed)
+        last_request_at = time.monotonic()
+        try:
+            results[symbol] = _load_vnstock_ohlcv(symbol, period, active_timeframe, active_source, Quote)
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:  # noqa: BLE001 - vnstock may raise SystemExit on rate-limit errors.
+            results[symbol] = RuntimeError(f"VNStock {active_source} {active_timeframe} data failed for {symbol}: {exc}")
+    return results
+
+
+def _load_vnstock_ohlcv(symbol: str, period: str, timeframe: str, source: str, quote_class) -> list[Candle]:
+    start, end = _period_date_range(period)
+    interval = "1H" if timeframe == "H4" else "1D"
+    stdout_buffer = io.StringIO()
+    stderr_buffer = io.StringIO()
+    with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+        frame = quote_class(symbol=symbol, source=source).history(start=start, end=end, interval=interval)
+    candles = _candles_from_vnstock_frame(frame, symbol, timeframe)
+    if timeframe == "H4":
+        candles = _resample_to_h4(candles)
+    if not candles:
+        raise ValueError(f"No usable VNStock {timeframe} candles for {symbol}")
+    return candles
+
+
 def _candles_from_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
     if frame.empty:
         raise ValueError(f"No Yahoo Finance {timeframe} data returned for {symbol}")
@@ -173,6 +233,45 @@ def _candles_from_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
 
     if not candles:
         raise ValueError(f"No usable Yahoo Finance {timeframe} candles for {symbol}")
+    return candles
+
+
+def _candles_from_vnstock_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
+    if frame is None or frame.empty:
+        raise ValueError(f"No VNStock {timeframe} data returned for {symbol}")
+
+    frame = frame.copy()
+    frame.columns = [str(column).strip().lower() for column in frame.columns]
+    required = {"time", "open", "high", "low", "close"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"VNStock data missing columns for {symbol}: {', '.join(sorted(missing))}")
+
+    frame = frame.sort_values("time").drop_duplicates(subset=["time"], keep="last")
+    candles: list[Candle] = []
+    for _, row in frame.iterrows():
+        open_value = _row_value(row, "open")
+        high = _row_value(row, "high")
+        low = _row_value(row, "low")
+        close = _row_value(row, "close")
+        volume = _row_value(row, "volume", default=0.0)
+        if any(_is_nan(value) for value in (open_value, high, low, close)):
+            continue
+        timestamp = row["time"]
+        dt = timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else datetime.fromisoformat(str(timestamp))
+        candles.append(
+            Candle(
+                datetime=dt.replace(tzinfo=None),
+                open=float(open_value),
+                high=float(high),
+                low=float(low),
+                close=float(close),
+                volume=0.0 if _is_nan(volume) else float(volume),
+            )
+        )
+
+    if not candles:
+        raise ValueError(f"No usable VNStock {timeframe} candles for {symbol}")
     return candles
 
 
@@ -244,6 +343,23 @@ def _period_to_days(period: str) -> int:
     if unit == "y":
         return value * 365
     return 730
+
+
+def _period_date_range(period: str) -> tuple[str, str]:
+    days = _period_to_days(period)
+    end = date.today()
+    start = end - timedelta(days=days)
+    return start.isoformat(), end.isoformat()
+
+
+def _vnstock_requests_per_minute(requests_per_minute: int | None = None) -> int:
+    if requests_per_minute is not None:
+        return max(1, requests_per_minute)
+    raw = os.environ.get("VNSTOCK_REQUESTS_PER_MINUTE", "18")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 18
 
 
 def _ccxt_symbol(symbol: str) -> str:
