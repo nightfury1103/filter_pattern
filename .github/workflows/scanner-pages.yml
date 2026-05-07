@@ -2,12 +2,11 @@ name: Scanner Pages
 
 on:
   schedule:
-    # H4 watchlist refresh. Cron is UTC; runs 20 minutes after each 4H close.
-    # Asia/Ho_Chi_Minh: 07:20, 11:20, 15:20, 19:20, 23:20, 03:20.
-    - cron: "0 0,4,8,12,16,20 * * *"
-    # D1 watchlist refresh after the US daily candle is normally available.
-    # Asia/Ho_Chi_Minh: 05:30 Tuesday-Saturday.
-    - cron: "0 3,14 * * 1-5"
+    # H4 watchlist refresh. Cron is UTC; avoid minute 0 because GitHub has high load at the start of each hour.
+    # Asia/Ho_Chi_Minh: 07:17, 11:17, 15:17, 19:17, 23:17, 03:17.
+    - cron: "1 0,4,8,12,16,20 * * *"
+    # D1 watchlist refresh. Cron is UTC; Asia/Ho_Chi_Minh: 10:23 and 21:23 Monday-Friday.
+    - cron: "1 3,14 * * 1-5"
   workflow_dispatch:
     inputs:
       timeframe:
@@ -87,7 +86,7 @@ jobs:
               h4) run_h4=1 ;;
               *) echo "Unknown timeframe input: $requested" >&2; exit 2 ;;
             esac
-          elif [[ "${{ github.event.schedule }}" == "30 22 * * 1-5" ]]; then
+          elif [[ "${{ github.event.schedule }}" == "23 3,14 * * 1-5" ]]; then
             run_d1=1
           else
             run_h4=1
