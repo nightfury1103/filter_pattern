@@ -6,8 +6,8 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from matplotlib import ticker as mticker
 from matplotlib.patches import Rectangle
 
 from .models import Candle, ScanResult, VCPConfig
@@ -44,7 +44,7 @@ def render_chart(
     evidence = result.evidence
     plot_candles = candles[-_chart_window(result.timeframe):]
     offset = len(candles) - len(plot_candles)
-    dates = [mdates.date2num(c.datetime) for c in plot_candles]
+    dates = _session_positions(plot_candles)
     candle_width = _candle_width(dates)
 
     fig, (price_ax, volume_ax) = plt.subplots(
@@ -123,7 +123,8 @@ def render_chart(
     price_ax.legend(loc="upper left", fontsize=10, frameon=True, facecolor="#ffffff", edgecolor="#d1d5db")
     price_ax.set_ylabel("Price", fontsize=11, fontweight="bold")
     volume_ax.set_ylabel("Volume", fontsize=11, fontweight="bold")
-    volume_ax.xaxis.set_major_formatter(_date_formatter(result.timeframe))
+    volume_ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=10, integer=True))
+    volume_ax.xaxis.set_major_formatter(_date_formatter(result.timeframe, plot_candles))
     price_ax.tick_params(axis="both", labelsize=10, width=1.2, colors="#111111")
     volume_ax.tick_params(axis="both", labelsize=9, width=1.2, colors="#111111")
     fig.autofmt_xdate()
@@ -178,6 +179,10 @@ def _figure_size(timeframe: str) -> tuple[float, float]:
     return (18, 9.5) if timeframe.upper() == "H4" else (16, 9)
 
 
+def _session_positions(candles: list[Candle]) -> list[float]:
+    return [float(index) for index, _ in enumerate(candles)]
+
+
 def _emphasize_chart_artists(ax) -> None:
     for line in ax.lines:
         line.set_linewidth(max(line.get_linewidth(), BASE_LINE_WIDTH))
@@ -211,10 +216,19 @@ def _range_width(dates: list[float], start: int, end: int) -> float:
     return max(dates[end] - dates[start] + _candle_width(dates), _candle_width(dates))
 
 
-def _date_formatter(timeframe: str):
-    if timeframe.upper() == "H4":
-        return mdates.DateFormatter("%m-%d %H:%M")
-    return mdates.DateFormatter("%Y-%m-%d")
+def _date_formatter(timeframe: str, candles: list[Candle]):
+    active_timeframe = timeframe.upper()
+
+    def format_position(value: float, _position: int) -> str:
+        index = int(round(value))
+        if abs(value - index) > 0.2 or index < 0 or index >= len(candles):
+            return ""
+        dt = candles[index].datetime
+        if active_timeframe == "H4":
+            return dt.strftime("%m-%d %H:%M")
+        return dt.strftime("%Y-%m-%d")
+
+    return mticker.FuncFormatter(format_position)
 
 
 def _draw_arb_annotations(

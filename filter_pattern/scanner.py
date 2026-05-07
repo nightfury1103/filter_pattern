@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from .chart import render_chart
 from .data import config_to_json, load_config, load_ohlcv_csv
 from .detector import detect_pattern
 from .exness import filter_exness_supported
-from .models import ScanResult, SymbolSpec, VCPConfig, VCPEvidence
+from .models import Candle, ScanResult, SymbolSpec, VCPConfig, VCPEvidence
 from .providers import load_ccxt_ohlcv_many, load_vnstock_ohlcv_many, load_yahoo_ohlcv_many
 from .report import apply_watchlist_changes, refresh_trigger_warnings, result_payload, write_html_report
 from .techniques import MINERVINI_VCP_SCAN_SETUPS, NHATHOAI_SCAN_SETUPS, normalize_setup, normalize_technique
@@ -77,6 +78,7 @@ def scan_all_csv(
 
         for technique_name, setup_name in pattern_runs:
             evidence = detect_pattern(candles, technique_name, config.vcp, setup_name)
+            evidence = _apply_ema_side_guard(evidence, candles, config.vcp, technique_name, setup_name)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=config.timeframe,
@@ -169,6 +171,7 @@ def _scan_csv(
 
         for setup_name in setup_names:
             evidence = detect_pattern(candles, active_technique, config.vcp, setup_name)
+            evidence = _apply_ema_side_guard(evidence, candles, config.vcp, active_technique, setup_name)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=config.timeframe,
@@ -316,6 +319,7 @@ def scan_market(
 
         for setup_name in setup_names:
             evidence = detect_pattern(candles, active_technique, vcp_config, setup_name)
+            evidence = _apply_ema_side_guard(evidence, candles, vcp_config, active_technique, setup_name)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=active_timeframe,
@@ -453,6 +457,7 @@ def scan_all_market(
         candles = data
         for technique_name, setup_name in pattern_runs:
             evidence = detect_pattern(candles, technique_name, vcp_config, setup_name)
+            evidence = _apply_ema_side_guard(evidence, candles, vcp_config, technique_name, setup_name)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=active_timeframe,
@@ -610,6 +615,75 @@ def _needs_vnstock_fallback(data: list | Exception | None, timeframe: str) -> bo
         return True
     minimum = 80 if timeframe == "D1" else 60
     return len(data) < minimum
+
+
+def _apply_ema_side_guard(
+    evidence: VCPEvidence,
+    candles: list[Candle],
+    config: VCPConfig,
+    technique: str,
+    setup: str,
+) -> VCPEvidence:
+    if not evidence.qualified or not candles:
+        return evidence
+
+    direction = _evidence_direction(evidence, technique, setup)
+    if direction not in {"long", "short"}:
+        return evidence
+
+    closes = [candle.close for candle in candles]
+    ema = _latest_ema(closes, config.ema_period)
+    current_close = closes[-1]
+    if ema is None:
+        return evidence
+
+    if direction == "long" and current_close >= ema:
+        return evidence
+    if direction == "short" and current_close <= ema:
+        return evidence
+
+    side = "above" if direction == "long" else "below"
+    failure = (
+        f"EMA21 final-side guard failed: {direction.title()} setup requires latest close {side} EMA{config.ema_period}; "
+        f"close={current_close:.4g}, EMA{config.ema_period}={ema:.4g}"
+    )
+    return replace(
+        evidence,
+        qualified=False,
+        status="rejected",
+        score=min(evidence.score, 79.0),
+        failures=[*evidence.failures, failure],
+    )
+
+
+def _evidence_direction(evidence: VCPEvidence, technique: str, setup: str) -> str:
+    lines = evidence.reasons + evidence.failures
+    for line in lines:
+        stripped = str(line).strip()
+        if stripped.startswith("Direction:"):
+            direction = stripped.removeprefix("Direction:").strip().lower()
+            if direction in {"long", "short"}:
+                return direction
+    status = evidence.status.lower()
+    if "_long" in status:
+        return "long"
+    if "_short" in status:
+        return "short"
+    normalized_setup = setup.lower()
+    normalized_technique = technique.lower()
+    if normalized_technique in {"minervini-vcp", "vcp"} or normalized_setup in {"vcp", "vcp-1c", "vcp-2c", "vcp-3c"}:
+        return "long"
+    return ""
+
+
+def _latest_ema(values: list[float], period: int) -> float | None:
+    if not values:
+        return None
+    multiplier = 2 / (period + 1)
+    ema = float(values[0])
+    for value in values[1:]:
+        ema = (float(value) - ema) * multiplier + ema
+    return ema
 
 
 def _data_source_label(data_provider: str) -> str:

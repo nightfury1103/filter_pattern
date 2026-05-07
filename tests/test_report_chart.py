@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
-from filter_pattern.chart import render_chart
+from filter_pattern.chart import _date_formatter, _session_positions, render_chart
 from filter_pattern.detector import detect_vcp
-from filter_pattern.models import ScanResult, SymbolSpec
+from filter_pattern.models import Candle, ScanResult, SymbolSpec
 from filter_pattern.report import apply_watchlist_changes, result_payload, write_combined_html_report, write_html_report
 from tests.test_detector import make_config, make_series
 
@@ -43,6 +44,22 @@ def test_chart_and_report_smoke(tmp_path: Path) -> None:
     assert 'id="coverageSection"' in html
     assert "applyFilters();" in html
     assert 'data-filterable="true"' in html
+
+
+def test_chart_x_axis_uses_trading_sessions_without_weekend_gap() -> None:
+    candles = [
+        Candle(datetime=datetime(2026, 5, 1), open=10, high=11, low=9, close=10.5, volume=100),
+        Candle(datetime=datetime(2026, 5, 4), open=10.5, high=12, low=10, close=11.5, volume=120),
+        Candle(datetime=datetime(2026, 5, 5), open=11.5, high=12, low=11, close=11.8, volume=110),
+    ]
+
+    positions = _session_positions(candles)
+    formatter = _date_formatter("D1", candles)
+
+    assert positions == [0.0, 1.0, 2.0]
+    assert formatter(0, 0) == "2026-05-01"
+    assert formatter(1, 1) == "2026-05-04"
+    assert formatter(2, 2) == "2026-05-05"
 
 
 def test_combined_report_merges_multiple_results_and_adds_filters(tmp_path: Path) -> None:

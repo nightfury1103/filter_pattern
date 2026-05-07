@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from filter_pattern.models import Candle, VCPEvidence
 from filter_pattern.scanner import scan, scan_all_csv, scan_all_market, scan_market
 from filter_pattern.universe import UniverseSymbol
 from tests.test_detector import make_flat_series, make_series
@@ -166,6 +168,54 @@ def test_mixed_provider_falls_back_to_vnstock_for_missing_vietnam_data(tmp_path:
     assert seen["yahoo"] == ["FPT.VN"]
     assert seen["vnstock"] == ["FPT"]
     assert payload["candidates"][0]["symbol"] == "FPT"
+
+
+def test_scan_market_rejects_long_candidate_below_ema21(tmp_path: Path, monkeypatch) -> None:
+    universe = [UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL")]
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_loader(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        candles = []
+        start = datetime(2026, 1, 1)
+        for index in range(30):
+            close = 100.0 if index < 29 else 80.0
+            candles.append(
+                Candle(
+                    datetime=start + timedelta(days=index),
+                    open=close,
+                    high=close + 1,
+                    low=close - 1,
+                    close=close,
+                    volume=100_000,
+                )
+            )
+        return {symbol: candles for symbol in symbols}
+
+    def fake_detect(candles: list[Candle], technique: str, config, setup: str):
+        return VCPEvidence(
+            qualified=True,
+            status="WAITING",
+            score=88,
+            pivot=101,
+            current_close=candles[-1].close,
+            distance_to_pivot_pct=1,
+            contractions=[],
+            reasons=["Direction: Long", "Synthetic long candidate"],
+            failures=[],
+        )
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_loader)
+    monkeypatch.setattr("filter_pattern.scanner.detect_pattern", fake_detect)
+
+    results_path = scan_market(tmp_path / "reports/ema-guard", technique="nhathoai", setup="dd")
+    payload = json.loads(results_path.read_text())
+
+    assert payload["qualified_count"] == 0
+    assert payload["rejected"][0]["evidence"]["status"] == "rejected"
+    assert "EMA21 final-side guard failed" in payload["rejected"][0]["evidence"]["failures"][-1]
 
 
 def test_scan_all_market_can_filter_markets_before_download(tmp_path: Path, monkeypatch) -> None:
