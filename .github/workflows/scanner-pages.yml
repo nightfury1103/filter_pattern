@@ -2,11 +2,9 @@ name: Scanner Pages
 
 on:
   schedule:
-    # H4 watchlist refresh. Cron is UTC; avoid minute 0 because GitHub has high load at the start of each hour.
-    # Asia/Ho_Chi_Minh: 07:17, 11:17, 15:17, 19:17, 23:17, 03:17.
-    - cron: "1 0,4,8,12,16,20 * * *"
-    # D1 watchlist refresh. Cron is UTC; Asia/Ho_Chi_Minh: 10:23 and 21:23 Monday-Friday.
-    - cron: "1 3,14 * * 1-5"
+    # Refresh both D1 and H4 every 2 hours. Cron is UTC; Vietnam time is UTC+7.
+    # Runs at minute 1 by request.
+    - cron: "1 */2 * * *"
   workflow_dispatch:
     inputs:
       timeframe:
@@ -78,6 +76,10 @@ jobs:
           requested="${{ github.event.inputs.timeframe || '' }}"
           run_d1=0
           run_h4=0
+          echo "event_name=${{ github.event_name }}"
+          echo "event_schedule=${{ github.event.schedule || '' }}"
+          echo "utc_now=$(date -u '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "hcm_now=$(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M:%S %Z')"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "$requested" in
@@ -86,9 +88,8 @@ jobs:
               h4) run_h4=1 ;;
               *) echo "Unknown timeframe input: $requested" >&2; exit 2 ;;
             esac
-          elif [[ "${{ github.event.schedule }}" == "23 3,14 * * 1-5" ]]; then
-            run_d1=1
           else
+            run_d1=1
             run_h4=1
           fi
 
