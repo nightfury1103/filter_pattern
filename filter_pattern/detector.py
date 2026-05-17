@@ -196,6 +196,8 @@ def detect_nhathoai_setup(candles: list[Candle], setup: str = "all", config: VCP
         return _detect_arb_setup(candles, config)
     if normalized == "dd":
         return _detect_dd_setup(candles, config)
+    if normalized == "fb":
+        return _detect_fb_setup(candles, config)
     if normalized == "sb":
         return _detect_sb_setup(candles, config)
     if normalized == "bb":
@@ -915,6 +917,23 @@ class _SBSetup:
 
 
 @dataclass(frozen=True)
+class _FBSetup:
+    direction: str
+    status: str
+    score: float
+    impulse_start_index: int | None
+    impulse_end_index: int | None
+    pullback_start_index: int | None
+    pullback_end_index: int | None
+    trigger_index: int | None
+    trigger: float | None
+    stop: float | None
+    obstacle: float | None
+    reasons: list[str]
+    failures: list[str]
+
+
+@dataclass(frozen=True)
 class _BBSetup:
     direction: str
     bb_type: str
@@ -1015,6 +1034,309 @@ def _detect_sb_setup(candles: list[Candle], config: VCPConfig | None = None) -> 
         volume_dry_up_ratio=_window_volume_ratio(candles, max(0, len(candles) - cfg.compression_lookback)),
         prior_uptrend_pct=None,
     )
+
+
+def _detect_fb_setup(candles: list[Candle], config: VCPConfig | None = None) -> VCPEvidence:
+    cfg = config or VCPConfig()
+    min_needed = max(cfg.min_history_days, cfg.ema_period + 45)
+    if len(candles) < min_needed:
+        return _not_qualified(f"FB requires at least {min_needed} candles, got {len(candles)}")
+
+    closes = [c.close for c in candles]
+    ema_values = _ema(closes, cfg.ema_period)
+    candidates = [
+        _score_fb_direction(candles, cfg, ema_values, "long"),
+        _score_fb_direction(candles, cfg, ema_values, "short"),
+    ]
+    result = max(candidates, key=lambda item: (_fb_status_rank(item.status), item.score))
+    qualified = result.score >= 80 and result.status in {"WAITING", "TRIGGERED"} and not result.failures
+
+    if result.trigger and result.trigger > 0:
+        if result.direction == "long":
+            distance_to_trigger = ((result.trigger - candles[-1].close) / result.trigger) * 100
+        else:
+            distance_to_trigger = ((candles[-1].close - result.trigger) / result.trigger) * 100
+    else:
+        distance_to_trigger = None
+
+    return VCPEvidence(
+        qualified=qualified,
+        status=result.status if qualified else "rejected",
+        score=result.score,
+        pivot=result.trigger,
+        current_close=candles[-1].close,
+        distance_to_pivot_pct=distance_to_trigger,
+        contractions=[],
+        reasons=_fb_output_lines(result, candles) if qualified else [],
+        failures=[] if qualified else _fb_reject_lines(result),
+        base_start_index=result.impulse_start_index,
+        base_end_index=len(candles) - 1,
+        volume_dry_up_ratio=_window_volume_ratio(candles, max(0, len(candles) - cfg.compression_lookback)),
+        prior_uptrend_pct=None,
+    )
+
+
+def _score_fb_direction(
+    candles: list[Candle],
+    cfg: VCPConfig,
+    ema_values: list[float],
+    direction: str,
+) -> _FBSetup:
+    latest = len(candles) - 1
+    triggered = _fb_first_break(candles, latest, direction)
+    trigger_index = latest if triggered else None
+    trigger_ref = latest - 1 if triggered else latest
+    if trigger_ref <= 0:
+        return _empty_fb(direction, ["Reject reason: not enough candles to form FB trigger"])
+
+    trigger = candles[trigger_ref].high if direction == "long" else candles[trigger_ref].low
+    structure_end = latest if triggered else trigger_ref
+    pullback_start = _dd_pullback_start(candles, direction, trigger_ref)
+    if pullback_start is None:
+        return _empty_fb(direction, ["Reject reason: no first clean pullback before the FB trigger"])
+    impulse_start = _dd_impulse_start(candles, direction, pullback_start)
+    if impulse_start is None:
+        return _empty_fb(direction, ["Reject reason: no clear new impulse before the first pullback"])
+    impulse_end = pullback_start
+
+    trend_points, trend_reason, trend_failure = _score_fb_trend(
+        candles, ema_values, cfg, direction, impulse_start, impulse_end, structure_end
+    )
+    ema_points, ema_reason, ema_failure = _score_fb_ema(
+        candles, ema_values, cfg, direction, pullback_start, structure_end
+    )
+    pullback_points, pullback_reason, pullback_failure = _score_dd_pullback(
+        candles, direction, impulse_start, impulse_end, pullback_start, trigger_ref
+    )
+    ema_reach_points, ema_reach_reason, ema_reach_failure = _score_dd_pullback_reaches_ema(
+        candles, ema_values, cfg, direction, pullback_start, structure_end
+    )
+    trigger_points, trigger_reason, trigger_failure, status = _score_fb_trigger(
+        candles[-1], trigger, triggered, cfg, direction
+    )
+    stop = min(c.low for c in candles[pullback_start : structure_end + 1]) if direction == "long" else max(
+        c.high for c in candles[pullback_start : structure_end + 1]
+    )
+    stop_points, stop_reason, stop_failure = _score_fb_stop(candles, trigger, stop, cfg, direction, trigger_ref)
+    obstacle = _nearest_dd_obstacle(candles, trigger, direction, impulse_start, trigger_ref)
+    obstacle_points, obstacle_reason, obstacle_failure = _score_dd_obstacle(
+        candles, trigger, obstacle, direction, trigger_ref
+    )
+
+    score = (
+        trend_points
+        + ema_points
+        + pullback_points
+        + ema_reach_points
+        + trigger_points
+        + stop_points
+        + obstacle_points
+    )
+    reasons = [
+        trend_reason,
+        ema_reason,
+        pullback_reason,
+        ema_reach_reason,
+        trigger_reason,
+        stop_reason,
+        obstacle_reason,
+    ]
+    failures = [
+        *([] if trend_points else [trend_failure]),
+        *([] if ema_points else [ema_failure]),
+        *([] if pullback_points else [pullback_failure]),
+        *([] if ema_reach_points else [ema_reach_failure]),
+        *([] if trigger_points else [trigger_failure]),
+        *([] if stop_points else [stop_failure]),
+        *([] if obstacle_points else [obstacle_failure]),
+    ]
+    if status in {"LATE", "FAILED", "REJECT"}:
+        failures.append(f"Status is {status}, not an active FB entry candidate")
+    if score < 80 and status in {"WAITING", "TRIGGERED"}:
+        status = "REJECT"
+        failures.append(f"Score {score:.0f} is below required FB threshold 80")
+
+    return _FBSetup(
+        direction=direction,
+        status=status,
+        score=max(0.0, score),
+        impulse_start_index=impulse_start,
+        impulse_end_index=impulse_end,
+        pullback_start_index=pullback_start,
+        pullback_end_index=trigger_ref - 1,
+        trigger_index=trigger_index,
+        trigger=trigger,
+        stop=stop,
+        obstacle=obstacle,
+        reasons=[reason for reason in reasons if reason],
+        failures=[failure for failure in failures if failure],
+    )
+
+
+def _score_fb_trend(
+    candles: list[Candle],
+    ema_values: list[float],
+    cfg: VCPConfig,
+    direction: str,
+    impulse_start: int,
+    impulse_end: int,
+    structure_end: int,
+) -> tuple[float, str, str]:
+    trend_points, trend_reason, trend_failure = _score_dd_trend(
+        candles, ema_values, cfg, direction, impulse_start, impulse_end, structure_end
+    )
+    if not trend_points:
+        return 0, "", trend_failure
+    recent_before_impulse = candles[max(0, impulse_start - 18) : impulse_start]
+    impulse = candles[impulse_start : impulse_end + 1]
+    if len(recent_before_impulse) >= 8 and impulse:
+        prior_range = _base_depth_pct(recent_before_impulse)
+        impulse_range = _base_depth_pct(impulse)
+        # FB should be early in a fresh directional move, not a mature multi-pullback trend.
+        if impulse_range < max(2.0, prior_range * 0.45):
+            return 0, "", "FB trend is not fresh enough before the first pullback"
+    return 20, f"New trend / impulse before first pullback: {trend_reason}", ""
+
+
+def _score_fb_ema(
+    candles: list[Candle],
+    ema_values: list[float],
+    cfg: VCPConfig,
+    direction: str,
+    pullback_start: int,
+    structure_end: int,
+) -> tuple[float, str, str]:
+    slope_back = max(0, structure_end - cfg.ema_slope_lookback)
+    recent_start = max(0, pullback_start - 12)
+    closes = [c.close for c in candles[recent_start : structure_end + 1]]
+    emas = ema_values[recent_start : structure_end + 1]
+    segment = candles[pullback_start : structure_end + 1]
+    segment_emas = ema_values[pullback_start : structure_end + 1]
+    if direction == "long":
+        slope_ok = ema_values[structure_end] >= ema_values[slope_back]
+        side_ratio = sum(1 for close, ema in zip(closes, emas, strict=True) if close >= ema) / len(closes)
+        nearest = min(abs(c.low - ema) / ema * 100 for c, ema in zip(segment, segment_emas, strict=True) if ema > 0)
+    else:
+        slope_ok = ema_values[structure_end] <= ema_values[slope_back]
+        side_ratio = sum(1 for close, ema in zip(closes, emas, strict=True) if close <= ema) / len(closes)
+        nearest = min(abs(c.high - ema) / ema * 100 for c, ema in zip(segment, segment_emas, strict=True) if ema > 0)
+    crossings = _ema_crossings(closes, emas)
+    if slope_ok and side_ratio >= 0.55 and crossings <= 4 and nearest <= cfg.max_pullback_ema_distance_pct * 1.2:
+        return 15, f"EMA21 condition: first pullback reacts {nearest:.2f}% from EMA with {side_ratio:.0%} closes on correct side", ""
+    return 0, "", f"EMA21 failed for FB: side ratio {side_ratio:.0%}, crossings {crossings}, closest {nearest:.2f}%"
+
+
+def _score_fb_trigger(
+    latest: Candle,
+    trigger: float,
+    triggered: bool,
+    cfg: VCPConfig,
+    direction: str,
+) -> tuple[float, str, str, str]:
+    if trigger <= 0:
+        return 0, "", "First break trigger level is missing", "REJECT"
+    if triggered:
+        extension = ((latest.close - trigger) / trigger * 100) if direction == "long" else (
+            (trigger - latest.close) / trigger * 100
+        )
+        status = "TRIGGERED" if extension <= cfg.max_boundary_distance_pct else "LATE"
+        if status == "TRIGGERED":
+            return 15, f"First break trigger: latest candle closed beyond {_fmt_price(trigger)}", "", status
+        return 0, "", "First break already moved too far from trigger", status
+    distance = ((trigger - latest.close) / trigger * 100) if direction == "long" else (
+        (latest.close - trigger) / trigger * 100
+    )
+    if 0 <= distance <= cfg.max_boundary_distance_pct:
+        return 10, f"First break trigger: waiting {distance:.2f}% from {_fmt_price(trigger)}", "", "WAITING"
+    return 0, "", "First break trigger has not happened and price is not close", "REJECT"
+
+
+def _score_fb_stop(
+    candles: list[Candle],
+    trigger: float | None,
+    stop: float | None,
+    cfg: VCPConfig,
+    direction: str,
+    trigger_ref: int,
+) -> tuple[float, str, str]:
+    if trigger is None or stop is None or trigger <= 0 or stop <= 0:
+        return 0, "", "Stop-loss area is missing"
+    atr = _average_range(candles[max(0, trigger_ref - 14) : trigger_ref] or candles[-14:])
+    distance = (trigger - stop) if direction == "long" else (stop - trigger)
+    if atr > 0 and 0 < distance <= atr * 1.7:
+        return 10, f"Stop-loss area: {_fmt_price(stop)} is {distance / atr:.2f} ATR from first break", ""
+    return 0, "", f"Stop-loss is too wide: {_fmt_price(distance)} vs 1.7 ATR limit"
+
+
+def _fb_first_break(candles: list[Candle], index: int, direction: str) -> bool:
+    if index <= 0:
+        return False
+    previous = candles[index - 1]
+    candle = candles[index]
+    if direction == "long":
+        return candle.close > previous.high and candle.close > candle.open
+    return candle.close < previous.low and candle.close < candle.open
+
+
+def _empty_fb(direction: str, failures: list[str]) -> _FBSetup:
+    return _FBSetup(
+        direction=direction,
+        status="REJECT",
+        score=0.0,
+        impulse_start_index=None,
+        impulse_end_index=None,
+        pullback_start_index=None,
+        pullback_end_index=None,
+        trigger_index=None,
+        trigger=None,
+        stop=None,
+        obstacle=None,
+        reasons=[],
+        failures=failures,
+    )
+
+
+def _fb_output_lines(result: _FBSetup, candles: list[Candle]) -> list[str]:
+    direction = "Long" if result.direction == "long" else "Short"
+    return [
+        "Pattern: FB",
+        f"Direction: {direction}",
+        f"Status: {result.status}",
+        f"Score: {result.score:.0f}",
+        f"Trend: new {direction.lower()} trend before first pullback",
+        f"EMA21 condition: first pullback reacts near EMA21 in trend direction",
+        f"Impulse wave: {_date_range_text(candles, result.impulse_start_index, result.impulse_end_index)}",
+        f"First pullback: {_date_range_text(candles, result.pullback_start_index, result.pullback_end_index)}",
+        f"First break trigger: {_date_text(candles, result.trigger_index)}; level {_fmt_price(result.trigger)}",
+        f"Current price: {_fmt_price(candles[-1].close)}",
+        f"Stop-loss area: {_fmt_price(result.stop)}",
+        f"Nearest obstacle: {_fmt_price(result.obstacle)}",
+        "Reason:",
+        *[f"- {reason}" for reason in result.reasons[:8]],
+        "Manual review note:",
+        "- Confirm this is the first pullback of a fresh trend, EMA21 supports/rejects the pullback, and the first break is fresh before acting.",
+    ]
+
+
+def _fb_reject_lines(result: _FBSetup) -> list[str]:
+    failures = result.failures or ["Reject reason: FB story is incomplete or unclear"]
+    return [
+        "Pattern: FB",
+        "Status: REJECT",
+        f"Score: {result.score:.0f}",
+        "Reject reason:",
+        *[f"- {failure}" for failure in failures[:8]],
+    ]
+
+
+def _fb_status_rank(status: str) -> int:
+    return {
+        "TRIGGERED": 5,
+        "WAITING": 4,
+        "LATE": 3,
+        "FAILED": 2,
+        "REJECT": 1,
+    }.get(status, 0)
 
 
 def _score_sb_direction(
@@ -3560,6 +3882,7 @@ def _score_arb_direction(
 
             type_candidates = [
                 _score_arb_type1(candles, cfg, ema_values, direction, start, end, first_break, range_score, range_reasons),
+                _score_arb_type2(candles, cfg, ema_values, direction, start, end, first_break, range_score, range_reasons),
             ]
             local_best = max(type_candidates, key=lambda item: (_arb_status_rank(item.status), item.score))
             if (_arb_status_rank(local_best.status), local_best.score) > (_arb_status_rank(best.status), best.score):
@@ -4405,7 +4728,7 @@ def _score_nhathoai_vcp_contraction_count(contractions: list[Contraction]) -> tu
     if len(contractions) == 2:
         return 13, "Flexible contraction count: 2 clear contractions found", ""
     if len(contractions) == 1:
-        return 8, "Flexible contraction count: 1 contraction found; accepted as lower-confidence VCP evidence", ""
+        return 0, "", "Need at least 2 contractions; single contraction is a developing watch only, not actionable VCP"
     return 0, "", "No measurable contraction found"
 
 

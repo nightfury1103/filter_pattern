@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pattern Report UI Options</title>
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --panel: #ffffff;
+      --ink: #111827;
+      --muted: #5f6b7a;
+      --line: #d4dbe6;
+      --line-strong: #a8b3c2;
+      --black: #111827;
+      --green: #12763d;
+      --red: #b42318;
+      --amber: #a15c07;
+      --blue: #1d4ed8;
+      --soft: #eef2f7;
+      --radius: 8px;
+      --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .page {
+      max-width: 1660px;
+      margin: 0 auto;
+      padding: 22px 26px 44px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 25px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 780px;
+      line-height: 1.45;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 300px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: #334155;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(243, 245, 248, 0.96);
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 14px;
+    }
+
+    button {
+      height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 14px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button.active {
+      background: var(--black);
+      border-color: var(--black);
+      color: #ffffff;
+    }
+
+    .option {
+      display: none;
+    }
+
+    .option.active {
+      display: block;
+    }
+
+    .option-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.25;
+    }
+
+    .option-note {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    select,
+    input {
+      height: 36px;
+      min-width: 130px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .kpi,
+    .card,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .kpi {
+      padding: 12px;
+      min-height: 74px;
+    }
+
+    .kpi small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .kpi strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .chart {
+      display: block;
+      width: 100%;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .chart svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #fff;
+    }
+
+    .candidate-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafc;
+    }
+
+    .symbol {
+      font-size: 17px;
+      font-weight: 850;
+      line-height: 1.25;
+    }
+
+    .sub {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .score {
+      min-width: 52px;
+      text-align: center;
+      border: 1px solid #bfdbfe;
+      color: var(--blue);
+      background: #eff6ff;
+      border-radius: 7px;
+      padding: 7px 8px;
+      font-weight: 850;
+      font-size: 15px;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      min-height: 22px;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #475569;
+      background: var(--soft);
+    }
+
+    .badge.ok { color: var(--green); background: #dcfce7; }
+    .badge.warn { color: var(--amber); background: #fef3c7; }
+    .badge.short { color: var(--red); background: #fee2e2; }
+    .badge.dark { color: #ffffff; background: #111827; }
+
+    .facts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      padding: 10px 12px 12px;
+    }
+
+    .fact {
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      padding: 7px;
+      min-height: 52px;
+      background: #fbfdff;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .fact strong {
+      display: block;
+      color: var(--ink);
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    .reason-list {
+      margin: 0;
+      padding: 0 12px 14px 28px;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    /* Option A */
+    .grid-review {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    /* Option B */
+    .queue-layout {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .queue-list {
+      overflow: hidden;
+    }
+
+    .queue-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .queue-row.active {
+      background: #f1f5f9;
+      border-left: 4px solid #111827;
+      padding-left: 8px;
+    }
+
+    .queue-row:last-child {
+      border-bottom: 0;
+    }
+
+    .preview-card .chart svg {
+      min-height: 620px;
+    }
+
+    .preview-body {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 0;
+    }
+
+    .preview-side {
+      border-left: 1px solid var(--line);
+      padding: 14px;
+    }
+
+    /* Option C */
+    .table-preview {
+      display: grid;
+      grid-template-columns: minmax(560px, 0.8fr) minmax(0, 1.2fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+    }
+
+    th {
+      position: sticky;
+      top: 61px;
+      background: #f8fafc;
+      color: #475569;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    tr.active td {
+      background: #f1f5f9;
+      border-top: 1px solid #b9c4d2;
+      border-bottom: 1px solid #b9c4d2;
+    }
+
+    .sticky-preview {
+      position: sticky;
+      top: 72px;
+    }
+
+    @media (max-width: 1260px) {
+      .grid-review { grid-template-columns: repeat(2, minmax(320px, 1fr)); }
+      .queue-layout, .table-preview, .preview-body { grid-template-columns: 1fr; }
+      .preview-side { border-left: 0; border-top: 1px solid var(--line); }
+      .sticky-preview { position: static; }
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 16px 12px 34px; }
+      header, .option-head { grid-template-columns: 1fr; display: grid; }
+      .meta, .filters { justify-content: flex-start; min-width: 0; }
+      .kpis { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .grid-review { grid-template-columns: 1fr; }
+      .facts { grid-template-columns: 1fr; }
+      .table-preview { grid-template-columns: 1fr; }
+      .preview-card .chart svg { min-height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>Report UI Options</h1>
+        <p class="subtitle">Pick one direction before we rewrite the production report. All options prioritize chart review, black-white candles, stronger EMA/pattern lines, and compact evidence.</p>
+      </div>
+      <div class="meta">
+        <span class="chip">D1 + H4</span>
+        <span class="chip">Chart-first</span>
+        <span class="chip">Mock data</span>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="UI options">
+      <button class="active" data-tab="a">Option A: Chart Grid</button>
+      <button data-tab="b">Option B: Review Queue</button>
+      <button data-tab="c">Option C: Table + Preview</button>
+    </nav>
+
+    <section id="option-a" class="option active">
+      <div class="option-head">
+        <div>
+          <h2>Option A: Chart Grid</h2>
+          <p class="option-note">Best for quickly scanning many charts. Each candidate is a large card with chart first and only essential facts below.</p>
+        </div>
+        <div class="filters">
+          <input value="BTC, XAU, VNM">
+          <select><option>All markets</option></select>
+          <select><option>All setups</option></select>
+          <select><option>Qualified + Near</option></select>
+        </div>
+      </div>
+      <section class="kpis">
+        <div class="kpi"><small>Qualified</small><strong>46</strong></div>
+        <div class="kpi"><small>Near trigger</small><strong>129</strong></div>
+        <div class="kpi"><small>H4 confirms</small><strong>18</strong></div>
+        <div class="kpi"><small>Exness</small><strong>31</strong></div>
+        <div class="kpi"><small>New</small><strong>12</strong></div>
+        <div class="kpi"><small>Dropped</small><strong>9</strong></div>
+      </section>
+      <div class="grid-review">
+        <article class="card">
+          <div class="candidate-head"><div><div class="symbol">BTCUSDT <span class="badge dark">BB</span></div><span class="sub">Crypto · H4 · Triggered</span></div><div class="score">91</div></div>
+          <div class="chart">__CHART_LONG__</div>
+          <div class="facts"><div class="fact">Trigger<strong>104,820</strong></div><div class="fact">Distance<strong>0.4%</strong></div><div class="fact">Volume<strong>H1 confirmed</strong></div></div>
+          <ul class="reason-list"><li>Block is tight near EMA21.</li><li>Breakout candle is close to trigger.</li></ul>
+        </article>
+        <article class="card">
+          <div class="candidate-head"><div><div class="symbol">XAUUSD <span class="badge dark">ARB</span></div><span class="sub">Metals · H4 · Waiting</span></div><div class="score">87</div></div>
+          <div class="chart">__CHART_ARB__</div>
+          <div class="facts"><div class="fact">Trigger<strong>2,417.8</strong></div><div class="fact">Distance<strong>1.1%</strong></div><div class="fact">Broker<strong>Exness</strong></div></div>
+          <ul class="reason-list"><li>First break already happened.</li><li>Build-up is forming near old boundary.</li></ul>
+        </article>
+        <article class="card">
+          <div class="candidate-head"><div><div class="symbol">VNM <span class="badge dark">VCP 2C</span></div><span class="sub">Vietnam Stock · D1 · Near pivot</span></div><div class="score">84</div></div>
+          <div class="chart">__CHART_VCP__</div>
+          <div class="facts"><div class="fact">Pivot<strong>72.40</strong></div><div class="fact">Distance<strong>2.2%</strong></div><div class="fact">Data<strong>vnstock</strong></div></div>
+          <ul class="reason-list"><li>Two contractions shrink clearly.</li><li>Right side is tight near pivot.</li></ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="option-b" class="option">
+      <div class="option-head">
+        <div>
+          <h2>Option B: Review Queue</h2>
+          <p class="option-note">Best for focused manual review. Left side is the candidate queue; right side is one very large chart with evidence beside it.</p>
+        </div>
+        <div class="filters">
+          <select><option>Priority: near trigger first</option></select>
+          <select><option>All markets</option></select>
+          <select><option>Exness + all</option></select>
+        </div>
+      </div>
+      <div class="queue-layout">
+        <section class="panel queue-list">
+          <div class="queue-row active"><div><strong>BTCUSDT</strong><span class="sub">BB · H4 · Triggered · H1 volume</span></div><span class="badge ok">91</span></div>
+          <div class="queue-row"><div><strong>XAUUSD</strong><span class="sub">ARB · H4 · Waiting · Exness</span></div><span class="badge warn">87</span></div>
+          <div class="queue-row"><div><strong>VNM</strong><span class="sub">VCP 2C · D1 · Near pivot</span></div><span class="badge warn">84</span></div>
+          <div class="queue-row"><div><strong>EURUSD</strong><span class="sub">SB · H4 · Waiting</span></div><span class="badge warn">82</span></div>
+          <div class="queue-row"><div><strong>TSLA</strong><span class="sub">Compression · H4 · Triggered</span></div><span class="badge ok">88</span></div>
+        </section>
+        <article class="card preview-card">
+          <div class="candidate-head"><div><div class="symbol">BTCUSDT <span class="badge dark">BB</span> <span class="badge ok">Triggered</span></div><span class="sub">Crypto · H4 · Lower timeframe volume confirmed</span></div><div class="score">91</div></div>
+          <div class="preview-body">
+            <div class="chart">__CHART_LONG_LARGE__</div>
+            <aside class="preview-side">
+              <div class="facts" style="grid-template-columns:1fr;">
+                <div class="fact">Trigger<strong>104,820</strong></div>
+                <div class="fact">Current<strong>105,210</strong></div>
+                <div class="fact">Stop area<strong>103,940</strong></div>
+                <div class="fact">Lower TF volume<strong>Confirmed on H1 trigger candle</strong></div>
+              </div>
+              <ul class="reason-list"><li>Trend/context is clean.</li><li>Block is tight and near EMA21.</li><li>Break stays close to trigger, not late.</li><li>Reject if lower timeframe loses compression.</li></ul>
+            </aside>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="option-c" class="option">
+      <div class="option-head">
+        <div>
+          <h2>Option C: Table + Preview</h2>
+          <p class="option-note">Best for filtering and audit. Dense symbol table on the left; selected chart stays large and sticky on the right.</p>
+        </div>
+        <div class="filters">
+          <input value="near trigger">
+          <select><option>All setups</option></select>
+          <select><option>All data status</option></select>
+        </div>
+      </div>
+      <div class="table-preview">
+        <section class="panel">
+          <table>
+            <thead><tr><th>Symbol</th><th>Setup</th><th>Market</th><th>TF</th><th>Status</th><th>Score</th></tr></thead>
+            <tbody>
+              <tr class="active"><td><strong>BTCUSDT</strong><span class="sub">Binance</span></td><td>BB</td><td>Crypto</td><td>H4</td><td><span class="badge ok">Triggered</span></td><td>91</td></tr>
+              <tr><td><strong>XAUUSD</strong><span class="sub">Exness</span></td><td>ARB</td><td>Metals</td><td>H4</td><td><span class="badge warn">Waiting</span></td><td>87</td></tr>
+              <tr><td><strong>VNM</strong><span class="sub">vnstock</span></td><td>VCP 2C</td><td>VN Stock</td><td>D1</td><td><span class="badge warn">Near pivot</span></td><td>84</td></tr>
+              <tr><td><strong>EURUSD</strong><span class="sub">Exness</span></td><td>SB</td><td>Forex</td><td>H4</td><td><span class="badge warn">Waiting</span></td><td>82</td></tr>
+              <tr><td><strong>TSLA</strong><span class="sub">Exness</span></td><td>Compression</td><td>US Stock</td><td>H4</td><td><span class="badge ok">Triggered</span></td><td>88</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <article class="card sticky-preview">
+          <div class="candidate-head"><div><div class="symbol">BTCUSDT <span class="badge dark">BB</span></div><span class="sub">Selected row preview</span></div><div class="score">91</div></div>
+          <div class="chart">__CHART_LONG_LARGE__</div>
+          <div class="facts"><div class="fact">Trigger<strong>104,820</strong></div><div class="fact">Current<strong>105,210</strong></div><div class="fact">Stop<strong>103,940</strong></div></div>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const chartLong = `<svg viewBox="0 0 960 420" role="img" aria-label="mock long chart">
+      <rect width="960" height="420" fill="#fff"/>
+      <g stroke="#eef2f7" stroke-width="1">${Array.from({length: 9}, (_, i) => `<line x1="0" y1="${40 + i * 42}" x2="960" y2="${40 + i * 42}"/>`).join("")}</g>
+      <line x1="60" y1="96" x2="900" y2="96" stroke="#111827" stroke-width="4"/>
+      <text x="66" y="84" font-size="18" font-weight="700" fill="#111827">trigger / pivot</text>
+      <path d="M60 315 C180 290 245 265 330 248 C440 225 500 178 620 160 C720 142 790 118 900 80" fill="none" stroke="#111827" stroke-width="5"/>
+      <path d="M60 342 C210 336 300 302 430 282 C540 266 660 238 900 204" fill="none" stroke="#2563eb" stroke-width="6"/>
+      ${candles([300,288,296,280,268,260,247,238,232,225,215,207,198,188,181,172,160,138,108,86], 78)}
+      <rect x="550" y="118" width="245" height="90" fill="none" stroke="#111827" stroke-width="3" stroke-dasharray="8 6"/>
+      <text x="565" y="226" font-size="18" font-weight="700" fill="#111827">tight block near EMA21</text>
+    </svg>`;
+
+    const chartLarge = `<svg viewBox="0 0 1180 660" role="img" aria-label="large mock review chart">
+      <rect width="1180" height="660" fill="#fff"/>
+      <g stroke="#edf1f6" stroke-width="1">${Array.from({length: 11}, (_, i) => `<line x1="0" y1="${55 + i * 52}" x2="1180" y2="${55 + i * 52}"/>`).join("")}</g>
+      <line x1="70" y1="155" x2="1110" y2="155" stroke="#111827" stroke-width="5"/>
+      <text x="80" y="135" font-size="22" font-weight="800" fill="#111827">trigger / pivot</text>
+      <path d="M70 505 C210 485 310 428 455 388 C570 355 680 300 810 274 C930 248 1010 205 1110 132" fill="none" stroke="#111827" stroke-width="6"/>
+      <path d="M70 540 C250 530 410 478 560 440 C710 402 860 342 1110 300" fill="none" stroke="#2563eb" stroke-width="7"/>
+      ${candles([480,462,474,448,430,418,398,382,370,355,338,322,305,288,270,252,232,205,166,128], 92)}
+      <rect x="690" y="210" width="300" height="142" fill="none" stroke="#111827" stroke-width="4" stroke-dasharray="10 7"/>
+      <line x1="990" y1="260" x2="1095" y2="156" stroke="#12763d" stroke-width="5"/>
+      <text x="735" y="385" font-size="22" font-weight="800" fill="#111827">compression before trigger</text>
+    </svg>`;
+
+    const chartArb = `<svg viewBox="0 0 960 420" role="img" aria-label="mock ARB chart">
+      <rect width="960" height="420" fill="#fff"/>
+      <g stroke="#eef2f7" stroke-width="1">${Array.from({length: 9}, (_, i) => `<line x1="0" y1="${40 + i * 42}" x2="960" y2="${40 + i * 42}"/>`).join("")}</g>
+      <rect x="58" y="165" width="420" height="120" fill="none" stroke="#111827" stroke-width="3"/>
+      <line x1="58" y1="165" x2="900" y2="165" stroke="#111827" stroke-width="4" stroke-dasharray="9 6"/>
+      <text x="68" y="152" font-size="18" font-weight="700" fill="#111827">old upper boundary</text>
+      <path d="M60 250 C185 240 330 265 438 222 C500 198 520 112 565 100 C625 92 660 170 735 170 C810 168 845 164 910 110" fill="none" stroke="#111827" stroke-width="5"/>
+      <path d="M80 300 C280 288 460 250 620 226 C720 211 820 198 910 184" fill="none" stroke="#2563eb" stroke-width="6"/>
+      ${candles([250,242,250,238,248,235,222,205,180,112,108,150,170,168,170,166,160,138,118,96], 78)}
+      <rect x="620" y="138" width="200" height="70" fill="none" stroke="#111827" stroke-width="3" stroke-dasharray="8 6"/>
+      <text x="628" y="228" font-size="18" font-weight="700" fill="#111827">build-up after first break</text>
+    </svg>`;
+
+    const chartVcp = `<svg viewBox="0 0 960 420" role="img" aria-label="mock VCP chart">
+      <rect width="960" height="420" fill="#fff"/>
+      <g stroke="#eef2f7" stroke-width="1">${Array.from({length: 9}, (_, i) => `<line x1="0" y1="${40 + i * 42}" x2="960" y2="${40 + i * 42}"/>`).join("")}</g>
+      <line x1="88" y1="105" x2="900" y2="105" stroke="#111827" stroke-width="4"/>
+      <text x="94" y="92" font-size="18" font-weight="700" fill="#111827">pivot</text>
+      <path d="M70 315 C150 280 230 166 320 112 C375 92 418 235 470 244 C520 252 565 142 620 128 C660 118 695 178 735 180 C775 178 806 126 850 120 C880 116 900 108 920 96" fill="none" stroke="#111827" stroke-width="5"/>
+      <path d="M70 335 C200 310 340 285 480 250 C630 212 780 188 920 154" fill="none" stroke="#2563eb" stroke-width="6"/>
+      ${candles([310,286,240,178,120,138,206,238,232,180,142,128,150,172,176,146,126,120,112,98], 78)}
+      <text x="325" y="284" font-size="18" font-weight="800" fill="#111827">C1</text>
+      <text x="605" y="196" font-size="18" font-weight="800" fill="#111827">C2</text>
+      <text x="762" y="160" font-size="18" font-weight="800" fill="#111827">tight</text>
+    </svg>`;
+
+    function candles(values, startX) {
+      return values.map((y, i) => {
+        const x = startX + i * 40;
+        const open = y + (i % 2 === 0 ? 12 : -8);
+        const close = y + (i % 2 === 0 ? -6 : 10);
+        const high = Math.min(open, close) - 24;
+        const low = Math.max(open, close) + 25;
+        const fill = close < open ? "#ffffff" : "#111827";
+        return `<g><line x1="${x}" y1="${high}" x2="${x}" y2="${low}" stroke="#111827" stroke-width="3"/><rect x="${x - 8}" y="${Math.min(open, close)}" width="16" height="${Math.max(8, Math.abs(close - open))}" fill="${fill}" stroke="#111827" stroke-width="3"/></g>`;
+      }).join("");
+    }
+
+    document.body.innerHTML = document.body.innerHTML
+      .replaceAll("__CHART_LONG__", chartLong)
+      .replaceAll("__CHART_LONG_LARGE__", chartLarge)
+      .replaceAll("__CHART_ARB__", chartArb)
+      .replaceAll("__CHART_VCP__", chartVcp);
+
+    const buttons = Array.from(document.querySelectorAll("[data-tab]"));
+    const options = {
+      a: document.getElementById("option-a"),
+      b: document.getElementById("option-b"),
+      c: document.getElementById("option-c"),
+    };
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        buttons.forEach((item) => item.classList.toggle("active", item === button));
+        Object.entries(options).forEach(([key, node]) => node.classList.toggle("active", key === button.dataset.tab));
+      });
+    });
+  </script>
+</body>
+</html>

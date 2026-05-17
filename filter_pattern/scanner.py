@@ -79,6 +79,7 @@ def scan_all_csv(
         for technique_name, setup_name in pattern_runs:
             evidence = detect_pattern(candles, technique_name, config.vcp, setup_name)
             evidence = _apply_ema_side_guard(evidence, candles, config.vcp, technique_name, setup_name)
+            evidence = _apply_near_trigger_volume_signal(evidence, candles, config.vcp)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=config.timeframe,
@@ -172,6 +173,7 @@ def _scan_csv(
         for setup_name in setup_names:
             evidence = detect_pattern(candles, active_technique, config.vcp, setup_name)
             evidence = _apply_ema_side_guard(evidence, candles, config.vcp, active_technique, setup_name)
+            evidence = _apply_near_trigger_volume_signal(evidence, candles, config.vcp)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=config.timeframe,
@@ -320,6 +322,7 @@ def scan_market(
         for setup_name in setup_names:
             evidence = detect_pattern(candles, active_technique, vcp_config, setup_name)
             evidence = _apply_ema_side_guard(evidence, candles, vcp_config, active_technique, setup_name)
+            evidence = _apply_near_trigger_volume_signal(evidence, candles, vcp_config)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=active_timeframe,
@@ -458,6 +461,7 @@ def scan_all_market(
         for technique_name, setup_name in pattern_runs:
             evidence = detect_pattern(candles, technique_name, vcp_config, setup_name)
             evidence = _apply_ema_side_guard(evidence, candles, vcp_config, technique_name, setup_name)
+            evidence = _apply_near_trigger_volume_signal(evidence, candles, vcp_config)
             scan_result = ScanResult(
                 symbol=symbol,
                 timeframe=active_timeframe,
@@ -653,6 +657,57 @@ def _apply_ema_side_guard(
         status="rejected",
         score=min(evidence.score, 79.0),
         failures=[*evidence.failures, failure],
+    )
+
+
+def _apply_near_trigger_volume_signal(evidence: VCPEvidence, candles: list[Candle], config: VCPConfig) -> VCPEvidence:
+    if not evidence.qualified or len(candles) < 6:
+        return evidence
+
+    status = str(evidence.status).upper()
+    latest_volume = float(candles[-1].volume or 0.0)
+    previous_volumes = [float(candle.volume or 0.0) for candle in candles[-6:-1] if float(candle.volume or 0.0) > 0]
+    if latest_volume <= 0 or not previous_volumes:
+        return evidence
+
+    previous_average = sum(previous_volumes) / len(previous_volumes)
+    if previous_average <= 0:
+        return evidence
+
+    ratio = latest_volume / previous_average
+
+    if status == "TRIGGERED":
+        signal_prefix = "Trigger volume confirmed" if ratio >= 1.2 else "Trigger volume not confirmed"
+        signal_detail = (
+            f"{signal_prefix}: latest closed candle volume {latest_volume:,.0f} is {ratio:.2f}x the previous "
+            f"{len(previous_volumes)}-candle average"
+        )
+        if signal_detail in evidence.reasons:
+            return evidence
+        return replace(evidence, reasons=[*evidence.reasons, signal_detail])
+
+    if status not in {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT", "FORMING"}:
+        return evidence
+
+    distance = evidence.distance_to_pivot_pct
+    if distance is None or abs(float(distance)) > max(0.1, float(config.near_pivot_pct)):
+        return evidence
+
+    rising_three = (
+        len(previous_volumes) >= 2
+        and previous_volumes[-2] < previous_volumes[-1] < latest_volume
+    )
+    signal_prefix = "Pre-trigger volume building" if ratio >= 1.2 or rising_three else "Pre-trigger volume watch"
+    signal_detail = (
+        f"{signal_prefix}: latest volume {latest_volume:,.0f} is {ratio:.2f}x the previous "
+        f"{len(previous_volumes)}-candle average while price is {abs(float(distance)):.2f}% from trigger"
+    )
+    if signal_detail in evidence.reasons:
+        return evidence
+
+    return replace(
+        evidence,
+        reasons=[*evidence.reasons, signal_detail],
     )
 
 

@@ -218,6 +218,56 @@ def test_scan_market_rejects_long_candidate_below_ema21(tmp_path: Path, monkeypa
     assert "EMA21 final-side guard failed" in payload["rejected"][0]["evidence"]["failures"][-1]
 
 
+def test_scan_market_marks_near_trigger_candidate_with_volume_building(tmp_path: Path, monkeypatch) -> None:
+    universe = [UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL")]
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_loader(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        candles = []
+        start = datetime(2026, 1, 1)
+        for index in range(30):
+            close = 100.0 if index < 29 else 105.0
+            volume = 100_000 if index < 29 else 150_000
+            candles.append(
+                Candle(
+                    datetime=start + timedelta(days=index),
+                    open=close,
+                    high=close + 1,
+                    low=close - 1,
+                    close=close,
+                    volume=volume,
+                )
+            )
+        return {symbol: candles for symbol in symbols}
+
+    def fake_detect(candles: list[Candle], technique: str, config, setup: str):
+        return VCPEvidence(
+            qualified=True,
+            status="WAITING",
+            score=88,
+            pivot=106,
+            current_close=candles[-1].close,
+            distance_to_pivot_pct=1,
+            contractions=[],
+            reasons=["Direction: Long", "Synthetic triggered candidate"],
+            failures=[],
+        )
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_loader)
+    monkeypatch.setattr("filter_pattern.scanner.detect_pattern", fake_detect)
+
+    results_path = scan_market(tmp_path / "reports/volume-signal", technique="nhathoai", setup="bb")
+    payload = json.loads(results_path.read_text())
+
+    assert payload["qualified_count"] == 1
+    reasons = payload["candidates"][0]["evidence"]["reasons"]
+    assert any("Pre-trigger volume building" in reason for reason in reasons)
+    assert payload["trigger_warnings"][0]["trigger_warning"]["label"] == "Near break, volume building"
+
+
 def test_scan_all_market_can_filter_markets_before_download(tmp_path: Path, monkeypatch) -> None:
     universe = [
         UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL"),

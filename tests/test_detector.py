@@ -191,16 +191,15 @@ def test_nhathoai_vcp_detects_triggered_breakout_with_volume() -> None:
     assert "breakout volume expands" in output
 
 
-def test_nhathoai_vcp_allows_single_contraction_when_other_evidence_is_strong() -> None:
+def test_nhathoai_vcp_rejects_single_contraction_as_not_actionable() -> None:
     candles = make_series([4], current_close=99, late_volume=60_000)
 
     evidence = detect_pattern(candles, "nhathoai", make_config(), setup="vcp")
 
-    assert evidence.qualified
-    assert evidence.status == "WAITING"
+    assert not evidence.qualified
     assert len(evidence.contractions) == 1
-    output = "\n".join(evidence.reasons)
-    assert "1 contraction found" in output
+    output = "\n".join(evidence.failures).lower()
+    assert "at least 2" in output or "single contraction" in output
 
 
 def test_nhathoai_vcp_rejects_expanding_contractions() -> None:
@@ -423,14 +422,32 @@ def test_arb_detects_bullish_type1_waiting_near_second_trigger() -> None:
     assert any("Second trigger is close" in reason for reason in evidence.reasons)
 
 
-def test_arb_rejects_delayed_pullback_from_far_as_not_advance_build_up() -> None:
+def test_arb_detects_type2a_pullback_from_far_after_first_breakout() -> None:
     candles = make_bullish_arb_type2a_series()
 
     evidence = detect_pattern(candles, "nhathoai", make_config(), setup="arb")
 
-    assert not evidence.qualified
-    reject_output = "\n".join(evidence.failures)
-    assert "Build-up must form immediately outside the old range" in reject_output or "no tight build-up" in reject_output
+    assert evidence.qualified
+    assert evidence.status == "TRIGGERED"
+    output = "\n".join(evidence.reasons)
+    assert "Pattern: ARB" in output
+    assert "ARB Type: Type 2A Pullback from far" in output
+    assert "Second trigger level:" in output
+
+
+def test_fb_detects_first_pullback_break_to_ema21() -> None:
+    candles = make_bullish_fb_series(triggered=True)
+
+    evidence = detect_pattern(candles, "nhathoai", make_config(), setup="fb")
+
+    assert evidence.qualified
+    assert evidence.status == "TRIGGERED"
+    assert evidence.score >= 80
+    output = "\n".join(evidence.reasons)
+    assert "Pattern: FB" in output
+    assert "Direction: Long" in output
+    assert "First pullback" in output
+    assert "First break trigger:" in output
 
 
 def test_arb_rejects_first_breakout_only() -> None:
@@ -692,6 +709,52 @@ def make_bullish_sb_first_break_only_series() -> list[Candle]:
             volume=150_000,
         )
     )
+    return candles
+
+
+def make_bullish_fb_series(triggered: bool) -> list[Candle]:
+    start = datetime(2025, 1, 1)
+    candles: list[Candle] = []
+
+    def add(index: int, open_price: float, high: float, low: float, close: float) -> None:
+        candles.append(
+            Candle(
+                datetime=start + timedelta(days=index),
+                open=open_price,
+                high=high,
+                low=low,
+                close=close,
+                volume=150_000,
+            )
+        )
+
+    index = 0
+    for step in range(105):
+        close = 74 + (14 * step / 104)
+        add(index, close * 0.996, close * 1.006, close * 0.994, close)
+        index += 1
+
+    # New impulse before the first pullback.
+    for step in range(10):
+        close = 88 + (21 * step / 9)
+        add(index, close * 0.996, close * 1.009, close * 0.994, close)
+        index += 1
+
+    # First clean one-wave pullback toward EMA21.
+    pullback = [
+        (108.7, 109.2, 105.8, 106.8),
+        (106.7, 107.2, 102.8, 104.4),
+        (104.2, 104.7, 100.8, 102.2),
+        (102.1, 102.4, 99.7, 101.0),
+    ]
+    for open_price, high, low, close in pullback:
+        add(index, open_price, high, low, close)
+        index += 1
+
+    if triggered:
+        add(index, 101.4, 104.0, 101.1, 103.2)
+    else:
+        add(index, 101.1, 102.3, 100.2, 101.9)
     return candles
 
 

@@ -188,17 +188,20 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
   <style>
     :root {{
       color-scheme: light;
-      --text: #111827;
-      --muted: #64748b;
-      --line: #d8dee7;
-      --line-strong: #aeb8c7;
+      --text: #e7ecf3;
+      --muted: #8d98aa;
+      --line: #2a3242;
+      --line-strong: #3d4658;
       --panel: #ffffff;
-      --bg: #f4f6f8;
+      --dark-panel: #111722;
+      --dark-panel-2: #0c111a;
+      --chrome: #151922;
+      --bg: #0f1218;
       --accent: #2563eb;
       --good: #15803d;
       --warn: #b45309;
       --bad: #b91c1c;
-      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -277,8 +280,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .page {{
       min-width: 0;
-      padding: 18px 24px 40px;
-      max-width: 1720px;
+      padding: 0 14px 18px;
+      max-width: none;
       margin: 0 auto;
     }}
     header {{
@@ -286,7 +289,13 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 18px;
       align-items: start;
-      margin-bottom: 18px;
+      margin: 0 -14px 0;
+      padding: 10px 14px;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      z-index: 30;
     }}
     h1 {{ margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }}
     .summary {{ color: var(--muted); font-size: 13px; }}
@@ -299,8 +308,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .tag {{
       border: 1px solid var(--line);
-      background: var(--panel);
-      color: #334155;
+      background: #0f141e;
+      color: #cbd5e1;
       border-radius: 999px;
       padding: 6px 10px;
       font-size: 12px;
@@ -308,28 +317,28 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .stats {{
       display: grid;
-      grid-template-columns: repeat(8, minmax(110px, 1fr));
+      grid-template-columns: repeat(10, minmax(104px, 1fr));
       gap: 10px;
-      margin-bottom: 10px;
+      margin: 12px 0 10px;
     }}
     .stat {{
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 12px;
-      background: #ffffff;
+      background: #0f141e;
       min-height: 76px;
     }}
-    .stat strong {{ display: block; font-size: 24px; line-height: 1; margin-bottom: 8px; }}
+    .stat strong {{ display: block; color: #ffffff; font-size: 24px; line-height: 1; margin-bottom: 8px; }}
     .stat span {{ color: var(--muted); font-size: 13px; }}
     .toolbar {{
       display: grid;
-      grid-template-columns: minmax(260px, 2fr) repeat(9, minmax(118px, 1fr));
+      grid-template-columns: minmax(280px, 2fr) repeat(4, minmax(132px, 1fr));
       gap: 10px;
       margin-bottom: 12px;
       position: sticky;
-      top: 0;
+      top: 58px;
       z-index: 20;
-      background: rgba(244, 246, 248, 0.98);
+      background: rgba(15, 18, 24, 0.98);
       padding: 14px 0 12px;
       backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
@@ -340,7 +349,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       border: 1px solid var(--line-strong);
       border-radius: 7px;
       padding: 0 10px;
-      background: #ffffff;
+      background: #0f141e;
       color: var(--text);
       font: inherit;
       font-size: 13px;
@@ -351,17 +360,22 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       font-size: 13px;
     }}
     .layout {{
-      display: block;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
     }}
     .main-column {{ min-width: 0; }}
     .side-panel {{
-      display: none;
+      display: grid;
       gap: 12px;
       position: sticky;
-      top: 70px;
+      top: 112px;
+      max-height: calc(100vh - 126px);
+      overflow: auto;
     }}
     .panel {{
-      background: #ffffff;
+      background: var(--dark-panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 14px;
@@ -374,7 +388,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       align-items: center;
       min-height: 30px;
       font-size: 12px;
-      border-bottom: 1px solid #eef2f7;
+      border-bottom: 1px solid var(--line);
     }}
     .dist-row:last-child {{ border-bottom: 0; }}
     .bar {{
@@ -386,10 +400,10 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .bar span {{ display: block; height: 100%; background: var(--accent); border-radius: inherit; }}
     article {{
-      background: var(--panel);
-      border: 1px solid #cbd5e1;
+      background: var(--dark-panel);
+      border: 1px solid var(--line-strong);
       border-radius: 8px;
-      margin-bottom: 18px;
+      margin-bottom: 22px;
       overflow: hidden;
       box-shadow: var(--shadow);
     }}
@@ -397,9 +411,9 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       display: flex;
       justify-content: space-between;
       gap: 16px;
-      padding: 12px 16px;
+      padding: 11px 14px;
       border-bottom: 1px solid var(--line);
-      background: #ffffff;
+      background: #111722;
     }}
     .symbol {{ font-size: 19px; font-weight: 800; }}
     .meta, .reasons, .metrics {{ color: var(--muted); font-size: 13px; }}
@@ -439,17 +453,35 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .badge.change-weaker {{ background: #fff7ed; color: #c2410c; }}
     .badge.change-dropped {{ background: #fef2f2; color: var(--bad); }}
     .badge.change-unchanged, .badge.change-first_run {{ background: #f8fafc; color: #475569; }}
-    img {{
+    .card-content {{
+      display: grid;
+      grid-template-columns: minmax(740px, 2.7fr) minmax(320px, 0.85fr);
+      align-items: start;
+      background: #ffffff;
+    }}
+    .card-content.no-chart {{
+      grid-template-columns: 1fr;
+    }}
+    .chart-frame {{
+      background: #ffffff;
+      border-right: 1px solid #cbd5e1;
+      min-width: 0;
+    }}
+    .chart-frame img {{
       display: block;
       width: 100%;
       height: auto;
-      border-bottom: 1px solid var(--line);
       background: #ffffff;
     }}
-    .body {{ padding: 14px 16px; }}
+    .body {{
+      padding: 14px;
+      min-width: 0;
+      background: #ffffff;
+      color: #111827;
+    }}
     .metrics {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(110px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-bottom: 12px;
     }}
@@ -461,17 +493,62 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       min-height: 54px;
     }}
     .metric strong {{ display: block; color: var(--text); margin-top: 4px; }}
+    details.lower-tf-review {{
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #f8fafc;
+      margin-top: 14px;
+      overflow: hidden;
+    }}
+    details.lower-tf-review summary {{
+      cursor: pointer;
+      padding: 10px 12px;
+      font-weight: 800;
+      color: #1f2937;
+      background: #ffffff;
+      border-bottom: 1px solid #e5e7eb;
+    }}
+    details.lower-tf-review[open] summary {{ border-bottom-color: #cbd5e1; }}
+    .lower-tf-body {{
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }}
+    .lower-tf-card {{
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+    }}
+    .lower-tf-head {{
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 13px;
+    }}
+    .lower-tf-head strong {{ color: var(--text); }}
+    .lower-tf-note {{
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      border-bottom: 1px solid #e5e7eb;
+    }}
+    .lower-tf-card img {{ border-bottom: 0; }}
     ul {{ margin: 8px 0 0; padding-left: 20px; }}
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     .empty {{
-      background: #ffffff;
+      background: var(--dark-panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 24px;
       color: var(--muted);
     }}
     h2 {{ margin: 36px 0 8px; font-size: 22px; }}
+    .main-column h2 {{ color: #f8fafc; }}
     .main-column > h2:first-child {{ margin-top: 0; }}
     .section-note {{ margin: 0 0 16px; color: var(--muted); }}
     .near {{
@@ -479,7 +556,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .near .failures {{ color: #991b1b; }}
     details.coverage {{
-      background: #ffffff;
+      background: var(--dark-panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 16px 20px;
@@ -516,7 +593,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       border-radius: 6px;
       padding: 2px 6px;
       margin: 2px;
-      background: #f9fafb;
+      background: #0f141e;
+      color: #cbd5e1;
     }}
     .data-errors {{
       margin-top: 12px;
@@ -530,6 +608,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       .side-panel {{ position: static; }}
       .stats {{ grid-template-columns: repeat(4, 1fr); }}
       .toolbar {{ grid-template-columns: repeat(2, 1fr); }}
+      .card-content {{ grid-template-columns: 1fr; }}
+      .chart-frame {{ border-right: 0; border-bottom: 1px solid #cbd5e1; }}
     }}
     @media (max-width: 720px) {{
       .page {{ padding: 16px; }}
@@ -762,10 +842,133 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
     }
     payload = result_payload(candidates, rejected, config)
     payload["near_matches"] = _near_matches(rejected, limit=50)
+    _attach_lower_timeframe_reviews(payload)
     payload["trigger_warnings"] = _trigger_warnings(candidates + payload["near_matches"])
     payload["watchlist_dropped"] = dropped
     payload["watchlist_changes"] = _watchlist_change_summary(candidates, dropped)
     return payload
+
+
+def _attach_lower_timeframe_reviews(payload: dict) -> None:
+    candidates = payload.get("candidates", [])
+    near_matches = payload.get("near_matches", [])
+    lower_rows = [
+        item
+        for item in candidates + near_matches
+        if str(item.get("timeframe", "")).upper() == "H4"
+        and item.get("chart_path")
+    ]
+    if not lower_rows:
+        return
+
+    for item in candidates + near_matches:
+        if str(item.get("timeframe", "")).upper() != "D1":
+            continue
+        reviews = _best_lower_timeframe_reviews(item, lower_rows)
+        if not reviews:
+            continue
+        item["lower_timeframe_reviews"] = reviews
+
+        evidence = item.get("evidence", {})
+        status = str(evidence.get("status", "")).upper()
+        if status not in {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT", "FORMING"}:
+            continue
+        distance = _numeric(evidence.get("distance_to_pivot_pct"))
+        if distance is None or abs(distance) > TRIGGER_WARNING_DISTANCE_PCT:
+            continue
+        confirmation = next((review for review in reviews if review.get("volume_confirmed")), None)
+        if confirmation is not None:
+            item["lower_timeframe_confirmation"] = confirmation
+
+
+def _best_lower_timeframe_reviews(item: dict, lower_rows: list[dict], limit: int = 3) -> list[dict]:
+    direction = _direction_from_evidence(item.get("evidence", {}))
+    matches = []
+    for candidate in lower_rows:
+        if str(candidate.get("symbol")) != str(item.get("symbol")):
+            continue
+        candidate_direction = _direction_from_evidence(candidate.get("evidence", {}))
+        if direction and candidate_direction and candidate_direction != direction:
+            continue
+        if not _lower_timeframe_is_same_price_area(item, candidate):
+            continue
+        matches.append(candidate)
+    if not matches:
+        return []
+
+    def rank(candidate: dict) -> tuple[int, int, int, float]:
+        evidence = candidate.get("evidence", {})
+        exact_setup = (
+            str(candidate.get("technique")) == str(item.get("technique"))
+            and str(candidate.get("setup")) == str(item.get("setup"))
+        )
+        volume_confirmed = _prefixed_evidence_line(evidence.get("reasons", []), "Trigger volume confirmed:") is not None
+        triggered = str(evidence.get("status", "")).upper() == "TRIGGERED"
+        return (1 if exact_setup else 0, 1 if volume_confirmed else 0, 1 if triggered else 0, _score_value(candidate) or 0.0)
+
+    ranked = sorted(matches, key=rank, reverse=True)
+    return [_lower_timeframe_review_payload(item) for item in ranked[:limit]]
+
+
+def _lower_timeframe_is_same_price_area(higher_item: dict, lower_item: dict) -> bool:
+    higher_evidence = higher_item.get("evidence", {})
+    lower_evidence = lower_item.get("evidence", {})
+    anchors = [
+        _numeric(higher_evidence.get("pivot")),
+        _numeric(higher_evidence.get("current_close")),
+    ]
+    lower_values = [
+        _numeric(lower_evidence.get("pivot")),
+        _numeric(lower_evidence.get("current_close")),
+    ]
+    anchors = [value for value in anchors if value and value > 0]
+    lower_values = [value for value in lower_values if value and value > 0]
+    if not anchors or not lower_values:
+        return False
+    for anchor in anchors:
+        for value in lower_values:
+            if abs(value - anchor) / anchor * 100 <= TRIGGER_WARNING_DISTANCE_PCT:
+                return True
+    return False
+
+
+def _lower_timeframe_review_payload(item: dict) -> dict:
+    evidence = item.get("evidence", {})
+    volume_confirmed = _prefixed_evidence_line(evidence.get("reasons", []), "Trigger volume confirmed:")
+    volume_not_confirmed = _prefixed_evidence_line(evidence.get("reasons", []), "Trigger volume not confirmed:")
+    pre_trigger_building = _prefixed_evidence_line(evidence.get("reasons", []), "Pre-trigger volume building:")
+    pre_trigger_watch = _prefixed_evidence_line(evidence.get("reasons", []), "Pre-trigger volume watch:")
+    volume_detail = volume_confirmed or volume_not_confirmed or pre_trigger_building or pre_trigger_watch
+    if volume_confirmed:
+        volume_label = "Trigger volume confirmed"
+    elif volume_not_confirmed:
+        volume_label = "Trigger volume not confirmed"
+    elif pre_trigger_building:
+        volume_label = "Pre-trigger volume building"
+    elif pre_trigger_watch:
+        volume_label = "Pre-trigger volume watch"
+    else:
+        volume_label = "Volume not available"
+    return {
+        "timeframe": str(item.get("timeframe", "")),
+        "technique": str(item.get("technique", "")),
+        "setup": str(item.get("setup", "")),
+        "status": str(evidence.get("status", "")),
+        "score": evidence.get("score"),
+        "trigger_level": evidence.get("pivot"),
+        "current_price": evidence.get("current_close"),
+        "distance_to_pivot_pct": evidence.get("distance_to_pivot_pct"),
+        "chart_path": item.get("chart_path"),
+        "volume_label": volume_label,
+        "volume_detail": volume_detail,
+        "volume_confirmed": volume_confirmed is not None,
+        "note": (
+            f"{item.get('timeframe')} {item.get('technique')} / {item.get('setup')} is triggered and latest closed candle "
+            f"has confirmed volume: {volume_confirmed}"
+            if volume_confirmed
+            else ""
+        ),
+    }
 
 
 def _mark_first_run(payload: dict) -> None:
@@ -956,6 +1159,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
     close = _fmt(evidence.get("current_close"))
     distance = _fmt(evidence.get("distance_to_pivot_pct"), suffix="%")
     volume_ratio = _fmt(evidence.get("volume_dry_up_ratio"))
+    lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
     technique = candidate.get("technique", "vcp")
     setup = candidate.get("setup", "all")
     timeframe = str(candidate.get("timeframe", "D1"))
@@ -982,18 +1186,71 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
     </div>
     <div class="score">{escape(str(evidence.get("score", 0)))}</div>
   </div>
-  <img src="{chart_src}" alt="{escape(candidate["symbol"])} proof chart">
-  <div class="body">
-    <div class="metrics">
-      <div class="metric"><span>Trigger / pivot</span><strong>{pivot}</strong></div>
-      <div class="metric"><span>Current</span><strong>{close}</strong></div>
-      <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
-      <div class="metric"><span>Volume ratio</span><strong>{volume_ratio}</strong></div>
+  <div class="card-content">
+    <div class="chart-frame"><img src="{chart_src}" alt="{escape(candidate["symbol"])} proof chart"></div>
+    <div class="body">
+      <div class="metrics">
+        <div class="metric"><span>Trigger / pivot</span><strong>{pivot}</strong></div>
+        <div class="metric"><span>Current</span><strong>{close}</strong></div>
+        <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+        <div class="metric"><span>Volume ratio</span><strong>{volume_ratio}</strong></div>
+      </div>
+      <div class="reasons">Candidate evidence:</div>
+      <ul>{reasons}</ul>
+      {lower_timeframe_confirmation}
     </div>
-    <div class="reasons">Candidate evidence:</div>
-    <ul>{reasons}</ul>
   </div>
 </article>"""
+
+
+def _lower_timeframe_confirmation_html(item: dict, report_dir: Path) -> str:
+    reviews = item.get("lower_timeframe_reviews") or []
+    confirmation = item.get("lower_timeframe_confirmation")
+    if not reviews and not confirmation:
+        return ""
+
+    if not reviews and confirmation:
+        reviews = [confirmation]
+    summary = "Review lower timeframe"
+    if confirmation:
+        summary = f"Review lower timeframe: {escape(str(confirmation.get('timeframe') or 'lower TF'))} volume confirmed"
+
+    cards = []
+    for review in reviews:
+        timeframe = str(review.get("timeframe") or "Lower TF")
+        technique = str(review.get("technique") or "")
+        setup = str(review.get("setup") or "")
+        status = str(review.get("status") or "n/a")
+        score = _fmt(review.get("score"))
+        trigger = _fmt(review.get("trigger_level"))
+        current = _fmt(review.get("current_price"))
+        distance = _fmt(review.get("distance_to_pivot_pct"), suffix="%")
+        volume_label = str(review.get("volume_label") or "Volume")
+        volume_detail = str(review.get("volume_detail") or "Review volume on the lower timeframe chart.")
+        chart_path = str(review.get("chart_path") or "")
+        chart_html = ""
+        if chart_path:
+            chart_src = escape(_relative_path(chart_path, report_dir))
+            chart_html = f'<img src="{chart_src}" alt="{escape(timeframe)} lower timeframe review chart">'
+        cards.append(
+            f"""<div class="lower-tf-card">
+        <div class="lower-tf-head">
+          <span><strong>{escape(timeframe)}</strong> · {escape(technique)} / {escape(setup)} · {escape(status)}</span>
+          <span>score {escape(score)} · trigger {escape(trigger)} · current {escape(current)} · distance {escape(distance)}</span>
+        </div>
+        <div class="lower-tf-note"><strong>{escape(volume_label)}:</strong> {escape(volume_detail)}</div>
+        {chart_html}
+      </div>"""
+        )
+    cards_html = "\n".join(cards)
+    return f"""
+    <details class="lower-tf-review">
+      <summary>{summary}</summary>
+      <div class="lower-tf-body">
+        <div class="lower-tf-note">Use this lower-timeframe chart for manual review only. Ignore the candidate if the lower timeframe is not compressed enough, has too much empty space, or does not agree with the higher-timeframe setup.</div>
+        {cards_html}
+      </div>
+    </details>"""
 
 
 def _near_match_card(candidate: dict, report_dir: Path) -> str:
@@ -1004,7 +1261,8 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
     chart_html = ""
     if chart_path:
         chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<img src="{chart_src}" alt="{escape(candidate["symbol"])} near-match VCP chart">'
+        chart_html = f'<div class="chart-frame"><img src="{chart_src}" alt="{escape(candidate["symbol"])} near-match VCP chart"></div>'
+    content_class = "card-content" if chart_html else "card-content no-chart"
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:4])
     distance = _fmt(evidence.get("distance_to_pivot_pct"), suffix="%")
@@ -1015,6 +1273,7 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
     direction = _direction_from_evidence(evidence)
     display_setup = _display_setup(candidate)
     change = str(candidate.get("watchlist_change", ""))
+    lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
 
     exness_supported = _is_row_exness_supported(candidate)
 
@@ -1026,16 +1285,19 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
     </div>
     <div class="score">{score}</div>
   </div>
-  {chart_html}
-  <div class="body">
-    <div class="metrics">
-      <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
-      <div class="metric"><span>Status</span><strong>Near</strong></div>
+  <div class="{content_class}">
+    {chart_html}
+    <div class="body">
+      <div class="metrics">
+        <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+        <div class="metric"><span>Status</span><strong>Near</strong></div>
+      </div>
+      <div class="reasons">Passed checks:</div>
+      <ul>{reasons}</ul>
+      <div class="reasons failures">Failed checks:</div>
+      <ul class="failures">{failures}</ul>
+      {lower_timeframe_confirmation}
     </div>
-    <div class="reasons">Passed checks:</div>
-    <ul>{reasons}</ul>
-    <div class="reasons failures">Failed checks:</div>
-    <ul class="failures">{failures}</ul>
   </div>
 </article>"""
 
@@ -1049,7 +1311,8 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     chart_html = ""
     if chart_path:
         chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<img src="{chart_src}" alt="{escape(item["symbol"])} near break warning chart">'
+        chart_html = f'<div class="chart-frame"><img src="{chart_src}" alt="{escape(item["symbol"])} near break warning chart"></div>'
+    content_class = "card-content" if chart_html else "card-content no-chart"
     technique = item.get("technique", "vcp")
     setup = item.get("setup", "all")
     timeframe = str(item.get("timeframe", "D1"))
@@ -1062,6 +1325,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     distance = _fmt(warning.get("distance_pct"), suffix="%")
     warning_label = str(warning.get("label") or "Near break")
     note = str(warning.get("note") or "Price is close to the trigger/pivot.")
+    lower_timeframe_confirmation = _lower_timeframe_confirmation_html(item, report_dir)
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:4])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:3])
     failure_html = ""
@@ -1077,17 +1341,20 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     </div>
     <div class="score">{score}</div>
   </div>
-  {chart_html}
-  <div class="body">
-    <div class="metrics">
-      <div class="metric"><span>Trigger / pivot</span><strong>{trigger}</strong></div>
-      <div class="metric"><span>Current</span><strong>{current}</strong></div>
-      <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
-      <div class="metric"><span>Warning</span><strong>{escape(warning_label)}</strong></div>
+  <div class="{content_class}">
+    {chart_html}
+    <div class="body">
+      <div class="metrics">
+        <div class="metric"><span>Trigger / pivot</span><strong>{trigger}</strong></div>
+        <div class="metric"><span>Current</span><strong>{current}</strong></div>
+        <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+        <div class="metric"><span>Warning</span><strong>{escape(warning_label)}</strong></div>
+      </div>
+      <div class="reasons">Warning reason:</div>
+      <ul><li>{escape(note)}</li>{reasons}</ul>
+      {lower_timeframe_confirmation}
+      {failure_html}
     </div>
-    <div class="reasons">Warning reason:</div>
-    <ul><li>{escape(note)}</li>{reasons}</ul>
-    {failure_html}
   </div>
 </article>"""
 
@@ -1240,9 +1507,19 @@ def _trigger_warning(row: dict) -> dict | None:
         return None
 
     if status == "TRIGGERED":
+        volume_confirmed = _prefixed_evidence_line(evidence.get("reasons", []), "Trigger volume confirmed:")
+        volume_not_confirmed = _prefixed_evidence_line(evidence.get("reasons", []), "Trigger volume not confirmed:")
+        label = "Triggered"
+        note = "Second trigger / pivot break has already closed and price is still being tracked."
+        if volume_confirmed:
+            label = "Triggered, volume confirmed"
+            note = f"Trigger candle volume confirms the break: {volume_confirmed}"
+        elif volume_not_confirmed:
+            label = "Triggered, volume not confirmed"
+            note = f"Trigger candle closed, but volume is not confirmed: {volume_not_confirmed}"
         return {
-            "label": "Triggered",
-            "note": "Second trigger / pivot break has already closed and price is still being tracked.",
+            "label": label,
+            "note": note,
             "distance_pct": round(distance, 2),
             "trigger_level": trigger,
             "priority": 0,
@@ -1251,9 +1528,30 @@ def _trigger_warning(row: dict) -> dict | None:
     active_wait_statuses = {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT", "FORMING"}
     near_strict_failure = row.get("near_match_score") is not None
     if (status in active_wait_statuses or near_strict_failure) and abs(distance) <= TRIGGER_WARNING_DISTANCE_PCT:
+        lower_confirmation = row.get("lower_timeframe_confirmation") or {}
+        volume_building = _prefixed_evidence_line(evidence.get("reasons", []), "Pre-trigger volume building:")
+        volume_watch = _prefixed_evidence_line(evidence.get("reasons", []), "Pre-trigger volume watch:")
         label = "Near break"
         note = f"Current price is within {TRIGGER_WARNING_DISTANCE_PCT:.1f}% of the trigger/pivot."
         priority = 1
+        if lower_confirmation:
+            label = f"Near break + {lower_confirmation.get('timeframe', 'lower TF')} volume"
+            note = (
+                f"Current price is within {TRIGGER_WARNING_DISTANCE_PCT:.1f}% of the higher-timeframe trigger/pivot. "
+                f"{lower_confirmation.get('note', 'Lower timeframe trigger volume is confirmed.')}"
+            )
+            priority = 0.5
+        elif volume_building:
+            label = "Near break, volume building"
+            note = (
+                f"Current price is within {TRIGGER_WARNING_DISTANCE_PCT:.1f}% of the trigger/pivot. "
+                f"Pre-trigger clue only, not confirmation: {volume_building}"
+            )
+        elif volume_watch:
+            note = (
+                f"Current price is within {TRIGGER_WARNING_DISTANCE_PCT:.1f}% of the trigger/pivot. "
+                f"Pre-trigger volume watch: {volume_watch}"
+            )
         if near_strict_failure:
             label = "Near break, strict-failed"
             note = (
@@ -1269,6 +1567,14 @@ def _trigger_warning(row: dict) -> dict | None:
             "priority": priority,
         }
 
+    return None
+
+
+def _prefixed_evidence_line(lines: list, prefix: str) -> str | None:
+    for line in lines:
+        text = str(line).strip()
+        if text.startswith(prefix):
+            return text.removeprefix(prefix).strip()
     return None
 
 

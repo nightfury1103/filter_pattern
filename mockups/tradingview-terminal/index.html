@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Professional Chart Review Workspace</title>
+  <style>
+    :root {
+      --bg: #0f1218;
+      --chrome: #151922;
+      --chrome-2: #1b202b;
+      --panel: #111722;
+      --panel-2: #0c111a;
+      --line: #2a3242;
+      --line-strong: #3d4658;
+      --text: #e7ecf3;
+      --muted: #8d98aa;
+      --chart: #f7f8fa;
+      --chart-line: #d8dee7;
+      --ink: #101318;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #d97706;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow: auto;
+    }
+
+    .terminal {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto minmax(680px, calc(100vh - 292px)) auto;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      min-height: 48px;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #5b6577;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 850;
+      color: #ffffff;
+      background: #0b1018;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.15;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .field,
+    .tool,
+    .segmented {
+      height: 32px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: #0f141e;
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+    }
+
+    .field {
+      width: 210px;
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .tool {
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+
+    .segmented {
+      display: inline-flex;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .segmented button {
+      height: 30px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .segmented button:last-child { border-right: 0; }
+    .segmented button.active { color: #ffffff; background: #263041; }
+
+    .run-state {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .workspace {
+      min-height: 680px;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) 380px;
+      background: var(--panel-2);
+    }
+
+    .tools {
+      border-right: 1px solid var(--line);
+      background: #10151f;
+      padding: 8px 6px;
+      display: grid;
+      align-content: start;
+      gap: 7px;
+    }
+
+    .icon {
+      width: 34px;
+      height: 34px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .icon.active,
+    .icon:hover {
+      border-color: var(--line-strong);
+      background: #1b2230;
+      color: #ffffff;
+    }
+
+    .chart-area {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      border-right: 1px solid var(--line);
+    }
+
+    .chart-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px;
+      min-height: 42px;
+      background: #111722;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .symbol-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .symbol-title strong {
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .symbol-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chart-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chart-shell {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) 122px;
+      background: var(--chart);
+      color: var(--ink);
+    }
+
+    .main-chart,
+    .volume-chart {
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .volume-chart {
+      border-top: 1px solid #cbd5e1;
+    }
+
+    .right-panel {
+      min-width: 0;
+      background: var(--panel);
+      display: grid;
+      grid-template-rows: 44px minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .panel-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-tabs button {
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .panel-tabs button.active {
+      color: #ffffff;
+      background: #1b2230;
+    }
+
+    .panel-body {
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .side-view {
+      display: none;
+    }
+
+    .side-view.active {
+      display: block;
+    }
+
+    .watch-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+
+    .side-copy {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .side-metric {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .side-metric strong {
+      color: var(--text);
+    }
+
+    .watch-row.active {
+      background: #202839;
+      border-left: 3px solid #ffffff;
+      padding-left: 9px;
+    }
+
+    .watch-row:hover {
+      background: #1b2230;
+    }
+
+    .watch-symbol {
+      font-weight: 850;
+      font-size: 13px;
+    }
+
+    .watch-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .watch-score {
+      color: #ffffff;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      min-width: 46px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 850;
+      background: #10151f;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #dbeafe;
+      background: #1e3a8a;
+      margin-right: 4px;
+    }
+
+    .badge.ok { color: #dcfce7; background: #166534; }
+    .badge.warn { color: #fef3c7; background: #92400e; }
+    .badge.short { color: #fee2e2; background: #991b1b; }
+
+    .bottom {
+      min-height: 236px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(460px, 0.9fr);
+      background: var(--chrome);
+      border-top: 1px solid var(--line);
+    }
+
+    .bottom-section {
+      min-width: 0;
+      padding: 12px 14px;
+      overflow: auto;
+      border-right: 1px solid var(--line);
+    }
+
+    .bottom-section:last-child {
+      border-right: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .section-head span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .evidence-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .fact {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0f141e;
+      padding: 9px;
+      min-height: 62px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .fact strong {
+      display: block;
+      color: var(--text);
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 7px 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .checklist li {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 9px;
+      background: #0f141e;
+    }
+
+    .mini-layout {
+      display: grid;
+      grid-template-columns: 1fr 150px;
+      gap: 10px;
+      min-height: 160px;
+    }
+
+    .mini-chart {
+      background: var(--chart);
+      border-radius: 7px;
+      overflow: hidden;
+      min-height: 160px;
+    }
+
+    .review-note {
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    @media (max-width: 1180px) {
+      body { overflow: auto; }
+      .terminal { min-height: 100vh; grid-template-rows: auto auto auto; }
+      .topbar { grid-template-columns: 1fr; padding: 10px 12px; }
+      .toolbar { flex-wrap: wrap; }
+      .workspace { grid-template-columns: 1fr; }
+      .tools { display: none; }
+      .right-panel { min-height: 320px; }
+      .chart-shell { min-height: 620px; }
+      .bottom { grid-template-columns: 1fr; }
+      .bottom-section { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+
+    @media (max-width: 760px) {
+      .evidence-grid, .checklist, .mini-layout { grid-template-columns: 1fr; }
+      .field { width: 100%; }
+      .chart-shell { min-height: 480px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">FP</div>
+        <div><strong>Filter Pattern Workspace</strong><span>Trading terminal style review</span></div>
+      </div>
+      <div class="toolbar">
+        <input class="field" value="BTCUSDT" aria-label="Symbol search">
+        <div class="segmented" aria-label="Timeframe">
+          <button data-timeframe="D1">D1</button><button class="active" data-timeframe="H4">H4</button><button data-timeframe="H1">H1</button><button data-timeframe="M15">M15</button>
+        </div>
+        <button class="tool">All setups</button>
+        <button class="tool">Qualified + Near</button>
+        <button class="tool">Exness filter</button>
+        <button class="tool">Volume review</button>
+      </div>
+      <div class="run-state">
+        <span>Last scan 09:01 ICT</span>
+        <span class="badge ok">Live report</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="tools" aria-label="Chart tools">
+        <button class="icon active">CR</button>
+        <button class="icon">TL</button>
+        <button class="icon">BX</button>
+        <button class="icon">PV</button>
+        <button class="icon">EM</button>
+        <button class="icon">VL</button>
+      </aside>
+
+      <section class="chart-area">
+        <div class="chart-header">
+          <div class="symbol-title">
+            <strong id="activeSymbol">BTCUSDT</strong>
+            <span id="activeMeta">Crypto · H4 · Block Break · Long</span>
+            <span id="activeStatus" class="badge ok">Triggered</span>
+            <span id="activeVolume" class="badge">Lower TF volume confirmed</span>
+          </div>
+          <div class="chart-actions">
+            <span id="activeScore">Score 91</span>
+            <span id="activeDistance">Distance 0.4%</span>
+            <span id="activeTv">TradingView: BINANCE:BTCUSDT</span>
+          </div>
+        </div>
+
+        <div class="chart-shell">
+          <div class="main-chart">
+            <svg viewBox="0 0 1280 620" preserveAspectRatio="none" role="img" aria-label="large proof chart">
+              <rect width="1280" height="620" fill="#f7f8fa"/>
+              <g stroke="#e5eaf1" stroke-width="1">
+                <line x1="0" y1="70" x2="1280" y2="70"/><line x1="0" y1="135" x2="1280" y2="135"/>
+                <line x1="0" y1="200" x2="1280" y2="200"/><line x1="0" y1="265" x2="1280" y2="265"/>
+                <line x1="0" y1="330" x2="1280" y2="330"/><line x1="0" y1="395" x2="1280" y2="395"/>
+                <line x1="0" y1="460" x2="1280" y2="460"/><line x1="0" y1="525" x2="1280" y2="525"/>
+                <line x1="120" y1="0" x2="120" y2="620"/><line x1="300" y1="0" x2="300" y2="620"/>
+                <line x1="480" y1="0" x2="480" y2="620"/><line x1="660" y1="0" x2="660" y2="620"/>
+                <line x1="840" y1="0" x2="840" y2="620"/><line x1="1020" y1="0" x2="1020" y2="620"/>
+              </g>
+              <line x1="70" y1="160" x2="1190" y2="160" stroke="#111827" stroke-width="5"/>
+              <text x="84" y="138" font-size="20" font-weight="800" fill="#111827">trigger / block high</text>
+              <path d="M80 520 C240 492 350 430 500 390 C635 354 735 304 870 280 C1010 255 1110 202 1210 128" fill="none" stroke="#111827" stroke-width="6"/>
+              <path d="M80 555 C260 545 430 500 590 462 C750 422 930 360 1210 318" fill="none" stroke="#2563eb" stroke-width="8"/>
+              <rect x="770" y="228" width="290" height="124" fill="none" stroke="#111827" stroke-width="4" stroke-dasharray="11 8"/>
+              <text x="790" y="382" font-size="20" font-weight="800" fill="#111827">tight block near EMA21</text>
+              <line x1="1060" y1="255" x2="1210" y2="160" stroke="#16a34a" stroke-width="5"/>
+              <text x="1082" y="245" font-size="18" font-weight="800" fill="#12763d">trigger</text>
+              <g stroke="#111827" stroke-width="3">
+                <line x1="95" y1="470" x2="95" y2="540"/><rect x="84" y="486" width="22" height="30" fill="#111827"/>
+                <line x1="145" y1="450" x2="145" y2="518"/><rect x="134" y="470" width="22" height="24" fill="#fff"/>
+                <line x1="195" y1="430" x2="195" y2="500"/><rect x="184" y="448" width="22" height="32" fill="#111827"/>
+                <line x1="245" y1="420" x2="245" y2="492"/><rect x="234" y="438" width="22" height="34" fill="#111827"/>
+                <line x1="295" y1="390" x2="295" y2="462"/><rect x="284" y="406" width="22" height="36" fill="#111827"/>
+                <line x1="345" y1="375" x2="345" y2="452"/><rect x="334" y="396" width="22" height="28" fill="#fff"/>
+                <line x1="395" y1="360" x2="395" y2="438"/><rect x="384" y="378" width="22" height="34" fill="#111827"/>
+                <line x1="445" y1="330" x2="445" y2="405"/><rect x="434" y="350" width="22" height="34" fill="#111827"/>
+                <line x1="495" y1="315" x2="495" y2="392"/><rect x="484" y="342" width="22" height="26" fill="#fff"/>
+                <line x1="545" y1="298" x2="545" y2="370"/><rect x="534" y="316" width="22" height="32" fill="#111827"/>
+                <line x1="595" y1="285" x2="595" y2="356"/><rect x="584" y="304" width="22" height="28" fill="#111827"/>
+                <line x1="645" y1="268" x2="645" y2="338"/><rect x="634" y="284" width="22" height="32" fill="#111827"/>
+                <line x1="695" y1="255" x2="695" y2="328"/><rect x="684" y="276" width="22" height="28" fill="#fff"/>
+                <line x1="745" y1="245" x2="745" y2="310"/><rect x="734" y="260" width="22" height="30" fill="#111827"/>
+                <line x1="795" y1="240" x2="795" y2="302"/><rect x="784" y="258" width="22" height="20" fill="#fff"/>
+                <line x1="845" y1="236" x2="845" y2="300"/><rect x="834" y="252" width="22" height="22" fill="#111827"/>
+                <line x1="895" y1="232" x2="895" y2="296"/><rect x="884" y="248" width="22" height="20" fill="#fff"/>
+                <line x1="945" y1="228" x2="945" y2="292"/><rect x="934" y="244" width="22" height="22" fill="#111827"/>
+                <line x1="995" y1="220" x2="995" y2="286"/><rect x="984" y="238" width="22" height="24" fill="#fff"/>
+                <line x1="1045" y1="205" x2="1045" y2="270"/><rect x="1034" y="225" width="22" height="22" fill="#111827"/>
+                <line x1="1095" y1="175" x2="1095" y2="245"/><rect x="1084" y="190" width="22" height="38" fill="#111827"/>
+                <line x1="1145" y1="148" x2="1145" y2="220"/><rect x="1134" y="164" width="22" height="42" fill="#111827"/>
+                <line x1="1195" y1="118" x2="1195" y2="190"/><rect x="1184" y="132" width="22" height="46" fill="#111827"/>
+              </g>
+              <g fill="#475569" font-size="13">
+                <text x="1215" y="164">104,820</text>
+                <text x="1215" y="323">EMA21</text>
+                <text x="18" y="598">No weekend/session gaps shown</text>
+              </g>
+            </svg>
+          </div>
+          <div class="volume-chart">
+            <svg viewBox="0 0 1280 122" preserveAspectRatio="none" role="img" aria-label="volume panel">
+              <rect width="1280" height="122" fill="#f7f8fa"/>
+              <line x1="0" y1="24" x2="1280" y2="24" stroke="#e5eaf1"/>
+              <line x1="0" y1="72" x2="1280" y2="72" stroke="#e5eaf1"/>
+              <path d="M80 74 L1210 74" stroke="#2563eb" stroke-width="3" stroke-dasharray="8 7"/>
+              <g fill="#111827">
+                <rect x="88" y="55" width="22" height="54"/><rect x="138" y="64" width="22" height="45"/><rect x="188" y="48" width="22" height="61"/>
+                <rect x="238" y="66" width="22" height="43"/><rect x="288" y="72" width="22" height="37"/><rect x="338" y="78" width="22" height="31"/>
+                <rect x="388" y="70" width="22" height="39"/><rect x="438" y="80" width="22" height="29"/><rect x="488" y="76" width="22" height="33"/>
+                <rect x="538" y="82" width="22" height="27"/><rect x="588" y="84" width="22" height="25"/><rect x="638" y="78" width="22" height="31"/>
+                <rect x="688" y="86" width="22" height="23"/><rect x="738" y="88" width="22" height="21"/><rect x="788" y="90" width="22" height="19"/>
+                <rect x="838" y="92" width="22" height="17"/><rect x="888" y="86" width="22" height="23"/><rect x="938" y="82" width="22" height="27"/>
+                <rect x="988" y="78" width="22" height="31"/><rect x="1038" y="64" width="22" height="45"/><rect x="1088" y="34" width="22" height="75"/>
+                <rect x="1138" y="22" width="22" height="87"/><rect x="1188" y="18" width="22" height="91"/>
+              </g>
+              <text x="84" y="22" fill="#111827" font-size="15" font-weight="800">Volume expands on trigger candle</text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <aside class="right-panel">
+        <div class="panel-tabs"><button class="active" data-side-tab="watchlist">Watchlist</button><button data-side-tab="details">Details</button><button data-side-tab="coverage">Coverage</button></div>
+        <div class="panel-body">
+          <div class="side-view active" data-side-view="watchlist">
+            <div class="watch-row active" data-symbol="BTCUSDT" data-meta="Crypto · H4 · Block Break · Long" data-status="Triggered" data-status-class="ok" data-score="91" data-distance="0.4%" data-tv="BINANCE:BTCUSDT" data-volume="Lower TF volume confirmed"><div><div class="watch-symbol">BTCUSDT <span class="badge ok">BB</span></div><div class="watch-meta">Crypto · H4 · Triggered · H1 volume confirmed</div></div><div class="watch-score">91</div></div>
+            <div class="watch-row" data-symbol="XAUUSD" data-meta="Metals · H4 · Advance Range Break · Long" data-status="Waiting" data-status-class="warn" data-score="87" data-distance="1.1%" data-tv="OANDA:XAUUSD" data-volume="Waiting for trigger volume"><div><div class="watch-symbol">XAUUSD <span class="badge warn">ARB</span></div><div class="watch-meta">Metals · H4 · Waiting · Exness</div></div><div class="watch-score">87</div></div>
+            <div class="watch-row" data-symbol="VNM" data-meta="VN Stock · D1 · VCP 2C · Long" data-status="Near pivot" data-status-class="warn" data-score="84" data-distance="2.2%" data-tv="HOSE:VNM" data-volume="Volume dry-up, no trigger yet"><div><div class="watch-symbol">VNM <span class="badge warn">VCP 2C</span></div><div class="watch-meta">VN Stock · D1 · Near pivot · vnstock</div></div><div class="watch-score">84</div></div>
+            <div class="watch-row" data-symbol="EURUSD" data-meta="Forex · H4 · Second Break · Long" data-status="Waiting" data-status-class="warn" data-score="82" data-distance="0.9%" data-tv="FX:EURUSD" data-volume="Need lower TF confirmation"><div><div class="watch-symbol">EURUSD <span class="badge warn">SB</span></div><div class="watch-meta">Forex · H4 · W near EMA21 · Exness</div></div><div class="watch-score">82</div></div>
+            <div class="watch-row" data-symbol="TSLA" data-meta="US Stock · H4 · Pivot-EMA21 Compression · Long" data-status="Triggered" data-status-class="ok" data-score="88" data-distance="0.7%" data-tv="NASDAQ:TSLA" data-volume="Trigger volume confirmed"><div><div class="watch-symbol">TSLA <span class="badge ok">Compression</span></div><div class="watch-meta">US Stock · H4 · Triggered · Exness</div></div><div class="watch-score">88</div></div>
+            <div class="watch-row" data-symbol="XCUUSD" data-meta="Commodity · D1 · Range Break · Long" data-status="Rejected" data-status-class="" data-score="68" data-distance="Late" data-tv="TVC:COPPER" data-volume="Rejected, late break"><div><div class="watch-symbol">XCUUSD <span class="badge">RB</span></div><div class="watch-meta">Commodity · D1 · Rejected, late break</div></div><div class="watch-score">68</div></div>
+            <div class="watch-row" data-symbol="SHB" data-meta="VN Stock · H4 · Block Break · Long" data-status="Waiting" data-status-class="warn" data-score="80" data-distance="1.8%" data-tv="HOSE:SHB" data-volume="Waiting near pivot"><div><div class="watch-symbol">SHB <span class="badge warn">BB</span></div><div class="watch-meta">VN Stock · H4 · Waiting near pivot</div></div><div class="watch-score">80</div></div>
+          </div>
+          <div class="side-view" data-side-view="details">
+            <div class="side-copy">Selected candidate details stay here while the chart remains visible. This avoids scrolling through report cards.</div>
+            <div class="side-metric"><span>Pattern</span><strong>Block Break</strong></div>
+            <div class="side-metric"><span>Direction</span><strong>Long</strong></div>
+            <div class="side-metric"><span>Trigger</span><strong>104,820</strong></div>
+            <div class="side-metric"><span>Stop area</span><strong>Below block / EMA21</strong></div>
+            <div class="side-metric"><span>Manual note</span><strong>Reject if H1 is no longer compressed.</strong></div>
+          </div>
+          <div class="side-view" data-side-view="coverage">
+            <div class="side-copy">Coverage summary helps verify that the scanner is broad enough before trusting the watchlist.</div>
+            <div class="side-metric"><span>Crypto</span><strong>520 scanned</strong></div>
+            <div class="side-metric"><span>Forex</span><strong>68 Exness pairs</strong></div>
+            <div class="side-metric"><span>Commodities</span><strong>57 Exness symbols</strong></div>
+            <div class="side-metric"><span>Vietnam stock</span><strong>vnstock fallback</strong></div>
+            <div class="side-metric"><span>Data errors</span><strong>38 need mapping</strong></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="bottom">
+      <section class="bottom-section">
+        <div class="section-head"><h2>Evidence</h2><span>Candidate for manual review, not auto entry</span></div>
+        <div class="evidence-grid">
+          <div class="fact">Setup<strong>Block Break, Long</strong></div>
+          <div class="fact">Trigger<strong>104,820</strong></div>
+          <div class="fact">Current<strong>105,210 · +0.4%</strong></div>
+          <div class="fact">Invalidation<strong>Below block low / EMA21</strong></div>
+        </div>
+        <ul class="checklist">
+          <li>Context supports long: price is above EMA21 and EMA21 is rising.</li>
+          <li>Block is tight, overlapping, and near the signal boundary.</li>
+          <li>Break is fresh; price has not moved too far from trigger.</li>
+          <li>Trigger candle volume confirmed on lower timeframe.</li>
+          <li>Ignore if lower timeframe loses compression or leaves empty space.</li>
+          <li>Stop-loss is logical and close enough for manual risk review.</li>
+        </ul>
+      </section>
+
+      <section class="bottom-section">
+        <div class="section-head"><h2>Lower Timeframe Volume Review</h2><span>H1 linked to H4 candidate</span></div>
+        <div class="mini-layout">
+          <div class="mini-chart">
+            <svg viewBox="0 0 360 170" preserveAspectRatio="none" role="img" aria-label="lower timeframe mini chart">
+              <rect width="360" height="170" fill="#f7f8fa"/>
+              <line x1="20" y1="58" x2="340" y2="58" stroke="#111827" stroke-width="3"/>
+              <path d="M25 130 C85 118 125 96 170 94 C220 91 260 76 338 45" fill="none" stroke="#111827" stroke-width="4"/>
+              <path d="M25 145 C90 136 170 124 250 105 C300 94 326 88 340 82" fill="none" stroke="#2563eb" stroke-width="4"/>
+              <rect x="175" y="70" width="98" height="45" fill="none" stroke="#111827" stroke-width="2" stroke-dasharray="6 5"/>
+              <g fill="#111827" stroke="#111827" stroke-width="2">
+                <line x1="205" y1="82" x2="205" y2="116"/><rect x="199" y="92" width="12" height="14"/>
+                <line x1="230" y1="80" x2="230" y2="114"/><rect x="224" y="90" width="12" height="13" fill="#fff"/>
+                <line x1="255" y1="74" x2="255" y2="108"/><rect x="249" y="84" width="12" height="15"/>
+                <line x1="280" y1="58" x2="280" y2="98"/><rect x="274" y="68" width="12" height="22"/>
+                <line x1="305" y1="42" x2="305" y2="88"/><rect x="299" y="52" width="12" height="28"/>
+              </g>
+              <rect x="35" y="145" width="12" height="16" fill="#111827"/><rect x="60" y="142" width="12" height="19" fill="#111827"/><rect x="85" y="139" width="12" height="22" fill="#111827"/>
+              <rect x="280" y="118" width="12" height="43" fill="#111827"/><rect x="305" y="102" width="12" height="59" fill="#111827"/><rect x="330" y="96" width="12" height="65" fill="#111827"/>
+            </svg>
+          </div>
+          <p class="review-note">
+            Use the lower timeframe only to confirm trigger volume and micro-compression. It is not allowed to override a weak higher-timeframe setup.
+          </p>
+        </div>
+      </section>
+    </footer>
+  </div>
+  <script>
+    const timeframeButtons = Array.from(document.querySelectorAll("[data-timeframe]"));
+    timeframeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        timeframeButtons.forEach((item) => item.classList.toggle("active", item === button));
+      });
+    });
+
+    const sideTabButtons = Array.from(document.querySelectorAll("[data-side-tab]"));
+    const sideViews = Array.from(document.querySelectorAll("[data-side-view]"));
+    sideTabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        sideTabButtons.forEach((item) => item.classList.toggle("active", item === button));
+        sideViews.forEach((view) => view.classList.toggle("active", view.dataset.sideView === button.dataset.sideTab));
+      });
+    });
+
+    const watchRows = Array.from(document.querySelectorAll(".watch-row"));
+    const activeSymbol = document.getElementById("activeSymbol");
+    const activeMeta = document.getElementById("activeMeta");
+    const activeStatus = document.getElementById("activeStatus");
+    const activeScore = document.getElementById("activeScore");
+    const activeDistance = document.getElementById("activeDistance");
+    const activeTv = document.getElementById("activeTv");
+    const activeVolume = document.getElementById("activeVolume");
+
+    watchRows.forEach((row) => {
+      row.addEventListener("click", () => {
+        watchRows.forEach((item) => item.classList.toggle("active", item === row));
+        activeSymbol.textContent = row.dataset.symbol;
+        activeMeta.textContent = row.dataset.meta;
+        activeStatus.textContent = row.dataset.status;
+        activeStatus.className = `badge ${row.dataset.statusClass || ""}`.trim();
+        activeScore.textContent = `Score ${row.dataset.score}`;
+        activeDistance.textContent = `Distance ${row.dataset.distance}`;
+        activeTv.textContent = `TradingView: ${row.dataset.tv}`;
+        activeVolume.textContent = row.dataset.volume;
+      });
+    });
+  </script>
+</body>
+</html>
