@@ -4,11 +4,17 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from filter_pattern.detector import detect_ema21_compression, detect_pattern, detect_vcp
+from filter_pattern.detector import _fmt_price, detect_ema21_compression, detect_pattern, detect_vcp
 from filter_pattern.models import Candle, VCPConfig
 
 
 NHATHOAI_SETUP_NAMES = ["dd", "fb", "sb", "bb", "rb", "irb", "arb", "vcp"]
+
+
+def test_price_formatter_preserves_tiny_crypto_prices() -> None:
+    assert _fmt_price(0.00001054) == "0.00001054"
+    assert _fmt_price(0.000000123456) == "1.23456e-07"
+    assert _fmt_price(1.234567) == "1.2346"
 
 
 def test_valid_vcp_with_three_contractions_is_ready_near_pivot() -> None:

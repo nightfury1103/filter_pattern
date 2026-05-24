@@ -12,6 +12,12 @@ set -euo pipefail
 # - yahoo = Yahoo Finance for every market. Faster, but crypto symbols may not match TradingView USDT pairs.
 # - ccxt = crypto only.
 # - vnstock = Vietnam stock only.
+# Crypto scan:
+# - core = faster scan. Binance + Bybit + OKX, capped by CRYPTO_MAX_SYMBOLS.
+# - wide = full scan. Binance + Bybit + OKX + MEXC, uncapped unless CRYPTO_MAX_SYMBOLS is set.
+# - static = only the crypto symbols already listed in the static universe.
+# - CRYPTO_MARKET_TYPE=perp matches crypto futures/perpetual TradingView symbols such as BTCUSDT.P.
+# - CRYPTO_MARKET_TYPE=spot matches spot symbols such as BTCUSDT.
 # Broker filter:
 # - exness = only Exness-supported commodities/forex/US stocks, plus Vietnam/crypto.
 # - all = every symbol in the selected universe.
@@ -21,6 +27,24 @@ BROKER="${BROKER:-exness}"
 RUN_D1="${RUN_D1:-1}"
 RUN_H4="${RUN_H4:-1}"
 NEAR_MATCH_CHART_LIMIT="${NEAR_MATCH_CHART_LIMIT:-5}"
+export CRYPTO_MODE="${CRYPTO_MODE:-wide}"
+export CRYPTO_MARKET_TYPE="${CRYPTO_MARKET_TYPE:-perp}"
+if [[ -z "${CRYPTO_MAX_SYMBOLS+x}" ]]; then
+  if [[ "$CRYPTO_MODE" == "core" ]]; then
+    export CRYPTO_MAX_SYMBOLS="100"
+  else
+    export CRYPTO_MAX_SYMBOLS=""
+  fi
+fi
+export CCXT_MAX_WORKERS="${CCXT_MAX_WORKERS:-8}"
+export VNSTOCK_REQUEST_TIMEOUT_SECONDS="${VNSTOCK_REQUEST_TIMEOUT_SECONDS:-8}"
+if [[ -z "${CRYPTO_EXCHANGES:-}" ]]; then
+  if [[ "$CRYPTO_MODE" == "wide" ]]; then
+    export CRYPTO_EXCHANGES="binance,bybit,okx,mexc"
+  else
+    export CRYPTO_EXCHANGES="binance,bybit,okx"
+  fi
+fi
 
 D1_PERIOD="${D1_PERIOD:-180d}"
 H4_PERIOD="${H4_PERIOD:-60d}"
@@ -54,7 +78,7 @@ COMBINED_OUT="${COMBINED_OUT:-reports/market-all/index.html}"
 COMBINE_INPUTS=()
 
 if [[ "$RUN_D1" == "1" ]]; then
-  echo "Scanning D1: mode=$MODE universe=$D1_UNIVERSE markets=$D1_MARKETS period=$D1_PERIOD provider=$DATA_PROVIDER broker=$BROKER"
+  echo "Scanning D1: mode=$MODE universe=$D1_UNIVERSE markets=$D1_MARKETS period=$D1_PERIOD provider=$DATA_PROVIDER broker=$BROKER crypto_mode=$CRYPTO_MODE crypto_market_type=$CRYPTO_MARKET_TYPE crypto_max=${CRYPTO_MAX_SYMBOLS:-unlimited} crypto_exchanges=$CRYPTO_EXCHANGES"
   D1_ARGS=(
     --timeframe D1 \
     --out "$D1_OUT" \
@@ -74,7 +98,7 @@ if [[ "$RUN_D1" == "1" ]]; then
 fi
 
 if [[ "$RUN_H4" == "1" ]]; then
-  echo "Scanning H4: mode=$MODE universe=$H4_UNIVERSE markets=$H4_MARKETS period=$H4_PERIOD provider=$DATA_PROVIDER broker=$BROKER"
+  echo "Scanning H4: mode=$MODE universe=$H4_UNIVERSE markets=$H4_MARKETS period=$H4_PERIOD provider=$DATA_PROVIDER broker=$BROKER crypto_mode=$CRYPTO_MODE crypto_market_type=$CRYPTO_MARKET_TYPE crypto_max=${CRYPTO_MAX_SYMBOLS:-unlimited} crypto_exchanges=$CRYPTO_EXCHANGES"
   H4_ARGS=(
     --timeframe H4 \
     --out "$H4_OUT" \

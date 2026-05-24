@@ -3,6 +3,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+CRYPTO_EXCHANGE_PRIORITY = ("binance", "bybit", "okx", "mexc")
+CRYPTO_TRADINGVIEW_EXCHANGES = {
+    "binance": "BINANCE",
+    "bybit": "BYBIT",
+    "okx": "OKX",
+    "mexc": "MEXC",
+}
+CRYPTO_STABLE_BASES = {
+    "USDT",
+    "USDC",
+    "FDUSD",
+    "BUSD",
+    "DAI",
+    "TUSD",
+    "USDE",
+    "USDD",
+    "PYUSD",
+    "EUR",
+    "USD",
+}
+CRYPTO_LEVERAGED_SUFFIXES = ("UP", "DOWN", "BULL", "BEAR", "3L", "3S", "5L", "5S")
+
+
 @dataclass(frozen=True)
 class UniverseSymbol:
     symbol: str
@@ -30,6 +53,125 @@ def get_universe(name: str) -> list[UniverseSymbol]:
     if normalized == "broad":
         return _dedupe_symbols([*default_universe(), *sp500_universe()])
     raise ValueError("unknown universe. Choose one of: default, sp500, broad")
+
+
+def expand_crypto_universe(
+    items: list[UniverseSymbol],
+    exchange_id: str = ",".join(CRYPTO_EXCHANGE_PRIORITY),
+    market_type: str = "spot",
+    max_symbols: int | None = None,
+) -> list[UniverseSymbol]:
+    if not any(item.market == "Crypto" for item in items):
+        return items
+    dynamic_crypto = discover_crypto_universe(exchange_id, market_type)
+    if not dynamic_crypto:
+        if max_symbols is None or max_symbols <= 0:
+            return items
+        crypto_items = [item for item in items if item.market == "Crypto"][:max_symbols]
+        non_crypto = [item for item in items if item.market != "Crypto"]
+        return _dedupe_symbols([*non_crypto, *crypto_items])
+    if max_symbols is not None and max_symbols > 0:
+        dynamic_crypto = dynamic_crypto[:max_symbols]
+    non_crypto = [item for item in items if item.market != "Crypto"]
+    return _dedupe_symbols([*non_crypto, *dynamic_crypto])
+
+
+def discover_crypto_universe(
+    exchange_id: str = ",".join(CRYPTO_EXCHANGE_PRIORITY),
+    market_type: str = "spot",
+) -> list[UniverseSymbol]:
+    try:
+        import ccxt
+    except ImportError:
+        return []
+
+    exchange_markets: list[tuple[str, dict]] = []
+    for active_exchange_id in _crypto_exchange_ids(exchange_id):
+        exchange_class = getattr(ccxt, active_exchange_id, None)
+        if exchange_class is None:
+            continue
+        exchange = exchange_class({"enableRateLimit": True})
+        try:
+            markets = exchange.load_markets()
+        except Exception:  # noqa: BLE001 - keep fallback exchanges available.
+            markets = {}
+        finally:
+            close = getattr(exchange, "close", None)
+            if callable(close):
+                close()
+        for market in markets.values():
+            exchange_markets.append((active_exchange_id, market))
+    return _crypto_from_exchange_markets(exchange_markets, market_type)
+
+
+def _crypto_exchange_ids(exchange_id: str) -> list[str]:
+    requested = [item.strip().lower() for item in exchange_id.split(",") if item.strip()]
+    return requested or list(CRYPTO_EXCHANGE_PRIORITY)
+
+
+def _crypto_from_exchange_markets(exchange_markets: list[tuple[str, dict]], market_type: str = "spot") -> list[UniverseSymbol]:
+    symbols: list[UniverseSymbol] = []
+    seen: set[str] = set()
+    for exchange_id, market in exchange_markets:
+        item = _crypto_symbol_from_market(exchange_id, market, market_type)
+        if item is None or item.symbol in seen:
+            continue
+        seen.add(item.symbol)
+        symbols.append(item)
+    return symbols
+
+
+def _crypto_symbol_from_market(exchange_id: str, market: dict, market_type: str = "spot") -> UniverseSymbol | None:
+    normalized_market_type = _normalize_crypto_market_type(market_type)
+    if not _is_supported_crypto_market(market, normalized_market_type):
+        return None
+    base = str(market.get("base") or "").upper().replace("/", "").replace("-", "")
+    if not base:
+        symbol_text = str(market.get("symbol") or "").upper()
+        if not symbol_text.endswith("/USDT"):
+            return None
+        base = symbol_text.removesuffix("/USDT").replace("/", "").replace("-", "")
+    symbol = f"{base}USDT"
+    tradingview_exchange = CRYPTO_TRADINGVIEW_EXCHANGES.get(exchange_id.lower(), exchange_id.upper())
+    tv_suffix = ".P" if normalized_market_type == "perp" else ""
+    return UniverseSymbol(
+        symbol=symbol,
+        market="Crypto",
+        tradingview_symbol=f"{tradingview_exchange}:{symbol}{tv_suffix}",
+        yahoo_symbol=f"{base}-USD",
+    )
+
+
+def _is_supported_crypto_market(market: dict, market_type: str = "spot") -> bool:
+    if market.get("active") is False:
+        return False
+    quote = str(market.get("quote") or "").upper()
+    symbol_text = str(market.get("symbol") or "").upper()
+    if quote != "USDT" and not symbol_text.endswith("/USDT"):
+        return False
+    requested_market_type = _normalize_crypto_market_type(market_type)
+    exchange_market_type = str(market.get("type") or "").lower()
+    if requested_market_type == "perp":
+        if market.get("swap") is not True and exchange_market_type != "swap":
+            return False
+    else:
+        if market.get("contract") is True or market.get("swap") is True or market.get("future") is True:
+            return False
+        if exchange_market_type and exchange_market_type != "spot":
+            return False
+        if market.get("spot") is False and exchange_market_type != "spot":
+            return False
+    base = str(market.get("base") or symbol_text.removesuffix("/USDT")).upper().replace("/", "").replace("-", "")
+    if not base or base in CRYPTO_STABLE_BASES:
+        return False
+    return not base.endswith(CRYPTO_LEVERAGED_SUFFIXES)
+
+
+def _normalize_crypto_market_type(market_type: str) -> str:
+    normalized = str(market_type or "").strip().lower()
+    if normalized in {"perp", "perpetual", "future", "futures", "swap"}:
+        return "perp"
+    return "spot"
 
 
 def sp500_universe() -> list[UniverseSymbol]:

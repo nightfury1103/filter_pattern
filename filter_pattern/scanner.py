@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from .models import Candle, ScanResult, SymbolSpec, VCPConfig, VCPEvidence
 from .providers import load_ccxt_ohlcv_many, load_vnstock_ohlcv_many, load_yahoo_ohlcv_many
 from .report import apply_watchlist_changes, refresh_trigger_warnings, result_payload, write_html_report
 from .techniques import MINERVINI_VCP_SCAN_SETUPS, NHATHOAI_SCAN_SETUPS, normalize_setup, normalize_technique
-from .universe import UniverseSymbol, get_universe
+from .universe import UniverseSymbol, expand_crypto_universe, get_universe
 
 
 NEAR_MATCH_CHART_LIMIT = 20
@@ -244,12 +245,15 @@ def scan_market(
     elif broker_filter != "all":
         raise ValueError("unknown broker filter. Choose one of: all, exness")
     universe = _filter_markets(universe, markets)
+    universe, crypto_settings = _expand_crypto_if_supported(universe, data_provider)
     if limit is not None:
         universe = universe[:limit]
 
+    _print_scan_plan(active_timeframe, active_technique, setup_names, universe, data_provider)
     downloaded = _download_market_data(universe, period, active_timeframe, data_provider)
 
-    for item in universe:
+    for index, item in enumerate(universe, start=1):
+        _print_scan_progress(index, len(universe), item, "scan-market")
         symbol = _symbol_from_universe(item, data_provider)
         data = downloaded.get(item.yahoo_symbol)
         if isinstance(data, Exception):
@@ -357,6 +361,7 @@ def scan_market(
             "universe": universe_name,
             "broker_filter": broker_filter,
             "data_provider": data_provider,
+            **crypto_settings,
             "markets": markets or "all",
             "technique": active_technique,
             "setup": active_setup,
@@ -405,13 +410,16 @@ def scan_all_market(
     elif broker_filter != "all":
         raise ValueError("unknown broker filter. Choose one of: all, exness")
     universe = _filter_markets(universe, markets)
+    universe, crypto_settings = _expand_crypto_if_supported(universe, data_provider)
     if limit is not None:
         universe = universe[:limit]
 
     pattern_runs = _all_pattern_runs()
+    _print_scan_plan(active_timeframe, "all-patterns", [setup for _technique, setup in pattern_runs], universe, data_provider)
     downloaded = _download_market_data(universe, period, active_timeframe, data_provider)
 
-    for item in universe:
+    for index, item in enumerate(universe, start=1):
+        _print_scan_progress(index, len(universe), item, "scan-all-market")
         symbol = _symbol_from_universe(item, data_provider)
         data = downloaded.get(item.yahoo_symbol)
         if isinstance(data, Exception):
@@ -496,6 +504,7 @@ def scan_all_market(
             "universe": universe_name,
             "broker_filter": broker_filter,
             "data_provider": data_provider,
+            **crypto_settings,
             "markets": markets or "all",
             "technique": "all-patterns",
             "setup": "all",
@@ -537,6 +546,7 @@ def _download_market_data(
     data_provider: str,
 ) -> dict[str, list | Exception]:
     provider = data_provider.lower()
+    crypto_settings = _crypto_scan_settings()
     if provider == "yahoo":
         return load_yahoo_ohlcv_many([item.yahoo_symbol for item in universe], period=period, timeframe=timeframe)
     if provider == "ccxt":
@@ -546,7 +556,13 @@ def _download_market_data(
             for item in universe
             if item.market != "Crypto"
         }
-        ccxt_results = load_ccxt_ohlcv_many([item.symbol for item in crypto_items], period=period, timeframe=timeframe)
+        ccxt_results = load_ccxt_ohlcv_many(
+            [item.symbol for item in crypto_items],
+            period=period,
+            timeframe=timeframe,
+            exchange_id=crypto_settings.exchanges,
+            market_type=crypto_settings.market_type,
+        )
         for item in crypto_items:
             results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
         return results
@@ -593,7 +609,13 @@ def _download_market_data(
                 else:
                     failed += 1
             print(f"Yahoo Vietnam fallback: VNStock recovered {recovered}, still failed {failed}")
-        ccxt_results = load_ccxt_ohlcv_many([item.symbol for item in crypto_items], period=period, timeframe=timeframe)
+        ccxt_results = load_ccxt_ohlcv_many(
+            [item.symbol for item in crypto_items],
+            period=period,
+            timeframe=timeframe,
+            exchange_id=crypto_settings.exchanges,
+            market_type=crypto_settings.market_type,
+        )
         for item in crypto_items:
             results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
         return results
@@ -612,6 +634,107 @@ def _filter_markets(universe: list[UniverseSymbol], markets: str | None) -> list
         requested = ", ".join(sorted(allowed))
         raise ValueError(f"market filter matched no symbols: {requested}. Available markets: {available}")
     return filtered
+
+
+def _expand_crypto_if_supported(universe: list[UniverseSymbol], data_provider: str) -> tuple[list[UniverseSymbol], dict[str, object]]:
+    settings = _crypto_scan_settings()
+    provider = data_provider.lower()
+    if provider not in {"mixed", "ccxt"}:
+        return universe, settings.to_config()
+    if not any(item.market == "Crypto" for item in universe):
+        return universe, settings.to_config()
+    if settings.mode == "static":
+        crypto_count = sum(1 for item in universe if item.market == "Crypto")
+        print(f"Crypto universe expansion: static mode, scanning {crypto_count} configured crypto symbol(s)")
+        return universe, settings.to_config()
+    expanded = expand_crypto_universe(
+        universe,
+        exchange_id=settings.exchanges,
+        market_type=settings.market_type,
+        max_symbols=settings.max_symbols,
+    )
+    crypto_count = sum(1 for item in expanded if item.market == "Crypto")
+    max_detail = "unlimited" if settings.max_symbols is None else str(settings.max_symbols)
+    print(
+        "Crypto universe expansion: "
+        f"mode={settings.mode} exchanges={settings.exchanges} max_symbols={max_detail} "
+        f"market_type={settings.market_type} scanning={crypto_count} USDT {settings.market_type} pair(s)"
+    )
+    return expanded, settings.to_config()
+
+
+class _CryptoScanSettings:
+    def __init__(self, mode: str, exchanges: str, market_type: str, max_symbols: int | None) -> None:
+        self.mode = mode
+        self.exchanges = exchanges
+        self.market_type = market_type
+        self.max_symbols = max_symbols
+
+    def to_config(self) -> dict[str, object]:
+        return {
+            "crypto_mode": self.mode,
+            "crypto_exchanges": self.exchanges,
+            "crypto_market_type": self.market_type,
+            "crypto_max_symbols": self.max_symbols,
+        }
+
+
+def _crypto_scan_settings() -> _CryptoScanSettings:
+    raw_mode = os.environ.get("CRYPTO_MODE", "wide").strip().lower()
+    mode = raw_mode if raw_mode in {"core", "wide", "static"} else "core"
+    exchange_override = os.environ.get("CRYPTO_EXCHANGES", "").strip()
+    if exchange_override:
+        exchanges = exchange_override
+    elif mode == "wide":
+        exchanges = "binance,bybit,okx,mexc"
+    else:
+        exchanges = "binance,bybit,okx"
+    market_type = _normalize_crypto_market_type(os.environ.get("CRYPTO_MARKET_TYPE", "perp"))
+
+    max_symbols_raw = os.environ.get("CRYPTO_MAX_SYMBOLS", "").strip()
+    if max_symbols_raw:
+        try:
+            max_symbols = max(1, int(max_symbols_raw))
+        except ValueError:
+            max_symbols = 100 if mode == "core" else None
+    elif mode == "core":
+        max_symbols = 100
+    else:
+        max_symbols = None
+    return _CryptoScanSettings(mode=mode, exchanges=exchanges, market_type=market_type, max_symbols=max_symbols)
+
+
+def _normalize_crypto_market_type(market_type: str) -> str:
+    normalized = str(market_type or "").strip().lower()
+    if normalized in {"spot"}:
+        return "spot"
+    return "perp"
+
+
+def _print_scan_plan(
+    timeframe: str,
+    technique: str,
+    setup_names: list[str] | tuple[str, ...],
+    universe: list[UniverseSymbol],
+    data_provider: str,
+) -> None:
+    market_counts: dict[str, int] = {}
+    for item in universe:
+        market_counts[item.market] = market_counts.get(item.market, 0) + 1
+    market_summary = ", ".join(f"{market}={count}" for market, count in sorted(market_counts.items()))
+    print(
+        f"Scan plan: timeframe={timeframe} technique={technique} provider={data_provider} "
+        f"symbols={len(universe)} setup_count={len(setup_names)} evaluations={len(universe) * len(setup_names)}"
+    )
+    print(f"Scan plan markets: {market_summary}")
+
+
+def _print_scan_progress(index: int, total: int, item: UniverseSymbol, label: str) -> None:
+    if total <= 0:
+        return
+    interval = max(1, min(100, total // 20 or 1))
+    if index == 1 or index == total or index % interval == 0:
+        print(f"{label} progress: {index}/{total} {item.market}:{item.symbol}", flush=True)
 
 
 def _needs_vnstock_fallback(data: list | Exception | None, timeframe: str) -> bool:

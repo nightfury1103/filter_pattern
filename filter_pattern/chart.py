@@ -78,7 +78,7 @@ def render_chart(
     elif _is_pivot_ema21_compression_evidence(evidence):
         _draw_pivot_ema21_compression_annotations(price_ax, candles, plot_candles, dates, offset, result, config)
     elif evidence.pivot is not None:
-        price_ax.axhline(evidence.pivot, color=PIVOT_COLOR, linewidth=PRIMARY_LINE_WIDTH, label=f"Pivot {evidence.pivot:.2f}")
+        price_ax.axhline(evidence.pivot, color=PIVOT_COLOR, linewidth=PRIMARY_LINE_WIDTH, label=f"Pivot {_price_label(evidence.pivot)}")
         lower = evidence.pivot * (1 - config.near_pivot_pct / 100)
         price_ax.axhspan(lower, evidence.pivot, color="#e5e7eb", alpha=0.45, label="Entry watch zone")
     if evidence.current_close is not None:
@@ -87,7 +87,7 @@ def render_chart(
             color="#111827",
             linestyle="--",
             linewidth=BASE_LINE_WIDTH,
-            label=f"Current close {evidence.current_close:.2f}",
+            label=f"Current close {_price_label(evidence.current_close)}",
         )
 
     for index, contraction in enumerate(evidence.contractions, start=1):
@@ -123,6 +123,7 @@ def render_chart(
     price_ax.legend(loc="upper left", fontsize=10, frameon=True, facecolor="#ffffff", edgecolor="#d1d5db")
     price_ax.set_ylabel("Price", fontsize=11, fontweight="bold")
     volume_ax.set_ylabel("Volume", fontsize=11, fontweight="bold")
+    price_ax.yaxis.set_major_formatter(_price_axis_formatter(plot_candles))
     volume_ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=10, integer=True))
     volume_ax.xaxis.set_major_formatter(_date_formatter(result.timeframe, plot_candles))
     price_ax.tick_params(axis="both", labelsize=10, width=1.2, colors="#111111")
@@ -134,12 +135,13 @@ def render_chart(
 
 
 def _draw_candles(ax, candles: list[Candle], dates: list[float], width: float) -> None:
+    body_floor = _minimum_body_height(candles)
     for candle, date in zip(candles, dates, strict=True):
         up = candle.close >= candle.open
         face = UP_CANDLE_FACE if up else DOWN_CANDLE_FACE
         ax.vlines(date, candle.low, candle.high, color=CANDLE_EDGE, linewidth=1.45, zorder=2)
         body_low = min(candle.open, candle.close)
-        body_height = max(abs(candle.close - candle.open), 0.001)
+        body_height = max(abs(candle.close - candle.open), body_floor)
         ax.add_patch(
             Rectangle(
                 (date - width / 2, body_low),
@@ -210,6 +212,46 @@ def _date_step(dates: list[float]) -> float:
 
 def _candle_width(dates: list[float]) -> float:
     return max(_date_step(dates) * 0.62, 0.015)
+
+
+def _minimum_body_height(candles: list[Candle]) -> float:
+    if not candles:
+        return 1e-12
+    highs = [c.high for c in candles]
+    lows = [c.low for c in candles]
+    closes = [abs(c.close) for c in candles if c.close]
+    visible_range = max(max(highs) - min(lows), max(closes or [1.0]) * 1e-6, 1e-12)
+    return visible_range * 0.004
+
+
+def _price_axis_formatter(candles: list[Candle]):
+    reference = max((abs(c.close) for c in candles if c.close), default=1.0)
+
+    def format_price(value: float, _position: int) -> str:
+        return _price_label(value, reference)
+
+    return mticker.FuncFormatter(format_price)
+
+
+def _price_label(value: float | None, reference: float | None = None) -> str:
+    if value is None:
+        return "n/a"
+    magnitude = abs(reference if reference is not None and reference != 0 else value)
+    if magnitude >= 1000:
+        return f"{value:,.2f}"
+    if magnitude >= 1:
+        return _trim_float(value, 4)
+    if magnitude >= 0.01:
+        return _trim_float(value, 6)
+    if magnitude >= 0.0001:
+        return _trim_float(value, 8)
+    if magnitude >= 0.000001:
+        return _trim_float(value, 10)
+    return f"{value:.10g}"
+
+
+def _trim_float(value: float, decimals: int) -> str:
+    return f"{value:.{decimals}f}".rstrip("0").rstrip(".")
 
 
 def _range_width(dates: list[float], start: int, end: int) -> float:
@@ -327,12 +369,12 @@ def _draw_arb_annotations(
             ax.text(dates[start], area_high, " build-up/retest", fontsize=8, va="bottom", color="#15803d")
 
     if trigger is not None:
-        ax.axhline(trigger, color="#16a34a", linewidth=1.7, label=f"Second trigger {trigger:.2f}")
+        ax.axhline(trigger, color="#16a34a", linewidth=1.7, label=f"Second trigger {_price_label(trigger)}")
         if result.evidence.status == "WAITING":
             lower = trigger * (1 - config.max_boundary_distance_pct / 100)
             ax.axhspan(lower, trigger, color="#bbf7d0", alpha=0.20, label="Trigger watch zone")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
 
 
 def _draw_dd_annotations(
@@ -393,7 +435,7 @@ def _draw_dd_annotations(
             ax.text(dates[start], cluster_high, " 2+ doji near EMA21", fontsize=8, va="bottom", color="#5b21b6")
 
     if signal is not None:
-        ax.axhline(signal, color="#16a34a", linewidth=1.7, label=f"DD signal {signal:.2f}")
+        ax.axhline(signal, color="#16a34a", linewidth=1.7, label=f"DD signal {_price_label(signal)}")
         if result.evidence.status == "WAITING":
             if _line_value(lines, "Direction:") == "Short":
                 upper = signal * (1 + config.max_boundary_distance_pct / 100)
@@ -402,9 +444,9 @@ def _draw_dd_annotations(
                 lower = signal * (1 - config.max_boundary_distance_pct / 100)
                 ax.axhspan(lower, signal, color="#bbf7d0", alpha=0.20, label="Signal watch zone")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
     if obstacle is not None:
-        ax.axhline(obstacle, color="#f97316", linestyle=":", linewidth=1.1, label=f"Nearest obstacle {obstacle:.2f}")
+        ax.axhline(obstacle, color="#f97316", linestyle=":", linewidth=1.1, label=f"Nearest obstacle {_price_label(obstacle)}")
 
 
 def _draw_sb_annotations(
@@ -443,7 +485,7 @@ def _draw_sb_annotations(
     _mark_event(ax, plot_candles, dates, offset, second_break_index, "2nd break", "#16a34a", above=True)
 
     if trigger is not None:
-        ax.axhline(trigger, color="#16a34a", linewidth=1.7, label=f"SB trigger {trigger:.2f}")
+        ax.axhline(trigger, color="#16a34a", linewidth=1.7, label=f"SB trigger {_price_label(trigger)}")
         if result.evidence.status == "WAITING":
             direction = _line_value(lines, "Direction:")
             if direction == "Short":
@@ -453,9 +495,9 @@ def _draw_sb_annotations(
                 lower = trigger * (1 - config.max_boundary_distance_pct / 100)
                 ax.axhspan(lower, trigger, color="#bbf7d0", alpha=0.20, label="Trigger watch zone")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
     if obstacle is not None:
-        ax.axhline(obstacle, color="#f97316", linestyle=":", linewidth=1.1, label=f"Nearest obstacle {obstacle:.2f}")
+        ax.axhline(obstacle, color="#f97316", linestyle=":", linewidth=1.1, label=f"Nearest obstacle {_price_label(obstacle)}")
 
 
 def _draw_bb_annotations(
@@ -535,7 +577,7 @@ def _draw_bb_annotations(
             )
 
     if trigger is not None:
-        ax.axhline(trigger, color="#16a34a", linewidth=2.0, label=f"BB signal {trigger:.2f}")
+        ax.axhline(trigger, color="#16a34a", linewidth=2.0, label=f"BB signal {_price_label(trigger)}")
         if result.evidence.status == "WAITING":
             direction = _line_value(lines, "Direction:")
             if direction == "Short":
@@ -545,9 +587,9 @@ def _draw_bb_annotations(
                 lower = trigger * (1 - config.max_boundary_distance_pct / 100)
                 ax.axhspan(lower, trigger, color="#bbf7d0", alpha=0.20, label="Signal watch zone")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
     if obstacle is not None:
-        ax.axhline(obstacle, color="#f97316", linestyle=":", linewidth=1.1, label=f"Nearest obstacle {obstacle:.2f}")
+        ax.axhline(obstacle, color="#f97316", linestyle=":", linewidth=1.1, label=f"Nearest obstacle {_price_label(obstacle)}")
 
 
 def _draw_rb_annotations(
@@ -631,7 +673,7 @@ def _draw_rb_annotations(
             ax.text(dates[start], buildup_high, " build-up", fontsize=9, va="bottom", color="#15803d", fontweight="bold")
 
     if trigger is not None:
-        ax.axhline(trigger, color="#16a34a", linewidth=2.0, label=f"RB breakout boundary {trigger:.2f}")
+        ax.axhline(trigger, color="#16a34a", linewidth=2.0, label=f"RB breakout boundary {_price_label(trigger)}")
         if result.evidence.status == "WAITING":
             direction = _line_value(lines, "Direction:")
             if direction == "Short":
@@ -641,7 +683,7 @@ def _draw_rb_annotations(
                 lower_zone = trigger * (1 - config.max_boundary_distance_pct / 100)
                 ax.axhspan(lower_zone, trigger, color="#bbf7d0", alpha=0.18, label="Boundary watch zone")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
 
 
 def _draw_irb_annotations(
@@ -726,7 +768,7 @@ def _draw_irb_annotations(
             ax.text(dates[start], block_high, " inner block", fontsize=9, va="bottom", color="#b45309", fontweight="bold")
 
     if trigger is not None:
-        ax.axhline(trigger, color="#16a34a", linewidth=2.0, label=f"IRB inner trigger {trigger:.2f}")
+        ax.axhline(trigger, color="#16a34a", linewidth=2.0, label=f"IRB inner trigger {_price_label(trigger)}")
         if result.evidence.status == "WAITING":
             direction = _line_value(lines, "Direction:")
             if direction == "Short":
@@ -736,9 +778,9 @@ def _draw_irb_annotations(
                 lower_zone = trigger * (1 - config.max_boundary_distance_pct / 100)
                 ax.axhspan(lower_zone, trigger, color="#bbf7d0", alpha=0.18, label="Inner trigger watch zone")
     if target is not None:
-        ax.axhline(target, color="#2563eb", linestyle="-.", linewidth=1.4, label=f"Target boundary {target:.2f}")
+        ax.axhline(target, color="#2563eb", linestyle="-.", linewidth=1.4, label=f"Target boundary {_price_label(target)}")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
 
 
 def _draw_pivot_ema21_compression_annotations(
@@ -815,7 +857,7 @@ def _draw_pivot_ema21_compression_annotations(
             ax.text(dates[start], zone_high, " squeeze zone", fontsize=8, va="bottom", color="#b45309")
 
     if trigger is not None:
-        ax.axhline(trigger, color="#16a34a", linewidth=1.5, alpha=0.75, label=f"Trigger {trigger:.2f}")
+        ax.axhline(trigger, color="#16a34a", linewidth=1.5, alpha=0.75, label=f"Trigger {_price_label(trigger)}")
         if result.evidence.status == "WAITING":
             if direction == "Short":
                 upper_zone = trigger * (1 + config.max_boundary_distance_pct / 100)
@@ -824,7 +866,7 @@ def _draw_pivot_ema21_compression_annotations(
                 lower_zone = trigger * (1 - config.max_boundary_distance_pct / 100)
                 ax.axhspan(lower_zone, trigger, color="#bbf7d0", alpha=0.16, label="Trigger watch zone")
     if stop is not None:
-        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {stop:.2f}")
+        ax.axhline(stop, color="#dc2626", linestyle="--", linewidth=1.2, label=f"Stop area {_price_label(stop)}")
 
 
 def _mark_event(

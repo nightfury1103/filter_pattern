@@ -779,8 +779,8 @@ def _first_line_containing(lines: list[str], needle: str) -> str | None:
     return None
 
 
-def _fmt_price(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.2f}"
+def _trim_price(value: float, decimals: int) -> str:
+    return f"{value:.{decimals}f}".rstrip("0").rstrip(".")
 
 
 def _fmt_range(low: float | None, high: float | None) -> str:
@@ -4543,7 +4543,18 @@ def _average_range_pct(candles: list[Candle]) -> float:
 def _fmt_price(value: float | None) -> str:
     if value is None:
         return "n/a"
-    return f"{value:.5f}".rstrip("0").rstrip(".")
+    magnitude = abs(value)
+    if magnitude >= 1000:
+        return f"{value:,.2f}"
+    if magnitude >= 1:
+        return _trim_price(value, 4)
+    if magnitude >= 0.01:
+        return _trim_price(value, 6)
+    if magnitude >= 0.0001:
+        return _trim_price(value, 8)
+    if magnitude >= 0.000001:
+        return _trim_price(value, 10)
+    return f"{value:.10g}"
 
 
 def _detect_nhathoai_vcp_setup(candles: list[Candle], config: VCPConfig | None = None) -> VCPEvidence:

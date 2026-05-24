@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from dataclasses import replace
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from filter_pattern.chart import _date_formatter, _session_positions, render_chart
+from filter_pattern.chart import _minimum_body_height, _price_label, _date_formatter, _session_positions, render_chart
 from filter_pattern.detector import detect_vcp
 from filter_pattern.models import Candle, ScanResult, SymbolSpec
 from filter_pattern.report import apply_watchlist_changes, result_payload, write_combined_html_report, write_html_report
@@ -60,6 +61,42 @@ def test_chart_x_axis_uses_trading_sessions_without_weekend_gap() -> None:
     assert formatter(0, 0) == "2026-05-01"
     assert formatter(1, 1) == "2026-05-04"
     assert formatter(2, 2) == "2026-05-05"
+
+
+def test_tiny_price_chart_uses_adaptive_candle_body_and_labels(tmp_path: Path) -> None:
+    candles = [
+        Candle(
+            datetime=datetime(2026, 5, 1) + timedelta(days=day - 1),
+            open=0.00001000 + day * 0.00000002,
+            high=0.00001060 + day * 0.00000002,
+            low=0.00000970 + day * 0.00000002,
+            close=0.00001015 + day * 0.00000002,
+            volume=1_000_000 + day * 10_000,
+        )
+        for day in range(1, 35)
+    ]
+    cfg = make_config()
+    evidence = replace(
+        detect_vcp(make_series([20, 12, 6], current_close=96, late_volume=80_000), cfg),
+        pivot=0.000011,
+        current_close=candles[-1].close,
+        contractions=[],
+    )
+    symbol = SymbolSpec(
+        symbol="SHIBUSDT",
+        market="Crypto",
+        tradingview_symbol="BINANCE:SHIBUSDT",
+        csv_path=tmp_path / "shib.csv",
+    )
+    result = ScanResult(symbol=symbol, timeframe="D1", evidence=evidence)
+
+    body_floor = _minimum_body_height(candles)
+    chart_path = render_chart(result, candles, tmp_path / "charts", cfg)
+
+    assert body_floor < candles[-1].close * 0.01
+    assert _price_label(candles[-1].close) != "0.00"
+    assert chart_path.exists()
+    assert chart_path.stat().st_size > 0
 
 
 def test_combined_report_merges_multiple_results_and_adds_filters(tmp_path: Path) -> None:

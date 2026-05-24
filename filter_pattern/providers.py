@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import io
 import os
+import signal
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime, timedelta, timezone
 from math import isnan
@@ -85,7 +88,8 @@ def load_ccxt_ohlcv_many(
     symbols: list[str],
     period: str = "2y",
     timeframe: str = "D1",
-    exchange_id: str = "binance,bybit,okx",
+    exchange_id: str = "binance,bybit,okx,mexc",
+    market_type: str = "spot",
 ) -> dict[str, list[Candle] | Exception]:
     active_timeframe = _normalize_timeframe(timeframe)
     unique_symbols = list(dict.fromkeys(symbols))
@@ -124,18 +128,29 @@ def load_ccxt_ohlcv_many(
                 close()
             continue
 
+        exchange_symbols = []
         for raw_symbol in list(unresolved):
-            try:
-                ccxt_symbol = _ccxt_symbol(raw_symbol)
-                if ccxt_symbol not in exchange.markets:
-                    raise ValueError(f"{ccxt_symbol} is not available on CCXT exchange {active_exchange_id}")
-                rows = exchange.fetch_ohlcv(ccxt_symbol, timeframe=ccxt_timeframe, limit=limit)
-                if not rows:
-                    raise ValueError(f"No CCXT {active_timeframe} data returned for {raw_symbol} on {active_exchange_id}")
-                results[raw_symbol] = [_ccxt_candle(row) for row in rows]
-                unresolved.remove(raw_symbol)
-            except Exception as exc:  # noqa: BLE001 - returned per symbol for scanner reporting.
-                results[raw_symbol] = exc
+            ccxt_symbol = _ccxt_symbol(raw_symbol, market_type)
+            if ccxt_symbol in exchange.markets:
+                exchange_symbols.append((raw_symbol, ccxt_symbol))
+            else:
+                results[raw_symbol] = ValueError(f"{ccxt_symbol} is not available on CCXT exchange {active_exchange_id}")
+
+        workers = _ccxt_worker_count(len(exchange_symbols))
+        if exchange_symbols:
+            print(f"CCXT fetch: exchange={active_exchange_id} symbols={len(exchange_symbols)} workers={workers}")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_fetch_ccxt_ohlcv, exchange, raw_symbol, ccxt_symbol, active_timeframe, ccxt_timeframe, limit): raw_symbol
+                for raw_symbol, ccxt_symbol in exchange_symbols
+            }
+            for future in as_completed(futures):
+                raw_symbol = futures[future]
+                try:
+                    results[raw_symbol] = future.result()
+                    unresolved.remove(raw_symbol)
+                except Exception as exc:  # noqa: BLE001 - returned per symbol for scanner reporting.
+                    results[raw_symbol] = exc
         close = getattr(exchange, "close", None)
         if callable(close):
             close()
@@ -145,6 +160,13 @@ def load_ccxt_ohlcv_many(
         detail = str(last_error) if isinstance(last_error, Exception) else "; ".join(exchange_errors)
         results[raw_symbol] = ValueError(f"No CCXT {active_timeframe} data returned for {raw_symbol}. {detail}")
     return results
+
+
+def _fetch_ccxt_ohlcv(exchange, raw_symbol: str, ccxt_symbol: str, active_timeframe: str, ccxt_timeframe: str, limit: int) -> list[Candle]:
+    rows = exchange.fetch_ohlcv(ccxt_symbol, timeframe=ccxt_timeframe, limit=limit)
+    if not rows:
+        raise ValueError(f"No CCXT {active_timeframe} data returned for {raw_symbol}")
+    return [_ccxt_candle(row) for row in rows]
 
 
 def load_vnstock_ohlcv_many(
@@ -180,7 +202,7 @@ def load_vnstock_ohlcv_many(
                 time.sleep(delay_seconds - elapsed)
         last_request_at = time.monotonic()
         try:
-            results[symbol] = _load_vnstock_ohlcv(symbol, period, active_timeframe, active_source, Quote)
+            results[symbol] = _load_vnstock_ohlcv_with_timeout(symbol, period, active_timeframe, active_source, Quote)
         except KeyboardInterrupt:
             raise
         except BaseException as exc:  # noqa: BLE001 - vnstock may raise SystemExit on rate-limit errors.
@@ -201,6 +223,25 @@ def _load_vnstock_ohlcv(symbol: str, period: str, timeframe: str, source: str, q
     if not candles:
         raise ValueError(f"No usable VNStock {timeframe} candles for {symbol}")
     return candles
+
+
+def _load_vnstock_ohlcv_with_timeout(symbol: str, period: str, timeframe: str, source: str, quote_class) -> list[Candle]:
+    timeout_seconds = _vnstock_request_timeout_seconds()
+    if timeout_seconds <= 0 or threading.current_thread() is not threading.main_thread():
+        return _load_vnstock_ohlcv(symbol, period, timeframe, source, quote_class)
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _raise_timeout(_signum, _frame):
+        raise TimeoutError(f"VNStock request timed out after {timeout_seconds}s for {symbol}")
+
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        return _load_vnstock_ohlcv(symbol, period, timeframe, source, quote_class)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def _candles_from_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
@@ -362,13 +403,40 @@ def _vnstock_requests_per_minute(requests_per_minute: int | None = None) -> int:
         return 18
 
 
-def _ccxt_symbol(symbol: str) -> str:
+def _vnstock_request_timeout_seconds() -> int:
+    raw = os.environ.get("VNSTOCK_REQUEST_TIMEOUT_SECONDS", "20")
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 20
+
+
+def _ccxt_symbol(symbol: str, market_type: str = "spot") -> str:
     normalized = symbol.upper().replace("-", "").replace("/", "")
+    suffix = ":USDT" if _normalize_crypto_market_type(market_type) == "perp" else ""
     if normalized.endswith("USDT"):
-        return f"{normalized[:-4]}/USDT"
+        return f"{normalized[:-4]}/USDT{suffix}"
     if normalized.endswith("USD"):
-        return f"{normalized[:-3]}/USDT"
+        return f"{normalized[:-3]}/USDT{suffix}"
     return symbol
+
+
+def _ccxt_worker_count(symbol_count: int) -> int:
+    if symbol_count <= 0:
+        return 1
+    raw = os.environ.get("CCXT_MAX_WORKERS", "8")
+    try:
+        requested = int(raw)
+    except ValueError:
+        requested = 8
+    return max(1, min(symbol_count, requested, 24))
+
+
+def _normalize_crypto_market_type(market_type: str) -> str:
+    normalized = str(market_type or "").strip().lower()
+    if normalized in {"perp", "perpetual", "future", "futures", "swap"}:
+        return "perp"
+    return "spot"
 
 
 def _exchange_ids(exchange_id: str) -> list[str]:

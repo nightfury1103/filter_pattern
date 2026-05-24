@@ -117,8 +117,10 @@ def test_scan_market_mixed_provider_uses_ccxt_for_crypto_and_yahoo_for_other_mar
         seen["yahoo"] = symbols
         return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
 
-    def fake_ccxt(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+    def fake_ccxt(symbols: list[str], period: str = "2y", timeframe: str = "D1", exchange_id: str = "", market_type: str = "spot"):
         seen["ccxt"] = symbols
+        seen["ccxt_exchange_id"] = [exchange_id]
+        seen["ccxt_market_type"] = [market_type]
         return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
 
     def fake_vnstock(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
@@ -126,6 +128,10 @@ def test_scan_market_mixed_provider_uses_ccxt_for_crypto_and_yahoo_for_other_mar
         return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
 
     monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr(
+        "filter_pattern.scanner.expand_crypto_universe",
+        lambda items, exchange_id, market_type="perp", max_symbols=None: items,
+    )
     monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
     monkeypatch.setattr("filter_pattern.scanner.load_ccxt_ohlcv_many", fake_ccxt)
     monkeypatch.setattr("filter_pattern.scanner.load_vnstock_ohlcv_many", fake_vnstock)
@@ -139,6 +145,108 @@ def test_scan_market_mixed_provider_uses_ccxt_for_crypto_and_yahoo_for_other_mar
     assert payload["config"]["data_provider"] == "mixed"
     assert payload["config"]["data_source"] == "Yahoo Finance + VNStock + CCXT"
     assert payload["scanned_symbols"] == 3
+
+
+def test_scan_market_expands_crypto_universe_for_mixed_provider(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("BTCUSDT", "Crypto", "BINANCE:BTCUSDT", "BTC-USD"),
+    ]
+    expanded = [
+        UniverseSymbol("BTCUSDT", "Crypto", "BINANCE:BTCUSDT", "BTC-USD"),
+        UniverseSymbol("PEPEUSDT", "Crypto", "MEXC:PEPEUSDT", "PEPE-USD"),
+    ]
+    seen: dict[str, list[str]] = {}
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_expand(
+        items: list[UniverseSymbol],
+        exchange_id: str,
+        market_type: str = "spot",
+        max_symbols: int | None = None,
+    ):
+        seen["expand_input"] = [item.symbol for item in items]
+        seen["exchange_id"] = [exchange_id]
+        seen["market_type"] = [market_type]
+        seen["max_symbols"] = [] if max_symbols is None else [str(max_symbols)]
+        return expanded
+
+    def fake_yahoo(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        seen["yahoo"] = symbols
+        return {}
+
+    def fake_ccxt(
+        symbols: list[str],
+        period: str = "2y",
+        timeframe: str = "D1",
+        exchange_id: str = "",
+        market_type: str = "spot",
+    ):
+        seen["ccxt"] = symbols
+        seen["ccxt_exchange_id"] = [exchange_id]
+        seen["ccxt_market_type"] = [market_type]
+        return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.expand_crypto_universe", fake_expand)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
+    monkeypatch.setattr("filter_pattern.scanner.load_ccxt_ohlcv_many", fake_ccxt)
+    monkeypatch.setenv("CRYPTO_MODE", "core")
+    monkeypatch.setenv("CRYPTO_MAX_SYMBOLS", "2")
+    monkeypatch.setenv("CRYPTO_MARKET_TYPE", "perp")
+
+    results_path = scan_market(tmp_path / "reports/crypto-expanded", data_provider="mixed", markets="Crypto")
+    payload = json.loads(results_path.read_text())
+
+    assert seen["expand_input"] == ["BTCUSDT"]
+    assert seen["exchange_id"] == ["binance,bybit,okx"]
+    assert seen["market_type"] == ["perp"]
+    assert seen["max_symbols"] == ["2"]
+    assert seen["ccxt"] == ["BTCUSDT", "PEPEUSDT"]
+    assert seen["ccxt_exchange_id"] == ["binance,bybit,okx"]
+    assert seen["ccxt_market_type"] == ["perp"]
+    assert payload["scanned_symbols"] == 2
+    assert {item["symbol"] for item in payload["candidates"]} == {"BTCUSDT", "PEPEUSDT"}
+
+
+def test_scan_market_static_crypto_mode_skips_dynamic_expansion(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("BTCUSDT", "Crypto", "BINANCE:BTCUSDT", "BTC-USD"),
+    ]
+    seen: dict[str, list[str]] = {}
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_expand(items: list[UniverseSymbol], exchange_id: str, market_type: str = "spot", max_symbols: int | None = None):
+        raise AssertionError("static crypto mode should not call dynamic expansion")
+
+    def fake_yahoo(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        return {}
+
+    def fake_ccxt(
+        symbols: list[str],
+        period: str = "2y",
+        timeframe: str = "D1",
+        exchange_id: str = "",
+        market_type: str = "spot",
+    ):
+        seen["ccxt"] = symbols
+        return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.expand_crypto_universe", fake_expand)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
+    monkeypatch.setattr("filter_pattern.scanner.load_ccxt_ohlcv_many", fake_ccxt)
+    monkeypatch.setenv("CRYPTO_MODE", "static")
+
+    results_path = scan_market(tmp_path / "reports/crypto-static", data_provider="mixed", markets="Crypto")
+    payload = json.loads(results_path.read_text())
+
+    assert seen["ccxt"] == ["BTCUSDT"]
+    assert payload["scanned_symbols"] == 1
+    assert payload["config"]["crypto_mode"] == "static"
 
 
 def test_mixed_provider_falls_back_to_vnstock_for_missing_vietnam_data(tmp_path: Path, monkeypatch) -> None:

@@ -16,6 +16,27 @@ on:
           - all
           - d1
           - h4
+      crypto_mode:
+        description: "Crypto universe size"
+        required: false
+        default: "wide"
+        type: choice
+        options:
+          - core
+          - wide
+          - static
+      crypto_max_symbols:
+        description: "Max dynamic crypto symbols. Leave empty to use mode default."
+        required: false
+        default: ""
+      crypto_market_type:
+        description: "Crypto market type"
+        required: false
+        default: "perp"
+        type: choice
+        options:
+          - perp
+          - spot
 
 permissions:
   contents: write
@@ -29,6 +50,11 @@ concurrency:
 env:
   DATA_PROVIDER: mixed
   BROKER: exness
+  CRYPTO_MODE: ${{ github.event.inputs.crypto_mode || 'wide' }}
+  CRYPTO_MARKET_TYPE: ${{ github.event.inputs.crypto_market_type || 'perp' }}
+  CRYPTO_MAX_SYMBOLS: ${{ github.event.inputs.crypto_max_symbols || '' }}
+  CCXT_MAX_WORKERS: "8"
+  VNSTOCK_REQUEST_TIMEOUT_SECONDS: "8"
   D1_PERIOD: 180d
   H4_PERIOD: 60d
   D1_UNIVERSE: default
