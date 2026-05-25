@@ -249,6 +249,89 @@ def test_report_renders_near_break_warning_filter(tmp_path: Path) -> None:
     assert "Triggered" in html
 
 
+def test_payload_keeps_structured_rejected_setups_for_lifecycle_review() -> None:
+    filler_rows = []
+    for index in range(25):
+        filler = _candidate(f"FILL{index}", "bb", 79, "rejected")
+        filler["evidence"]["qualified"] = False
+        filler["evidence"]["reasons"] = [f"passed check {step}" for step in range(12)]
+        filler["evidence"]["failures"] = ["strict failed"]
+        filler_rows.append(filler)
+
+    review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
+    review_row.update(
+        {
+            "market": "Crypto",
+            "tradingview_symbol": "BINANCE:ATOMUSDT.P",
+            "csv_path": "ccxt:ATOMUSDT",
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "pivot": 2.19,
+            "current_close": 2.105,
+            "distance_to_pivot_pct": 3.88,
+            "reasons": [
+                "Pattern: IRB",
+                "Range description: 2026-04-21 -> 2026-05-19",
+                "Upper range boundary: 2.235",
+                "Lower range boundary: 1.763",
+                "Inner buildup/block description: 2026-05-20 -> 2026-05-23; area 1.979 - 2.19",
+                "Trigger level: 2.19",
+                "Stop-loss area: 1.979",
+            ],
+            "failures": [
+                "Status: REJECT",
+                "Inner block break is not triggered or close enough",
+                "Risk/reward to boundary is poor",
+            ],
+        }
+    )
+
+    payload = result_payload([], filler_rows + [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+
+    assert all(item["symbol"] != "ATOMUSDT" for item in payload["near_matches"])
+    assert any(item["symbol"] == "ATOMUSDT" and item["setup"] == "irb" for item in payload["review_setups"])
+
+
+def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
+    review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
+    review_row.update(
+        {
+            "market": "Crypto",
+            "tradingview_symbol": "BINANCE:ATOMUSDT.P",
+            "csv_path": "ccxt:ATOMUSDT",
+            "chart_path": str(tmp_path / "charts" / "ATOMUSDT.P_nhathoai_irb.png"),
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "pivot": 2.19,
+            "current_close": 2.105,
+            "distance_to_pivot_pct": 3.88,
+            "reasons": [
+                "Pattern: IRB",
+                "Range description: 2026-04-21 -> 2026-05-19",
+                "Inner buildup/block description: 2026-05-20 -> 2026-05-23; area 1.979 - 2.19",
+            ],
+            "failures": ["Inner block break is not triggered or close enough"],
+        }
+    )
+    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert "Continue Watching" in html
+    assert 'data-status="review"' in html
+    assert "ATOMUSDT" in html
+    assert "ATOMUSDT.P_nhathoai_irb.png" in html
+
+
 def test_watchlist_change_tracking_marks_new_unchanged_and_dropped(tmp_path: Path) -> None:
     previous_candidate = _candidate("AAPL", "dd", 84, "WAITING")
     previous_payload = result_payload([previous_candidate], [], {"timeframe": "D1"})

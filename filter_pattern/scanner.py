@@ -17,6 +17,7 @@ from .universe import UniverseSymbol, expand_crypto_universe, get_universe
 
 
 NEAR_MATCH_CHART_LIMIT = 20
+REVIEW_SETUP_CHART_LIMIT = 250
 
 
 def scan(config_path: str | Path, out_dir: str | Path, timeframe: str = "D1", technique: str | None = None) -> Path:
@@ -903,17 +904,35 @@ def _payload_with_near_match_charts(
     chart_dir: Path,
     vcp_config: VCPConfig,
     near_match_chart_limit: int = NEAR_MATCH_CHART_LIMIT,
+    review_setup_chart_limit: int = REVIEW_SETUP_CHART_LIMIT,
 ) -> dict:
     payload = result_payload(candidates, rejected, config)
-    for near_match in payload.get("near_matches", [])[: max(0, near_match_chart_limit)]:
-        stored = rejected_candles.get(_result_key(near_match))
+    chart_rows = (
+        payload.get("near_matches", [])[: max(0, near_match_chart_limit)]
+        + payload.get("review_setups", [])[: max(0, review_setup_chart_limit)]
+    )
+    rendered_keys = set()
+    for chart_row in chart_rows:
+        key = _result_key(chart_row)
+        if key in rendered_keys:
+            continue
+        rendered_keys.add(key)
+        stored = rejected_candles.get(key)
         if stored is None:
             continue
         scan_result, candles = stored
         chart_path = render_chart(scan_result, candles, chart_dir, vcp_config)
-        near_match["chart_path"] = str(chart_path)
+        chart_row["chart_path"] = str(chart_path)
+        for review_item in payload.get("review_setups", []):
+            if _result_key(review_item) == key:
+                review_item["chart_path"] = str(chart_path)
+                break
+        for near_match in payload.get("near_matches", []):
+            if _result_key(near_match) == key:
+                near_match["chart_path"] = str(chart_path)
+                break
         for rejected_item in rejected:
-            if _result_key(rejected_item) == _result_key(near_match):
+            if _result_key(rejected_item) == key:
                 rejected_item["chart_path"] = str(chart_path)
                 break
     refresh_trigger_warnings(payload)

@@ -437,10 +437,13 @@ def test_scan_market_writes_near_match_chart_and_scanned_coverage(tmp_path: Path
     assert payload["qualified_count"] == 0
     assert payload["near_matches"][0]["chart_path"]
     assert Path(payload["near_matches"][0]["chart_path"]).exists()
+    assert payload["review_setups"][0]["chart_path"]
+    assert Path(payload["review_setups"][0]["chart_path"]).exists()
     assert payload["scanned_symbols_by_market"]["US stock"] == ["AAPL"]
     assert "Scanned Universe (1 symbols)" in html
     assert "AAPL" in html
     assert "near-match VCP chart" in html
+    assert "Continue Watching" in html
 
 
 def test_scan_market_applies_exness_broker_filter(tmp_path: Path, monkeypatch) -> None:

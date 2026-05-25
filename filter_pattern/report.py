@@ -12,6 +12,7 @@ from .exness import is_exness_supported_symbol
 
 
 TRIGGER_WARNING_DISTANCE_PCT = 5.0
+REVIEW_SETUP_LIMIT = 250
 
 
 def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:
@@ -71,7 +72,8 @@ def apply_watchlist_changes(payload: dict, previous_results_path: str | Path | N
 
 def refresh_trigger_warnings(payload: dict) -> dict:
     near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
-    payload["trigger_warnings"] = _trigger_warnings(payload.get("candidates", []) + near_matches)
+    review_setups = payload.get("review_setups") or _review_setups(payload.get("rejected", []))
+    payload["trigger_warnings"] = _trigger_warnings(payload.get("candidates", []) + near_matches + review_setups)
     return payload
 
 
@@ -91,7 +93,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     output_file = Path(output_path)
     candidates = payload.get("candidates", [])
     near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
-    trigger_warnings = _trigger_warnings(candidates + near_matches)
+    review_setups = payload.get("review_setups") or _review_setups(payload.get("rejected", []))
+    trigger_warnings = _trigger_warnings(candidates + near_matches + review_setups)
     not_configured = _not_configured_rows(payload.get("rejected", []))
     dropped = payload.get("watchlist_dropped", [])
     watchlist_changes = payload.get("watchlist_changes", {})
@@ -105,19 +108,19 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     technique_options = "\n".join(
         f'<option value="{escape(technique_name)}">{escape(technique_name)}</option>'
         for technique_name in _techniques_in_rows(
-            candidates + near_matches + trigger_warnings + not_configured + payload.get("rejected", [])
+            candidates + near_matches + review_setups + trigger_warnings + not_configured + payload.get("rejected", [])
         )
     )
     setup_options = "\n".join(
         f'<option value="{escape(setup_name)}">{escape(setup_name.upper())}</option>'
         for setup_name in _setups_in_rows(
-            candidates + near_matches + trigger_warnings + not_configured + payload.get("rejected", [])
+            candidates + near_matches + review_setups + trigger_warnings + not_configured + payload.get("rejected", [])
         )
     )
     timeframe_options = "\n".join(
         f'<option value="{escape(timeframe)}">{escape(timeframe)}</option>'
         for timeframe in _timeframes_in_rows(
-            candidates + near_matches + trigger_warnings + not_configured + payload.get("rejected", []), payload
+            candidates + near_matches + review_setups + trigger_warnings + not_configured + payload.get("rejected", []), payload
         )
     )
     change_options = "\n".join(
@@ -139,6 +142,13 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     <h2>Near Matches</h2>
     <p class="section-note">These are not qualified entry setups. They passed many checks but failed at least one strict setup rule.</p>
     {near_rows}
+"""
+    review_rows = "\n".join(_review_setup_card(candidate, output_file.parent) for candidate in review_setups)
+    if review_rows:
+        review_rows = f"""
+    <h2>Continue Watching</h2>
+    <p class="section-note">These rejected, failed, late, or already-triggered structures still have recognizable pattern context. Keep them visible for manual lifecycle review because a setup can rebuild and trigger again.</p>
+    {review_rows}
 """
     warning_rows = "\n".join(_trigger_warning_card(item, output_file.parent) for item in trigger_warnings)
     if warning_rows:
@@ -632,6 +642,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <div class="nav-pill"><span>Triggered</span><span class="count">{triggered}</span></div>
         <div class="nav-pill"><span>Waiting</span><span class="count">{waiting}</span></div>
       <div class="nav-pill"><span>Warnings</span><span class="count">{len(trigger_warnings)}</span></div>
+      <div class="nav-pill"><span>Continue Watching</span><span class="count">{len(review_setups)}</span></div>
       <div class="nav-pill"><span>Near Match</span><span class="count">{len(near_matches)}</span></div>
       <div class="nav-pill"><span>Exness Supported</span><span class="count">{exness_count}</span></div>
       </div>
@@ -681,6 +692,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           <option value="all">All statuses</option>
           <option value="warning">Near break warning</option>
           <option value="qualified">Qualified</option>
+          <option value="review">Continue watching</option>
           <option value="near">Near match</option>
           <option value="dropped">Dropped</option>
           <option value="not_configured">Not configured</option>
@@ -700,6 +712,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           <h2>Candidates</h2>
           {rows}
           {dropped_rows}
+          {review_rows}
           {near_rows}
           {not_configured_rows}
         </section>
@@ -709,7 +722,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           <section class="panel"><h3>Priority Queue</h3>
             <div class="dist-row"><span>Fresh triggered</span><strong>{triggered}</strong></div>
             <div class="dist-row"><span>Waiting / near pivot</span><strong>{waiting}</strong></div>
-            <div class="dist-row"><span>Needs manual chart review</span><strong>{len(candidates)}</strong></div>
+            <div class="dist-row"><span>Continue watching</span><strong>{len(review_setups)}</strong></div>
+            <div class="dist-row"><span>Needs manual chart review</span><strong>{len(candidates) + len(review_setups)}</strong></div>
           </section>
         </aside>
       </div>
@@ -798,9 +812,10 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
 
 def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -> dict:
     near_matches = _near_matches(rejected)
+    review_setups = _review_setups(rejected)
     scanned = candidates + rejected
     scanned_by_market = _scanned_symbols_by_market(scanned)
-    trigger_warnings = _trigger_warnings(candidates + near_matches)
+    trigger_warnings = _trigger_warnings(candidates + near_matches + review_setups)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "timeframe": config.get("timeframe", "D1"),
@@ -809,6 +824,7 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
         "qualified_count": len(candidates),
         "candidates": candidates,
         "near_matches": near_matches,
+        "review_setups": review_setups,
         "trigger_warnings": trigger_warnings,
         "scanned_symbols_by_market": scanned_by_market,
         "data_errors_by_market": _data_errors_by_market(rejected),
@@ -842,8 +858,9 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
     }
     payload = result_payload(candidates, rejected, config)
     payload["near_matches"] = _near_matches(rejected, limit=50)
+    payload["review_setups"] = _review_setups(rejected)
     _attach_lower_timeframe_reviews(payload)
-    payload["trigger_warnings"] = _trigger_warnings(candidates + payload["near_matches"])
+    payload["trigger_warnings"] = _trigger_warnings(candidates + payload["near_matches"] + payload["review_setups"])
     payload["watchlist_dropped"] = dropped
     payload["watchlist_changes"] = _watchlist_change_summary(candidates, dropped)
     return payload
@@ -852,16 +869,18 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
 def _attach_lower_timeframe_reviews(payload: dict) -> None:
     candidates = payload.get("candidates", [])
     near_matches = payload.get("near_matches", [])
+    review_setups = payload.get("review_setups", [])
+    reviewable_rows = candidates + near_matches + review_setups
     lower_rows = [
         item
-        for item in candidates + near_matches
+        for item in reviewable_rows
         if str(item.get("timeframe", "")).upper() == "H4"
         and item.get("chart_path")
     ]
     if not lower_rows:
         return
 
-    for item in candidates + near_matches:
+    for item in reviewable_rows:
         if str(item.get("timeframe", "")).upper() != "D1":
             continue
         reviews = _best_lower_timeframe_reviews(item, lower_rows)
@@ -1302,6 +1321,59 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
 </article>"""
 
 
+def _review_setup_card(candidate: dict, report_dir: Path) -> str:
+    evidence = candidate["evidence"]
+    tv_symbol = candidate["tradingview_symbol"]
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
+    chart_path = candidate.get("chart_path") or ""
+    chart_html = ""
+    if chart_path:
+        chart_src = escape(_relative_path(chart_path, report_dir))
+        chart_html = f'<div class="chart-frame"><img src="{chart_src}" alt="{escape(candidate["symbol"])} lifecycle review chart"></div>'
+    content_class = "card-content" if chart_html else "card-content no-chart"
+    reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
+    failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:5])
+    trigger = _fmt(evidence.get("pivot"))
+    current = _fmt(evidence.get("current_close"))
+    distance = _fmt(evidence.get("distance_to_pivot_pct"), suffix="%")
+    score = _fmt(candidate.get("review_score"))
+    technique = candidate.get("technique", "vcp")
+    setup = candidate.get("setup", "all")
+    timeframe = str(candidate.get("timeframe", "D1"))
+    status = str(evidence.get("status", "review"))
+    direction = _direction_from_evidence(evidence)
+    display_setup = _display_setup(candidate)
+    change = str(candidate.get("watchlist_change", ""))
+    lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
+    exness_supported = _is_row_exness_supported(candidate)
+
+    return f"""<article class="near result-card" data-filterable="true" data-status="review" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Review</span><span class="badge">{escape(display_setup)}</span><span class="badge">{escape(status)}</span>{_exness_badge(exness_supported)}</div>
+      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+    </div>
+    <div class="score">{score}</div>
+  </div>
+  <div class="{content_class}">
+    {chart_html}
+    <div class="body">
+      <div class="metrics">
+        <div class="metric"><span>Trigger / pivot</span><strong>{trigger}</strong></div>
+        <div class="metric"><span>Current</span><strong>{current}</strong></div>
+        <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
+        <div class="metric"><span>Status</span><strong>{escape(status)}</strong></div>
+      </div>
+      <div class="reasons">Detected structure:</div>
+      <ul>{reasons}</ul>
+      <div class="reasons failures">Why it is not qualified:</div>
+      <ul class="failures">{failures}</ul>
+      {lower_timeframe_confirmation}
+    </div>
+  </div>
+</article>"""
+
+
 def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     evidence = item["evidence"]
     warning = item.get("trigger_warning", {})
@@ -1469,6 +1541,100 @@ def _near_matches(rejected: list[dict], limit: int = 20) -> list[dict]:
         scored.append(enriched)
     scored.sort(key=lambda item: item["near_match_score"], reverse=True)
     return scored[:limit]
+
+
+def _review_setups(rejected: list[dict], limit: int = REVIEW_SETUP_LIMIT) -> list[dict]:
+    scored = []
+    for item in rejected:
+        evidence = item.get("evidence", {})
+        status = str(evidence.get("status", "")).lower()
+        if status in {"data_error", "not_configured"}:
+            continue
+        if not _is_reviewable_setup(item):
+            continue
+        score = _review_setup_score(item)
+        if score <= 0:
+            continue
+        enriched = dict(item)
+        enriched["near_match_score"] = round(max(0.0, _near_match_score(evidence)), 2)
+        enriched["review_score"] = round(score, 2)
+        scored.append(enriched)
+    scored.sort(
+        key=lambda item: (
+            item["review_score"],
+            _score_value(item) or 0.0,
+            str(item.get("market", "")),
+            str(item.get("symbol", "")),
+            str(item.get("setup", "")),
+        ),
+        reverse=True,
+    )
+    return scored[:limit]
+
+
+def _is_reviewable_setup(item: dict) -> bool:
+    evidence = item.get("evidence", {})
+    if evidence.get("qualified"):
+        return False
+    if _has_structural_chart_evidence(evidence):
+        return True
+    if evidence.get("contractions"):
+        return evidence.get("pivot") is not None and evidence.get("current_close") is not None
+    setup = str(item.get("setup", "")).lower()
+    if setup not in {
+        "original-vcp",
+        "vcp-1c",
+        "vcp-2c",
+        "vcp-3c",
+        "vcp",
+        "compression",
+        "fb",
+        "sb",
+        "bb",
+        "rb",
+        "irb",
+        "arb",
+    }:
+        return False
+    score = _numeric(evidence.get("score")) or 0.0
+    distance = _numeric(evidence.get("distance_to_pivot_pct"))
+    has_trigger_context = evidence.get("pivot") is not None and evidence.get("current_close") is not None
+    near_enough = distance is not None and abs(distance) <= 10.0
+    return has_trigger_context and score >= 50 and near_enough
+
+
+def _has_structural_chart_evidence(evidence: dict) -> bool:
+    structural_prefixes = (
+        "Range description:",
+        "Build-up description:",
+        "Inner buildup/block description:",
+        "Context/range:",
+        "Compression zone:",
+        "Pivot line values:",
+        "Entry trigger level:",
+        "Breakout boundary:",
+        "Trigger level:",
+        "Target boundary:",
+        "Stop-loss area:",
+    )
+    for line in evidence.get("reasons", []) + evidence.get("failures", []):
+        text = str(line).strip()
+        if text.startswith(structural_prefixes):
+            return True
+    return False
+
+
+def _review_setup_score(item: dict) -> float:
+    evidence = item.get("evidence", {})
+    detector_score = _numeric(evidence.get("score")) or 0.0
+    near_score = max(0.0, _near_match_score(evidence))
+    structure_bonus = 80.0 if _has_structural_chart_evidence(evidence) else 0.0
+    contraction_bonus = 30.0 if evidence.get("contractions") else 0.0
+    distance = _numeric(evidence.get("distance_to_pivot_pct"))
+    distance_bonus = max(0.0, 20.0 - abs(distance) * 2.0) if distance is not None else 0.0
+    status = str(evidence.get("status", "")).upper()
+    lifecycle_bonus = 20.0 if status in {"REJECTED", "REJECT", "FAILED", "LATE", "DEVELOPING", "FORMING", "TRIGGERED"} else 0.0
+    return detector_score + near_score + structure_bonus + contraction_bonus + distance_bonus + lifecycle_bonus
 
 
 def _trigger_warnings(rows: list[dict], limit: int = 60) -> list[dict]:
