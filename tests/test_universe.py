@@ -75,6 +75,19 @@ def test_dynamic_crypto_perp_universe_uses_swap_markets_and_tradingview_p_suffix
     assert by_symbol["PEPEUSDT"].tradingview_symbol == "BYBIT:PEPEUSDT.P"
 
 
+def test_mexc_tokenized_stock_perp_symbols_drop_stock_suffix_for_tradingview() -> None:
+    crypto = _crypto_from_exchange_markets(
+        [
+            ("mexc", {"symbol": "AAPLSTOCK/USDT:USDT", "base": "AAPLSTOCK", "quote": "USDT", "swap": True, "active": True}),
+        ],
+        market_type="perp",
+    )
+
+    assert len(crypto) == 1
+    assert crypto[0].symbol == "AAPLUSDT"
+    assert crypto[0].tradingview_symbol == "MEXC:AAPLUSDT.P"
+
+
 def test_dynamic_crypto_perp_universe_rejects_spot_only_markets() -> None:
     crypto = _crypto_from_exchange_markets(
         [

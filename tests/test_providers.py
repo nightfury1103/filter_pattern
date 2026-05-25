@@ -6,6 +6,7 @@ from datetime import datetime
 from filter_pattern.models import Candle
 from filter_pattern.providers import (
     _candles_from_vnstock_frame,
+    _ccxt_symbol_candidates,
     _ccxt_symbol,
     _exchange_ids,
     _period_date_range,
@@ -43,6 +44,10 @@ def test_ccxt_symbol_uses_swap_contract_key_for_perp_market_type() -> None:
     assert _ccxt_symbol("BTCUSDT", "perp") == "BTC/USDT:USDT"
     assert _ccxt_symbol("1000SHIBUSDT", "perp") == "1000SHIB/USDT:USDT"
     assert _ccxt_symbol("BTCUSDT", "spot") == "BTC/USDT"
+
+
+def test_ccxt_symbol_candidates_include_mexc_stock_suffix_fallback_for_perps() -> None:
+    assert _ccxt_symbol_candidates("AAPLUSDT", "perp") == ["AAPL/USDT:USDT", "AAPLSTOCK/USDT:USDT"]
 
 
 def test_ccxt_worker_count_is_configurable_and_bounded(monkeypatch) -> None:

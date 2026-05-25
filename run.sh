@@ -68,8 +68,8 @@ D1_UNIVERSE="${D1_UNIVERSE:-$DEFAULT_D1_UNIVERSE}"
 H4_UNIVERSE="${H4_UNIVERSE:-$DEFAULT_H4_UNIVERSE}"
 D1_MARKETS="${D1_MARKETS:-all}"
 
-# H4 can include Vietnam stock through VNStock fallback, but it is rate-limited.
-H4_MARKETS="${H4_MARKETS:-US stock,Commodity,Forex,Crypto}"
+# H4 focuses on 24h/liquid intraday markets. US stock/Vietnam stock are excluded by default.
+H4_MARKETS="${H4_MARKETS:-Commodity,Forex,Crypto}"
 
 D1_OUT="${D1_OUT:-reports/market-d1}"
 H4_OUT="${H4_OUT:-reports/market-h4}"

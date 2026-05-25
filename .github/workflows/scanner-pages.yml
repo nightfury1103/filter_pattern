@@ -60,7 +60,7 @@ env:
   D1_UNIVERSE: default
   H4_UNIVERSE: default
   D1_MARKETS: all
-  H4_MARKETS: "US stock,Commodity,Forex,Crypto"
+  H4_MARKETS: "Commodity,Forex,Crypto"
   NEAR_MATCH_CHART_LIMIT: "5"
 
 jobs:

@@ -130,11 +130,12 @@ def load_ccxt_ohlcv_many(
 
         exchange_symbols = []
         for raw_symbol in list(unresolved):
-            ccxt_symbol = _ccxt_symbol(raw_symbol, market_type)
-            if ccxt_symbol in exchange.markets:
+            ccxt_symbol = _first_available_ccxt_symbol(raw_symbol, market_type, exchange.markets)
+            if ccxt_symbol is not None:
                 exchange_symbols.append((raw_symbol, ccxt_symbol))
             else:
-                results[raw_symbol] = ValueError(f"{ccxt_symbol} is not available on CCXT exchange {active_exchange_id}")
+                candidates = ", ".join(_ccxt_symbol_candidates(raw_symbol, market_type))
+                results[raw_symbol] = ValueError(f"{candidates} is not available on CCXT exchange {active_exchange_id}")
 
         workers = _ccxt_worker_count(len(exchange_symbols))
         if exchange_symbols:
@@ -412,13 +413,32 @@ def _vnstock_request_timeout_seconds() -> int:
 
 
 def _ccxt_symbol(symbol: str, market_type: str = "spot") -> str:
+    return _ccxt_symbol_candidates(symbol, market_type)[0]
+
+
+def _ccxt_symbol_candidates(symbol: str, market_type: str = "spot") -> list[str]:
     normalized = symbol.upper().replace("-", "").replace("/", "")
     suffix = ":USDT" if _normalize_crypto_market_type(market_type) == "perp" else ""
     if normalized.endswith("USDT"):
-        return f"{normalized[:-4]}/USDT{suffix}"
+        base = normalized[:-4]
+        candidates = [f"{base}/USDT{suffix}"]
+        if suffix and base.isalpha() and 1 <= len(base) <= 5:
+            candidates.append(f"{base}STOCK/USDT{suffix}")
+        return candidates
     if normalized.endswith("USD"):
-        return f"{normalized[:-3]}/USDT{suffix}"
-    return symbol
+        base = normalized[:-3]
+        candidates = [f"{base}/USDT{suffix}"]
+        if suffix and base.isalpha() and 1 <= len(base) <= 5:
+            candidates.append(f"{base}STOCK/USDT{suffix}")
+        return candidates
+    return [symbol]
+
+
+def _first_available_ccxt_symbol(symbol: str, market_type: str, markets: dict) -> str | None:
+    for candidate in _ccxt_symbol_candidates(symbol, market_type):
+        if candidate in markets:
+            return candidate
+    return None
 
 
 def _ccxt_worker_count(symbol_count: int) -> int:

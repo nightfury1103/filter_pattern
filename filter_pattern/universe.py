@@ -125,12 +125,12 @@ def _crypto_symbol_from_market(exchange_id: str, market: dict, market_type: str 
     normalized_market_type = _normalize_crypto_market_type(market_type)
     if not _is_supported_crypto_market(market, normalized_market_type):
         return None
-    base = str(market.get("base") or "").upper().replace("/", "").replace("-", "")
+    base = _normalize_crypto_base(str(market.get("base") or "").upper().replace("/", "").replace("-", ""))
     if not base:
         symbol_text = str(market.get("symbol") or "").upper()
         if not symbol_text.endswith("/USDT"):
             return None
-        base = symbol_text.removesuffix("/USDT").replace("/", "").replace("-", "")
+        base = _normalize_crypto_base(symbol_text.removesuffix("/USDT").replace("/", "").replace("-", ""))
     symbol = f"{base}USDT"
     tradingview_exchange = CRYPTO_TRADINGVIEW_EXCHANGES.get(exchange_id.lower(), exchange_id.upper())
     tv_suffix = ".P" if normalized_market_type == "perp" else ""
@@ -161,7 +161,7 @@ def _is_supported_crypto_market(market: dict, market_type: str = "spot") -> bool
             return False
         if market.get("spot") is False and exchange_market_type != "spot":
             return False
-    base = str(market.get("base") or symbol_text.removesuffix("/USDT")).upper().replace("/", "").replace("-", "")
+    base = _normalize_crypto_base(str(market.get("base") or symbol_text.removesuffix("/USDT")).upper().replace("/", "").replace("-", ""))
     if not base or base in CRYPTO_STABLE_BASES:
         return False
     return not base.endswith(CRYPTO_LEVERAGED_SUFFIXES)
@@ -172,6 +172,13 @@ def _normalize_crypto_market_type(market_type: str) -> str:
     if normalized in {"perp", "perpetual", "future", "futures", "swap"}:
         return "perp"
     return "spot"
+
+
+def _normalize_crypto_base(base: str) -> str:
+    normalized = str(base or "").upper().replace("/", "").replace("-", "")
+    if normalized.endswith("STOCK") and len(normalized) > len("STOCK"):
+        return normalized[: -len("STOCK")]
+    return normalized
 
 
 def sp500_universe() -> list[UniverseSymbol]:
