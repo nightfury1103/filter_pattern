@@ -295,6 +295,46 @@ def test_payload_keeps_structured_rejected_setups_for_lifecycle_review() -> None
     assert any(item["symbol"] == "ATOMUSDT" and item["setup"] == "irb" for item in payload["review_setups"])
 
 
+def test_payload_prioritizes_near_trigger_lifecycle_review_rows() -> None:
+    filler_rows = []
+    for index in range(260):
+        filler = _candidate(f"FILL{index}", "compression", 95, "rejected")
+        filler["evidence"].update(
+            {
+                "qualified": False,
+                "pivot": 100,
+                "current_close": 80,
+                "distance_to_pivot_pct": 20,
+                "reasons": ["Compression zone: 92 - 100", "Direction: Long"],
+                "failures": ["Strict setup failed"],
+            }
+        )
+        filler_rows.append(filler)
+
+    review_row = _candidate("ATOMUSDT", "irb", 68, "rejected")
+    review_row.update(
+        {
+            "market": "Crypto",
+            "tradingview_symbol": "OKX:ATOMUSDT.P",
+            "csv_path": "ccxt:ATOMUSDT",
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "pivot": 2.189,
+            "current_close": 2.126,
+            "distance_to_pivot_pct": 2.878,
+            "reasons": ["Pattern: IRB", "Direction: Long"],
+            "failures": ["Status: REJECT", "Strict setup failed"],
+        }
+    )
+
+    payload = result_payload([], filler_rows + [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+
+    assert any(item["symbol"] == "ATOMUSDT" and item["setup"] == "irb" for item in payload["review_setups"])
+
+
 def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
     review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
     review_row.update(

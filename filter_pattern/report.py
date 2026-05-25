@@ -12,7 +12,7 @@ from .exness import is_exness_supported_symbol
 
 
 TRIGGER_WARNING_DISTANCE_PCT = 5.0
-REVIEW_SETUP_LIMIT = 250
+REVIEW_SETUP_LIMIT = 750
 
 
 def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:

@@ -17,7 +17,7 @@ from .universe import UniverseSymbol, expand_crypto_universe, get_universe
 
 
 NEAR_MATCH_CHART_LIMIT = 20
-REVIEW_SETUP_CHART_LIMIT = 250
+REVIEW_SETUP_CHART_LIMIT = 750
 
 
 def scan(config_path: str | Path, out_dir: str | Path, timeframe: str = "D1", technique: str | None = None) -> Path:
