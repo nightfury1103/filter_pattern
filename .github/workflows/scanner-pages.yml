@@ -50,9 +50,9 @@ concurrency:
 env:
   DATA_PROVIDER: mixed
   BROKER: exness
-  CRYPTO_MODE: ${{ github.event.inputs.crypto_mode || 'wide' }}
-  CRYPTO_MARKET_TYPE: ${{ github.event.inputs.crypto_market_type || 'perp' }}
-  CRYPTO_MAX_SYMBOLS: ${{ github.event.inputs.crypto_max_symbols || '' }}
+  CRYPTO_MODE: ${{ inputs.crypto_mode || 'wide' }}
+  CRYPTO_MARKET_TYPE: ${{ inputs.crypto_market_type || 'perp' }}
+  CRYPTO_MAX_SYMBOLS: ${{ inputs.crypto_max_symbols || '' }}
   CCXT_MAX_WORKERS: "8"
   VNSTOCK_REQUEST_TIMEOUT_SECONDS: "8"
   D1_PERIOD: 180d
@@ -64,10 +64,10 @@ env:
   NEAR_MATCH_CHART_LIMIT: "5"
 
 jobs:
-  scan-d1:
+  scan_d1:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.timeframe == 'all' || github.event.inputs.timeframe == 'd1' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.timeframe == 'all' || inputs.timeframe == 'd1' }}
 
     steps:
       - name: Checkout scanner source
@@ -118,10 +118,10 @@ jobs:
           path: public/d1
           if-no-files-found: error
 
-  scan-h4:
+  scan_h4:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.timeframe == 'all' || github.event.inputs.timeframe == 'h4' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.timeframe == 'all' || inputs.timeframe == 'h4' }}
 
     steps:
       - name: Checkout scanner source
@@ -176,9 +176,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
-      - scan-d1
-      - scan-h4
-    if: ${{ always() && (needs.scan-d1.result == 'success' || needs.scan-d1.result == 'skipped') && (needs.scan-h4.result == 'success' || needs.scan-h4.result == 'skipped') && (needs.scan-d1.result == 'success' || needs.scan-h4.result == 'success') }}
+      - scan_d1
+      - scan_h4
+    if: ${{ always() && (needs.scan_d1.result == 'success' || needs.scan_d1.result == 'skipped') && (needs.scan_h4.result == 'success' || needs.scan_h4.result == 'skipped') && (needs.scan_d1.result == 'success' || needs.scan_h4.result == 'success') }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -207,7 +207,7 @@ jobs:
           fi
 
       - name: Remove stale D1 files before artifact restore
-        if: needs.scan-d1.result == 'success'
+        if: needs.scan_d1.result == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -215,14 +215,14 @@ jobs:
           mkdir -p public/d1
 
       - name: Download D1 report artifact
-        if: needs.scan-d1.result == 'success'
+        if: needs.scan_d1.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: d1-report
           path: public/d1
 
       - name: Remove stale H4 files before artifact restore
-        if: needs.scan-h4.result == 'success'
+        if: needs.scan_h4.result == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -230,7 +230,7 @@ jobs:
           mkdir -p public/h4
 
       - name: Download H4 report artifact
-        if: needs.scan-h4.result == 'success'
+        if: needs.scan_h4.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: h4-report
