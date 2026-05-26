@@ -1167,6 +1167,10 @@ def _all_setup_labels() -> tuple[str, ...]:
     )
 
 
+def _chart_img(src: str, alt: str) -> str:
+    return f'<img src="{src}" alt="{escape(alt)}" loading="lazy" decoding="async">'
+
+
 def _candidate_card(candidate: dict, report_dir: Path) -> str:
     evidence = candidate["evidence"]
     tv_symbol = candidate["tradingview_symbol"]
@@ -1206,7 +1210,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
     <div class="score">{escape(str(evidence.get("score", 0)))}</div>
   </div>
   <div class="card-content">
-    <div class="chart-frame"><img src="{chart_src}" alt="{escape(candidate["symbol"])} proof chart"></div>
+    <div class="chart-frame">{_chart_img(chart_src, f'{candidate["symbol"]} proof chart')}</div>
     <div class="body">
       <div class="metrics">
         <div class="metric"><span>Trigger / pivot</span><strong>{pivot}</strong></div>
@@ -1250,7 +1254,7 @@ def _lower_timeframe_confirmation_html(item: dict, report_dir: Path) -> str:
         chart_html = ""
         if chart_path:
             chart_src = escape(_relative_path(chart_path, report_dir))
-            chart_html = f'<img src="{chart_src}" alt="{escape(timeframe)} lower timeframe review chart">'
+            chart_html = _chart_img(chart_src, f"{timeframe} lower timeframe review chart")
         cards.append(
             f"""<div class="lower-tf-card">
         <div class="lower-tf-head">
@@ -1280,7 +1284,7 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
     chart_html = ""
     if chart_path:
         chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<div class="chart-frame"><img src="{chart_src}" alt="{escape(candidate["symbol"])} near-match VCP chart"></div>'
+        chart_html = f'<div class="chart-frame">{_chart_img(chart_src, f'{candidate["symbol"]} near-match VCP chart')}</div>'
     content_class = "card-content" if chart_html else "card-content no-chart"
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:4])
@@ -1329,7 +1333,7 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     chart_html = ""
     if chart_path:
         chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<div class="chart-frame"><img src="{chart_src}" alt="{escape(candidate["symbol"])} lifecycle review chart"></div>'
+        chart_html = f'<div class="chart-frame">{_chart_img(chart_src, f'{candidate["symbol"]} lifecycle review chart')}</div>'
     content_class = "card-content" if chart_html else "card-content no-chart"
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:5])
@@ -1383,7 +1387,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     chart_html = ""
     if chart_path:
         chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<div class="chart-frame"><img src="{chart_src}" alt="{escape(item["symbol"])} near break warning chart"></div>'
+        chart_html = f'<div class="chart-frame">{_chart_img(chart_src, f'{item["symbol"]} near break warning chart')}</div>'
     content_class = "card-content" if chart_html else "card-content no-chart"
     technique = item.get("technique", "vcp")
     setup = item.get("setup", "all")

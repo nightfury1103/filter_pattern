@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from filter_pattern.models import Candle, VCPEvidence
-from filter_pattern.scanner import scan, scan_all_csv, scan_all_market, scan_market
+from filter_pattern.scanner import _review_setup_chart_rows, scan, scan_all_csv, scan_all_market, scan_market
 from filter_pattern.universe import UniverseSymbol
 from tests.test_detector import make_flat_series, make_series
 
@@ -444,6 +444,26 @@ def test_scan_market_writes_near_match_chart_and_scanned_coverage(tmp_path: Path
     assert "AAPL" in html
     assert "near-match VCP chart" in html
     assert "Continue Watching" in html
+
+
+def test_review_setup_chart_rows_prioritize_near_trigger_rows() -> None:
+    far_rows = [
+        {
+            "symbol": f"FILL{index}",
+            "review_score": 900 - index,
+            "evidence": {"score": 95, "distance_to_pivot_pct": 18, "status": "rejected"},
+        }
+        for index in range(4)
+    ]
+    near_row = {
+        "symbol": "ATOMUSDT",
+        "review_score": 350,
+        "evidence": {"score": 68, "distance_to_pivot_pct": 2.8, "status": "rejected"},
+    }
+
+    selected = _review_setup_chart_rows(far_rows + [near_row], limit=2)
+
+    assert [item["symbol"] for item in selected] == ["ATOMUSDT", "FILL0"]
 
 
 def test_scan_market_applies_exness_broker_filter(tmp_path: Path, monkeypatch) -> None:

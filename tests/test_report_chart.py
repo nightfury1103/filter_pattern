@@ -33,6 +33,7 @@ def test_chart_and_report_smoke(tmp_path: Path) -> None:
     report_path = write_html_report(results_path, tmp_path / "index.html")
 
     assert chart_path.exists()
+    assert chart_path.suffix == ".jpg"
     assert chart_path.stat().st_size > 0
     assert report_path.exists()
     html = report_path.read_text()
@@ -368,6 +369,8 @@ def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
 
     assert "Continue Watching" in html
     assert 'data-status="review"' in html
+    assert 'loading="lazy"' in html
+    assert 'decoding="async"' in html
     assert "ATOMUSDT" in html
     assert "ATOMUSDT.P_nhathoai_irb.png" in html
 

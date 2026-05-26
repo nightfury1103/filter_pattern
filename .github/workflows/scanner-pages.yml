@@ -64,9 +64,121 @@ env:
   NEAR_MATCH_CHART_LIMIT: "5"
 
 jobs:
-  scan-and-deploy:
+  scan-d1:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.timeframe == 'all' || github.event.inputs.timeframe == 'd1' }}
+
+    steps:
+      - name: Checkout scanner source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install scanner
+        run: python -m pip install -e .
+
+      - name: Restore current published site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git archive origin/gh-pages | tar -x -C public
+          fi
+
+      - name: Scan D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "event_name=${{ github.event_name }}"
+          echo "event_schedule=${{ github.event.schedule || '' }}"
+          echo "utc_now=$(date -u '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "hcm_now=$(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M:%S %Z')"
+          python -m filter_pattern.cli scan-all-market \
+            --timeframe D1 \
+            --out public/d1 \
+            --period "$D1_PERIOD" \
+            --universe "$D1_UNIVERSE" \
+            --broker "$BROKER" \
+            --data-provider "$DATA_PROVIDER" \
+            --markets "$D1_MARKETS" \
+            --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
+            --previous-results public/d1/results.json
+
+      - name: Upload D1 report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-report
+          path: public/d1
+          if-no-files-found: error
+
+  scan-h4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.timeframe == 'all' || github.event.inputs.timeframe == 'h4' }}
+
+    steps:
+      - name: Checkout scanner source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install scanner
+        run: python -m pip install -e .
+
+      - name: Restore current published site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git archive origin/gh-pages | tar -x -C public
+          fi
+
+      - name: Scan H4
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "event_name=${{ github.event_name }}"
+          echo "event_schedule=${{ github.event.schedule || '' }}"
+          echo "utc_now=$(date -u '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "hcm_now=$(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M:%S %Z')"
+          python -m filter_pattern.cli scan-all-market \
+            --timeframe H4 \
+            --out public/h4 \
+            --period "$H4_PERIOD" \
+            --universe "$H4_UNIVERSE" \
+            --broker "$BROKER" \
+            --data-provider "$DATA_PROVIDER" \
+            --markets "$H4_MARKETS" \
+            --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
+            --previous-results public/h4/results.json
+
+      - name: Upload H4 report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: h4-report
+          path: public/h4
+          if-no-files-found: error
+
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - scan-d1
+      - scan-h4
+    if: ${{ always() && (needs.scan-d1.result == 'success' || needs.scan-d1.result == 'skipped') && (needs.scan-h4.result == 'success' || needs.scan-h4.result == 'skipped') && (needs.scan-d1.result == 'success' || needs.scan-h4.result == 'success') }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -94,67 +206,35 @@ jobs:
             git archive origin/gh-pages | tar -x -C public
           fi
 
-      - name: Decide scan scope
-        id: scope
+      - name: Remove stale D1 files before artifact restore
+        if: needs.scan-d1.result == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          requested="${{ github.event.inputs.timeframe || '' }}"
-          run_d1=0
-          run_h4=0
-          echo "event_name=${{ github.event_name }}"
-          echo "event_schedule=${{ github.event.schedule || '' }}"
-          echo "utc_now=$(date -u '+%Y-%m-%d %H:%M:%S %Z')"
-          echo "hcm_now=$(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M:%S %Z')"
+          rm -rf public/d1
+          mkdir -p public/d1
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            case "$requested" in
-              all) run_d1=1; run_h4=1 ;;
-              d1) run_d1=1 ;;
-              h4) run_h4=1 ;;
-              *) echo "Unknown timeframe input: $requested" >&2; exit 2 ;;
-            esac
-          else
-            run_d1=1
-            run_h4=1
-          fi
+      - name: Download D1 report artifact
+        if: needs.scan-d1.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: d1-report
+          path: public/d1
 
-          echo "run_d1=$run_d1" >> "$GITHUB_OUTPUT"
-          echo "run_h4=$run_h4" >> "$GITHUB_OUTPUT"
-          echo "RUN_D1=$run_d1"
-          echo "RUN_H4=$run_h4"
-
-      - name: Scan D1
-        if: steps.scope.outputs.run_d1 == '1'
+      - name: Remove stale H4 files before artifact restore
+        if: needs.scan-h4.result == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          python -m filter_pattern.cli scan-all-market \
-            --timeframe D1 \
-            --out public/d1 \
-            --period "$D1_PERIOD" \
-            --universe "$D1_UNIVERSE" \
-            --broker "$BROKER" \
-            --data-provider "$DATA_PROVIDER" \
-            --markets "$D1_MARKETS" \
-            --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
-            --previous-results public/d1/results.json
+          rm -rf public/h4
+          mkdir -p public/h4
 
-      - name: Scan H4
-        if: steps.scope.outputs.run_h4 == '1'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m filter_pattern.cli scan-all-market \
-            --timeframe H4 \
-            --out public/h4 \
-            --period "$H4_PERIOD" \
-            --universe "$H4_UNIVERSE" \
-            --broker "$BROKER" \
-            --data-provider "$DATA_PROVIDER" \
-            --markets "$H4_MARKETS" \
-            --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
-            --previous-results public/h4/results.json
+      - name: Download H4 report artifact
+        if: needs.scan-h4.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: h4-report
+          path: public/h4
 
       - name: Build site entry report
         shell: bash

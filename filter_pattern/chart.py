@@ -39,7 +39,7 @@ def render_chart(
     chart_dir = Path(out_dir)
     chart_dir.mkdir(parents=True, exist_ok=True)
     output_name = f"{result.symbol.symbol}_{result.technique}_{result.setup}"
-    output_path = chart_dir / f"{safe_filename(output_name)}.png"
+    output_path = chart_dir / f"{safe_filename(output_name)}.jpg"
 
     evidence = result.evidence
     plot_candles = candles[-_chart_window(result.timeframe):]
@@ -129,7 +129,12 @@ def render_chart(
     price_ax.tick_params(axis="both", labelsize=10, width=1.2, colors="#111111")
     volume_ax.tick_params(axis="both", labelsize=9, width=1.2, colors="#111111")
     fig.autofmt_xdate()
-    fig.savefig(output_path, dpi=175)
+    fig.savefig(
+        output_path,
+        dpi=120,
+        format="jpg",
+        pil_kwargs={"quality": 82, "optimize": True, "progressive": True},
+    )
     plt.close(fig)
     return output_path
 

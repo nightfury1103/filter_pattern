@@ -17,7 +17,7 @@ from .universe import UniverseSymbol, expand_crypto_universe, get_universe
 
 
 NEAR_MATCH_CHART_LIMIT = 20
-REVIEW_SETUP_CHART_LIMIT = 750
+REVIEW_SETUP_CHART_LIMIT = 350
 
 
 def scan(config_path: str | Path, out_dir: str | Path, timeframe: str = "D1", technique: str | None = None) -> Path:
@@ -892,8 +892,9 @@ def _all_pattern_runs() -> list[tuple[str, str]]:
 def _clear_old_charts(chart_dir: Path) -> None:
     if not chart_dir.exists():
         return
-    for chart_path in chart_dir.glob("*.png"):
-        chart_path.unlink()
+    for pattern in ("*.jpg", "*.jpeg", "*.png", "*.webp"):
+        for chart_path in chart_dir.glob(pattern):
+            chart_path.unlink()
 
 
 def _payload_with_near_match_charts(
@@ -909,7 +910,7 @@ def _payload_with_near_match_charts(
     payload = result_payload(candidates, rejected, config)
     chart_rows = (
         payload.get("near_matches", [])[: max(0, near_match_chart_limit)]
-        + payload.get("review_setups", [])[: max(0, review_setup_chart_limit)]
+        + _review_setup_chart_rows(payload.get("review_setups", []), review_setup_chart_limit)
     )
     rendered_keys = set()
     for chart_row in chart_rows:
@@ -937,6 +938,34 @@ def _payload_with_near_match_charts(
                 break
     refresh_trigger_warnings(payload)
     return payload
+
+
+def _review_setup_chart_rows(review_setups: list[dict], limit: int = REVIEW_SETUP_CHART_LIMIT) -> list[dict]:
+    if limit <= 0:
+        return []
+    indexed = list(enumerate(review_setups))
+    indexed.sort(key=lambda pair: _review_setup_chart_priority(pair[1], pair[0]), reverse=True)
+    return [item for _, item in indexed[:limit]]
+
+
+def _review_setup_chart_priority(item: dict, index: int) -> tuple[int, float, float, int]:
+    evidence = item.get("evidence", {})
+    distance = _numeric(evidence.get("distance_to_pivot_pct"))
+    detector_score = _numeric(evidence.get("score")) or 0.0
+    status = str(evidence.get("status") or "").upper()
+    active_status = status in {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT", "FORMING", "TRIGGERED"}
+    near_trigger = distance is not None and abs(distance) <= 5.0
+    priority = 1 if near_trigger and (detector_score >= 60.0 or active_status) else 0
+    return (priority, _numeric(item.get("review_score")) or 0.0, detector_score, -index)
+
+
+def _numeric(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _result_key(item: dict) -> str:
