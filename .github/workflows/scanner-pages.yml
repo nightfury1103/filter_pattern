@@ -45,7 +45,7 @@ permissions:
 
 concurrency:
   group: scanner-pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   DATA_PROVIDER: mixed
