@@ -44,7 +44,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: scanner-pages
+  group: scanner-pages-v2
   cancel-in-progress: true
 
 env:
