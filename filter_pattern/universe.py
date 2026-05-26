@@ -24,6 +24,22 @@ CRYPTO_STABLE_BASES = {
     "USD",
 }
 CRYPTO_LEVERAGED_SUFFIXES = ("UP", "DOWN", "BULL", "BEAR", "3L", "3S", "5L", "5S")
+CRYPTO_COMMODITY_BASES = {
+    "BRENT",
+    "GOLD",
+    "OIL",
+    "PAXG",
+    "SILVER",
+    "UKOIL",
+    "USOIL",
+    "WTI",
+    "XAG",
+    "XAGT",
+    "XAU",
+    "XAUT",
+    "XPD",
+    "XPT",
+}
 
 
 @dataclass(frozen=True)
@@ -164,6 +180,8 @@ def _is_supported_crypto_market(market: dict, market_type: str = "spot") -> bool
     base = _normalize_crypto_base(str(market.get("base") or symbol_text.removesuffix("/USDT")).upper().replace("/", "").replace("-", ""))
     if not base or base in CRYPTO_STABLE_BASES:
         return False
+    if _is_non_crypto_base(base):
+        return False
     return not base.endswith(CRYPTO_LEVERAGED_SUFFIXES)
 
 
@@ -176,9 +194,14 @@ def _normalize_crypto_market_type(market_type: str) -> str:
 
 def _normalize_crypto_base(base: str) -> str:
     normalized = str(base or "").upper().replace("/", "").replace("-", "")
-    if normalized.endswith("STOCK") and len(normalized) > len("STOCK"):
-        return normalized[: -len("STOCK")]
     return normalized
+
+
+def _is_non_crypto_base(base: str) -> bool:
+    normalized = _normalize_crypto_base(base)
+    if normalized.endswith("STOCK") and len(normalized) > len("STOCK"):
+        return True
+    return normalized in CRYPTO_COMMODITY_BASES
 
 
 def sp500_universe() -> list[UniverseSymbol]:
@@ -965,7 +988,6 @@ def _crypto() -> list[UniverseSymbol]:
         "VIRTUAL",
         "ZEN",
         "STORJ",
-        "PAXG",
         "TRUMP",
         "NEIRO",
         "NOT",
