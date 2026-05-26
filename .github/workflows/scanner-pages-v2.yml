@@ -1,6 +1,9 @@
 name: Scanner Pages V2
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Refresh both D1 and H4 every 2 hours. Cron is UTC; Vietnam time is UTC+7.
     # Runs at minute 1 by request.
