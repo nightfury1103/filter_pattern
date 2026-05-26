@@ -50,9 +50,9 @@ concurrency:
 env:
   DATA_PROVIDER: mixed
   BROKER: exness
-  CRYPTO_MODE: ${{ inputs.crypto_mode || 'wide' }}
-  CRYPTO_MARKET_TYPE: ${{ inputs.crypto_market_type || 'perp' }}
-  CRYPTO_MAX_SYMBOLS: ${{ inputs.crypto_max_symbols || '' }}
+  CRYPTO_MODE: ${{ github.event.inputs.crypto_mode || 'wide' }}
+  CRYPTO_MARKET_TYPE: ${{ github.event.inputs.crypto_market_type || 'perp' }}
+  CRYPTO_MAX_SYMBOLS: ${{ github.event.inputs.crypto_max_symbols || '' }}
   CCXT_MAX_WORKERS: "8"
   VNSTOCK_REQUEST_TIMEOUT_SECONDS: "8"
   D1_PERIOD: 180d
@@ -67,7 +67,7 @@ jobs:
   scan_d1:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.timeframe == 'all' || inputs.timeframe == 'd1' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.timeframe == 'all' || github.event.inputs.timeframe == 'd1' }}
 
     steps:
       - name: Checkout scanner source
@@ -121,7 +121,7 @@ jobs:
   scan_h4:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.timeframe == 'all' || inputs.timeframe == 'h4' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.timeframe == 'all' || github.event.inputs.timeframe == 'h4' }}
 
     steps:
       - name: Checkout scanner source
