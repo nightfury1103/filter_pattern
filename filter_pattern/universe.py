@@ -26,10 +26,13 @@ CRYPTO_STABLE_BASES = {
 CRYPTO_LEVERAGED_SUFFIXES = ("UP", "DOWN", "BULL", "BEAR", "3L", "3S", "5L", "5S")
 CRYPTO_COMMODITY_BASES = {
     "BRENT",
+    "COPPER",
     "GOLD",
+    "NATGAS",
     "OIL",
     "PAXG",
     "SILVER",
+    "USO",
     "UKOIL",
     "USOIL",
     "WTI",
@@ -39,6 +42,43 @@ CRYPTO_COMMODITY_BASES = {
     "XAUT",
     "XPD",
     "XPT",
+}
+CRYPTO_TRADFI_BASES = {
+    "AAPL",
+    "AMD",
+    "AMZN",
+    "ARM",
+    "AVGO",
+    "BABA",
+    "COIN",
+    "COST",
+    "CRWD",
+    "DIS",
+    "GLD",
+    "GOOGL",
+    "HD",
+    "HOOD",
+    "INTC",
+    "IWM",
+    "JPM",
+    "LLY",
+    "META",
+    "MSFT",
+    "MSTR",
+    "MU",
+    "NFLX",
+    "NVDA",
+    "ORCL",
+    "PLTR",
+    "QQQ",
+    "QCOM",
+    "SLV",
+    "SPY",
+    "TSLA",
+    "UBER",
+    "V",
+    "WMT",
+    "XLE",
 }
 
 
@@ -180,6 +220,8 @@ def _is_supported_crypto_market(market: dict, market_type: str = "spot") -> bool
     base = _normalize_crypto_base(str(market.get("base") or symbol_text.removesuffix("/USDT")).upper().replace("/", "").replace("-", ""))
     if not base or base in CRYPTO_STABLE_BASES:
         return False
+    if _market_metadata_is_tradfi(market):
+        return False
     if _is_non_crypto_base(base):
         return False
     return not base.endswith(CRYPTO_LEVERAGED_SUFFIXES)
@@ -201,7 +243,20 @@ def _is_non_crypto_base(base: str) -> bool:
     normalized = _normalize_crypto_base(base)
     if normalized.endswith("STOCK") and len(normalized) > len("STOCK"):
         return True
-    return normalized in CRYPTO_COMMODITY_BASES
+    return normalized in CRYPTO_COMMODITY_BASES or normalized in CRYPTO_TRADFI_BASES
+
+
+def _market_metadata_is_tradfi(market: dict) -> bool:
+    info = market.get("info") or {}
+    metadata_values = [
+        info.get("contractType"),
+        info.get("underlyingType"),
+        info.get("symbolType"),
+        info.get("category"),
+    ]
+    metadata_values.extend(info.get("underlyingSubType") or [])
+    text = " ".join(str(value).upper() for value in metadata_values if value is not None)
+    return any(marker in text for marker in ("TRADIFI", "EQUITY", "COMMODITY", "STOCK"))
 
 
 def sp500_universe() -> list[UniverseSymbol]:

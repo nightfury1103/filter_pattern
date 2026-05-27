@@ -82,12 +82,69 @@ def test_dynamic_crypto_universe_rejects_tokenized_stock_and_commodity_markets()
             ("mexc", {"symbol": "XAUT/USDT:USDT", "base": "XAUT", "quote": "USDT", "swap": True, "active": True}),
             ("mexc", {"symbol": "GOLD/USDT:USDT", "base": "GOLD", "quote": "USDT", "swap": True, "active": True}),
             ("mexc", {"symbol": "OIL/USDT:USDT", "base": "OIL", "quote": "USDT", "swap": True, "active": True}),
+            (
+                "binance",
+                {
+                    "symbol": "TSLA/USDT:USDT",
+                    "base": "TSLA",
+                    "quote": "USDT",
+                    "swap": True,
+                    "active": True,
+                    "info": {"contractType": "TRADIFI_PERPETUAL", "underlyingType": "EQUITY", "underlyingSubType": ["TradFi"]},
+                },
+            ),
+            (
+                "binance",
+                {
+                    "symbol": "COPPER/USDT:USDT",
+                    "base": "COPPER",
+                    "quote": "USDT",
+                    "swap": True,
+                    "active": True,
+                    "info": {"contractType": "TRADIFI_PERPETUAL", "underlyingType": "COMMODITY", "underlyingSubType": ["TradFi"]},
+                },
+            ),
+            (
+                "bybit",
+                {
+                    "symbol": "AAPL/USDT:USDT",
+                    "base": "AAPL",
+                    "quote": "USDT",
+                    "swap": True,
+                    "active": True,
+                    "info": {"symbolType": "stock"},
+                },
+            ),
+            ("okx", {"symbol": "COST/USDT:USDT", "base": "COST", "quote": "USDT", "swap": True, "active": True}),
+            ("okx", {"symbol": "USO/USDT:USDT", "base": "USO", "quote": "USDT", "swap": True, "active": True}),
+            (
+                "binance",
+                {
+                    "symbol": "GAS/USDT:USDT",
+                    "base": "GAS",
+                    "quote": "USDT",
+                    "swap": True,
+                    "active": True,
+                    "info": {"contractType": "PERPETUAL", "underlyingType": "COIN", "underlyingSubType": ["Infrastructure"]},
+                },
+            ),
+            (
+                "binance",
+                {
+                    "symbol": "CVX/USDT:USDT",
+                    "base": "CVX",
+                    "quote": "USDT",
+                    "swap": True,
+                    "active": True,
+                    "info": {"contractType": "PERPETUAL", "underlyingType": "COIN", "underlyingSubType": ["DeFi"]},
+                },
+            ),
             ("mexc", {"symbol": "ATOM/USDT:USDT", "base": "ATOM", "quote": "USDT", "swap": True, "active": True}),
         ],
         market_type="perp",
     )
 
-    assert [item.symbol for item in crypto] == ["ATOMUSDT"]
+    assert [item.symbol for item in crypto] == ["GASUSDT", "CVXUSDT", "ATOMUSDT"]
 
 
 def test_dynamic_crypto_perp_universe_rejects_spot_only_markets() -> None:
