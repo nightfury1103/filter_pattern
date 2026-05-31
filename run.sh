@@ -36,7 +36,7 @@ if [[ -z "${CRYPTO_MAX_SYMBOLS+x}" ]]; then
     export CRYPTO_MAX_SYMBOLS=""
   fi
 fi
-export CCXT_MAX_WORKERS="${CCXT_MAX_WORKERS:-8}"
+export CCXT_MAX_WORKERS="${CCXT_MAX_WORKERS:-16}"
 export VNSTOCK_REQUEST_TIMEOUT_SECONDS="${VNSTOCK_REQUEST_TIMEOUT_SECONDS:-8}"
 if [[ -z "${CRYPTO_EXCHANGES:-}" ]]; then
   if [[ "$CRYPTO_MODE" == "wide" ]]; then

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
+from pathlib import Path
 
 from filter_pattern.models import Candle
 from filter_pattern.providers import (
@@ -59,6 +60,16 @@ def test_ccxt_worker_count_is_configurable_and_bounded(monkeypatch) -> None:
 
     monkeypatch.setenv("CCXT_MAX_WORKERS", "bad")
     assert _ccxt_worker_count(3) == 3
+
+
+def test_deployment_defaults_use_16_ccxt_workers() -> None:
+    root = Path(__file__).resolve().parents[1]
+
+    run_script = (root / "run.sh").read_text()
+    workflow = (root / ".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert 'CCXT_MAX_WORKERS="${CCXT_MAX_WORKERS:-16}"' in run_script
+    assert 'CCXT_MAX_WORKERS: "16"' in workflow
 
 
 def test_vnstock_frame_normalization_sorts_deduplicates_and_maps_ohlcv() -> None:
