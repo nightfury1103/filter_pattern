@@ -369,12 +369,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       color: var(--muted);
       font-size: 13px;
     }}
-    .layout {{
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 14px;
-      align-items: start;
-    }}
+    .layout {{ display: block; }}
     .main-column {{ min-width: 0; }}
     .side-panel {{
       display: grid;
@@ -464,9 +459,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .badge.change-dropped {{ background: #fef2f2; color: var(--bad); }}
     .badge.change-unchanged, .badge.change-first_run {{ background: #f8fafc; color: #475569; }}
     .card-content {{
-      display: grid;
-      grid-template-columns: minmax(740px, 2.7fr) minmax(320px, 0.85fr);
-      align-items: start;
+      display: block;
       background: #ffffff;
     }}
     .card-content.no-chart {{
@@ -474,7 +467,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .chart-frame {{
       background: #ffffff;
-      border-right: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
       min-width: 0;
     }}
     .chart-frame img {{
@@ -482,6 +475,48 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       width: 100%;
       height: auto;
       background: #ffffff;
+    }}
+    .chart-pair {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      padding: 14px;
+      align-items: start;
+    }}
+    .chart-tile {{
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #ffffff;
+    }}
+    .chart-tile strong {{
+      display: block;
+      padding: 8px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+      color: #334155;
+      font-size: 12px;
+      text-transform: uppercase;
+    }}
+    .chart-tile img {{
+      border: 0;
+    }}
+    .rrg-reference {{
+      border: 1px solid #dbeafe;
+      border-radius: 8px;
+      background: #f8fbff;
+      padding: 10px;
+      margin-bottom: 12px;
+      color: #1f2937;
+    }}
+    .rrg-reference .reasons {{
+      color: #1f2937;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }}
+    .rrg-reference .meta {{
+      color: #64748b;
+      font-size: 12px;
     }}
     .body {{
       padding: 14px;
@@ -614,12 +649,13 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     @media (max-width: 1180px) {{
       .app {{ grid-template-columns: 1fr; }}
       aside.nav {{ position: static; height: auto; }}
-      .layout {{ grid-template-columns: 1fr; }}
+      .layout {{ display: block; }}
       .side-panel {{ position: static; }}
       .stats {{ grid-template-columns: repeat(4, 1fr); }}
       .toolbar {{ grid-template-columns: repeat(2, 1fr); }}
       .card-content {{ grid-template-columns: 1fr; }}
-      .chart-frame {{ border-right: 0; border-bottom: 1px solid #cbd5e1; }}
+      .chart-pair {{ grid-template-columns: 1fr; }}
+      .chart-frame {{ border-bottom: 1px solid #cbd5e1; }}
     }}
     @media (max-width: 720px) {{
       .page {{ padding: 16px; }}
@@ -716,16 +752,6 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           {near_rows}
           {not_configured_rows}
         </section>
-        <aside class="side-panel">
-          <section class="panel"><h3>Setup Distribution</h3>{setup_panel}</section>
-          <section class="panel"><h3>Market Coverage</h3>{market_panel}</section>
-          <section class="panel"><h3>Priority Queue</h3>
-            <div class="dist-row"><span>Fresh triggered</span><strong>{triggered}</strong></div>
-            <div class="dist-row"><span>Waiting / near pivot</span><strong>{waiting}</strong></div>
-            <div class="dist-row"><span>Continue watching</span><strong>{len(review_setups)}</strong></div>
-            <div class="dist-row"><span>Needs manual chart review</span><strong>{len(candidates) + len(review_setups)}</strong></div>
-          </section>
-        </aside>
       </div>
     </main>
   </div>
@@ -1171,11 +1197,67 @@ def _chart_img(src: str, alt: str) -> str:
     return f'<img src="{src}" alt="{escape(alt)}" loading="lazy" decoding="async">'
 
 
+def _chart_frame_html(item: dict, report_dir: Path, alt: str, label: str) -> str:
+    chart_path = item.get("chart_path") or ""
+    if not chart_path:
+        return ""
+    chart_src = escape(_relative_path(chart_path, report_dir))
+    rrg = item.get("rrg") or {}
+    rrg_chart = rrg.get("rrg_chart_path")
+    if not rrg_chart:
+        return f'<div class="chart-frame">{_chart_img(chart_src, alt)}</div>'
+
+    rrg_src = escape(_relative_path(str(rrg_chart), report_dir))
+    confidence = rrg.get("confidence") or {}
+    confidence_label = str(confidence.get("label") or "RRG Reference")
+    return f"""<div class="chart-frame">
+      <div class="chart-pair">
+        <a class="chart-tile" href="{chart_src}"><strong>{escape(label)}</strong>{_chart_img(chart_src, alt)}</a>
+        <a class="chart-tile" href="{rrg_src}"><strong>RRG Confidence</strong>{_chart_img(rrg_src, f'{item.get("symbol", "")} RRG confidence chart')}</a>
+      </div>
+      <div class="rrg-reference" style="margin:0 10px 10px;">
+        <div class="reasons">{escape(confidence_label)}</div>
+        <div class="meta">{escape(_rrg_reference_meta(rrg))}</div>
+      </div>
+    </div>"""
+
+
+def _rrg_reference_panel(item: dict) -> str:
+    rrg = item.get("rrg") or {}
+    if not rrg:
+        return ""
+    confidence = rrg.get("confidence") or {}
+    intent = rrg.get("stock_intent") or {}
+    return f"""
+      <div class="rrg-reference">
+        <div class="reasons">RRG Confidence: {escape(str(confidence.get("label") or "RRG Reference"))}</div>
+        <div class="metrics">
+          <div class="metric"><span>Benchmark</span><strong>{escape(str(rrg.get("benchmark") or "-"))}</strong></div>
+          <div class="metric"><span>Quadrant</span><strong>{escape(str(intent.get("quadrant") or "-"))}</strong></div>
+          <div class="metric"><span>Head dx</span><strong>{escape(_fmt(intent.get("dx1")))}</strong></div>
+          <div class="metric"><span>Head dy</span><strong>{escape(_fmt(intent.get("dy1")))}</strong></div>
+        </div>
+        <div class="meta">{escape(str(confidence.get("note") or "RRG is shown as reference only and does not block the pattern."))}</div>
+      </div>"""
+
+
+def _rrg_reference_meta(rrg: dict) -> str:
+    confidence = rrg.get("confidence") or {}
+    intent = rrg.get("stock_intent") or {}
+    sector = str(rrg.get("sector") or "").strip()
+    benchmark = str(rrg.get("benchmark") or "").strip()
+    relation = f"{sector} vs {benchmark}" if sector and benchmark else (benchmark or sector or "RRG")
+    quadrant = str(intent.get("quadrant") or "-")
+    dx = _fmt(intent.get("dx1"))
+    dy = _fmt(intent.get("dy1"))
+    note = str(confidence.get("note") or "Reference only.")
+    return f"{relation} · {quadrant} · head dx {dx} · head dy {dy}. {note}"
+
+
 def _candidate_card(candidate: dict, report_dir: Path) -> str:
     evidence = candidate["evidence"]
     tv_symbol = candidate["tradingview_symbol"]
-    chart_path = candidate.get("chart_path") or ""
-    chart_src = escape(_relative_path(chart_path, report_dir))
+    chart_html = _chart_frame_html(candidate, report_dir, f'{candidate["symbol"]} proof chart', "Current Setup Pattern")
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
     tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
     pivot = _fmt(evidence.get("pivot"))
@@ -1183,6 +1265,8 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
     distance = _fmt(evidence.get("distance_to_pivot_pct"), suffix="%")
     volume_ratio = _fmt(evidence.get("volume_dry_up_ratio"))
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
+    direction_authority = _direction_authority_html(candidate)
+    rrg_reference = _rrg_reference_panel(candidate)
     technique = candidate.get("technique", "vcp")
     setup = candidate.get("setup", "all")
     timeframe = str(candidate.get("timeframe", "D1"))
@@ -1210,7 +1294,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
     <div class="score">{escape(str(evidence.get("score", 0)))}</div>
   </div>
   <div class="card-content">
-    <div class="chart-frame">{_chart_img(chart_src, f'{candidate["symbol"]} proof chart')}</div>
+    {chart_html}
     <div class="body">
       <div class="metrics">
         <div class="metric"><span>Trigger / pivot</span><strong>{pivot}</strong></div>
@@ -1218,6 +1302,8 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
         <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
         <div class="metric"><span>Volume ratio</span><strong>{volume_ratio}</strong></div>
       </div>
+      {rrg_reference}
+      {direction_authority}
       <div class="reasons">Candidate evidence:</div>
       <ul>{reasons}</ul>
       {lower_timeframe_confirmation}
@@ -1276,15 +1362,39 @@ def _lower_timeframe_confirmation_html(item: dict, report_dir: Path) -> str:
     </details>"""
 
 
+def _direction_authority_html(item: dict) -> str:
+    authority = item.get("direction_authority") or {}
+    if not authority:
+        return ""
+    decision = str(authority.get("decision_label") or authority.get("decision") or "Watch only")
+    bias = str(authority.get("bias") or "n/a")
+    phase = str(authority.get("phase") or "n/a")
+    confidence = _fmt(authority.get("confidence"))
+    trend = _fmt(authority.get("trend_score"))
+    momentum = _fmt(authority.get("momentum_score"))
+    trade_filter = str(authority.get("trade_filter") or "")
+    reasons = authority.get("reasons") or []
+    reason_text = " · ".join(str(reason) for reason in reasons[:2])
+    return f"""
+      <div class="direction-authority">
+        <div class="reasons">Direction authority:</div>
+        <div class="metrics">
+          <div class="metric"><span>Decision</span><strong>{escape(decision)}</strong></div>
+          <div class="metric"><span>Phase</span><strong>{escape(phase)}</strong></div>
+          <div class="metric"><span>Bias</span><strong>{escape(bias)}</strong></div>
+          <div class="metric"><span>Confidence</span><strong>{escape(confidence)}</strong></div>
+          <div class="metric"><span>Trend</span><strong>{escape(trend)}</strong></div>
+          <div class="metric"><span>Momentum</span><strong>{escape(momentum)}</strong></div>
+        </div>
+        <ul><li>{escape(trade_filter)}</li>{f"<li>{escape(reason_text)}</li>" if reason_text else ""}</ul>
+      </div>"""
+
+
 def _near_match_card(candidate: dict, report_dir: Path) -> str:
     evidence = candidate["evidence"]
     tv_symbol = candidate["tradingview_symbol"]
     tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
-    chart_path = candidate.get("chart_path") or ""
-    chart_html = ""
-    if chart_path:
-        chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<div class="chart-frame">{_chart_img(chart_src, f'{candidate["symbol"]} near-match VCP chart')}</div>'
+    chart_html = _chart_frame_html(candidate, report_dir, f'{candidate["symbol"]} near-match VCP chart', "Near-Match Pattern")
     content_class = "card-content" if chart_html else "card-content no-chart"
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:4])
@@ -1297,6 +1407,8 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
     display_setup = _display_setup(candidate)
     change = str(candidate.get("watchlist_change", ""))
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
+    direction_authority = _direction_authority_html(candidate)
+    rrg_reference = _rrg_reference_panel(candidate)
 
     exness_supported = _is_row_exness_supported(candidate)
 
@@ -1315,6 +1427,8 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
         <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
         <div class="metric"><span>Status</span><strong>Near</strong></div>
       </div>
+      {rrg_reference}
+      {direction_authority}
       <div class="reasons">Passed checks:</div>
       <ul>{reasons}</ul>
       <div class="reasons failures">Failed checks:</div>
@@ -1329,11 +1443,7 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     evidence = candidate["evidence"]
     tv_symbol = candidate["tradingview_symbol"]
     tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
-    chart_path = candidate.get("chart_path") or ""
-    chart_html = ""
-    if chart_path:
-        chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<div class="chart-frame">{_chart_img(chart_src, f'{candidate["symbol"]} lifecycle review chart')}</div>'
+    chart_html = _chart_frame_html(candidate, report_dir, f'{candidate["symbol"]} lifecycle review chart', "Lifecycle Pattern")
     content_class = "card-content" if chart_html else "card-content no-chart"
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:5])
@@ -1349,6 +1459,8 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     display_setup = _display_setup(candidate)
     change = str(candidate.get("watchlist_change", ""))
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
+    direction_authority = _direction_authority_html(candidate)
+    rrg_reference = _rrg_reference_panel(candidate)
     exness_supported = _is_row_exness_supported(candidate)
 
     return f"""<article class="near result-card" data-filterable="true" data-status="review" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
@@ -1368,6 +1480,8 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
         <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
         <div class="metric"><span>Status</span><strong>{escape(status)}</strong></div>
       </div>
+      {rrg_reference}
+      {direction_authority}
       <div class="reasons">Detected structure:</div>
       <ul>{reasons}</ul>
       <div class="reasons failures">Why it is not qualified:</div>
@@ -1383,11 +1497,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     warning = item.get("trigger_warning", {})
     tv_symbol = item["tradingview_symbol"]
     tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tv_symbol)}"
-    chart_path = item.get("chart_path") or ""
-    chart_html = ""
-    if chart_path:
-        chart_src = escape(_relative_path(chart_path, report_dir))
-        chart_html = f'<div class="chart-frame">{_chart_img(chart_src, f'{item["symbol"]} near break warning chart')}</div>'
+    chart_html = _chart_frame_html(item, report_dir, f'{item["symbol"]} near break warning chart', "Near-Break Pattern")
     content_class = "card-content" if chart_html else "card-content no-chart"
     technique = item.get("technique", "vcp")
     setup = item.get("setup", "all")
@@ -1402,6 +1512,8 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     warning_label = str(warning.get("label") or "Near break")
     note = str(warning.get("note") or "Price is close to the trigger/pivot.")
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(item, report_dir)
+    direction_authority = _direction_authority_html(item)
+    rrg_reference = _rrg_reference_panel(item)
     reasons = "".join(f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:4])
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:3])
     failure_html = ""
@@ -1426,8 +1538,10 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
         <div class="metric"><span>Distance</span><strong>{distance}</strong></div>
         <div class="metric"><span>Warning</span><strong>{escape(warning_label)}</strong></div>
       </div>
+      {rrg_reference}
       <div class="reasons">Warning reason:</div>
       <ul><li>{escape(note)}</li>{reasons}</ul>
+      {direction_authority}
       {lower_timeframe_confirmation}
       {failure_html}
     </div>

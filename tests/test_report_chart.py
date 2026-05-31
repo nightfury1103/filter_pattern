@@ -26,7 +26,20 @@ def test_chart_and_report_smoke(tmp_path: Path) -> None:
 
     chart_path = render_chart(result, candles, tmp_path / "charts", cfg)
     result = ScanResult(symbol=symbol, timeframe="D1", evidence=evidence, chart_path=str(chart_path))
-    payload = result_payload([result.to_json()], [], {"timeframe": "D1"})
+    row = result.to_json()
+    row["direction_authority"] = {
+        "bias": "WATCH LONG",
+        "phase": "Accumulation / Recovery",
+        "trend_score": -12.5,
+        "momentum_score": 45.0,
+        "confidence": 62.0,
+        "setup_direction": "short",
+        "decision": "BLOCK_SHORT_ACCUMULATION_RISK",
+        "decision_label": "Block short: accumulation/recovery risk",
+        "trade_filter": "Block shorts: improving from weak state",
+        "reasons": ["20-bar return: +8.0%"],
+    }
+    payload = result_payload([row], [], {"timeframe": "D1"})
     results_path = tmp_path / "results.json"
     results_path.write_text(json.dumps(payload))
 
@@ -46,6 +59,68 @@ def test_chart_and_report_smoke(tmp_path: Path) -> None:
     assert 'id="coverageSection"' in html
     assert "applyFilters();" in html
     assert 'data-filterable="true"' in html
+    assert "Block short: accumulation/recovery risk" in html
+    assert "Accumulation / Recovery" in html
+
+
+def test_report_renders_rrg_confidence_reference_beside_candidate_chart(tmp_path: Path) -> None:
+    cfg = make_config()
+    candles = make_series([20, 12, 6], current_close=96, late_volume=80_000)
+    evidence = detect_vcp(candles, cfg)
+    symbol = SymbolSpec(
+        symbol="MSFT",
+        market="US stock",
+        tradingview_symbol="NASDAQ:MSFT",
+        csv_path=tmp_path / "msft.csv",
+    )
+    chart_path = render_chart(ScanResult(symbol=symbol, timeframe="D1", evidence=evidence), candles, tmp_path / "charts", cfg)
+    rrg_path = tmp_path / "rrg" / "msft-rrg-proof.jpg"
+    rrg_path.parent.mkdir()
+    rrg_path.write_bytes(b"fake jpg")
+    row = ScanResult(symbol=symbol, timeframe="D1", evidence=evidence, chart_path=str(chart_path)).to_json()
+    row["rrg"] = {
+        "benchmark": "XLK",
+        "sector": "Information Technology",
+        "rrg_chart_path": str(rrg_path),
+        "stock_intent": {"quadrant": "LAGGING", "dx1": 0.5, "dy1": 0.4, "dy2": 0.2},
+        "confidence": {"label": "RRG Early Reference", "tone": "early", "blocks_pattern": False},
+    }
+    payload = result_payload([row], [], {"timeframe": "D1"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert "RRG Confidence" in html
+    assert "RRG Early Reference" in html
+    assert "Information Technology vs XLK" in html
+    assert "msft-rrg-proof.jpg" in html
+
+
+def test_report_uses_full_width_chart_layout_without_right_side_panel(tmp_path: Path) -> None:
+    cfg = make_config()
+    candles = make_series([20, 12, 6], current_close=96, late_volume=80_000)
+    evidence = detect_vcp(candles, cfg)
+    symbol = SymbolSpec(
+        symbol="MSFT",
+        market="US stock",
+        tradingview_symbol="NASDAQ:MSFT",
+        csv_path=tmp_path / "msft.csv",
+    )
+    chart_path = render_chart(ScanResult(symbol=symbol, timeframe="D1", evidence=evidence), candles, tmp_path / "charts", cfg)
+    row = ScanResult(symbol=symbol, timeframe="D1", evidence=evidence, chart_path=str(chart_path)).to_json()
+    payload = result_payload([row], [], {"timeframe": "D1"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert 'class="side-panel"' not in html
+    assert "Setup Distribution" not in html
+    assert ".layout { display: block;" in html
+    assert ".card-content {\n      display: block;" in html
 
 
 def test_chart_x_axis_uses_trading_sessions_without_weekend_gap() -> None:

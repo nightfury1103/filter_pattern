@@ -8,6 +8,7 @@ from pathlib import Path
 from .chart import render_chart
 from .data import config_to_json, load_config, load_ohlcv_csv
 from .detector import detect_pattern
+from .direction import DirectionMarketContext, annotate_result_with_direction_authority, build_market_context
 from .exness import filter_exness_supported
 from .models import Candle, ScanResult, SymbolSpec, VCPConfig, VCPEvidence
 from .providers import load_ccxt_ohlcv_many, load_vnstock_ohlcv_many, load_yahoo_ohlcv_many
@@ -99,9 +100,9 @@ def scan_all_csv(
                     technique=technique_name,
                     setup=setup_name,
                 )
-                candidates.append(scan_result.to_json())
+                candidates.append(_result_json_with_direction(scan_result, candles))
             else:
-                rejected_item = scan_result.to_json()
+                rejected_item = _result_json_with_direction(scan_result, candles)
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -118,6 +119,7 @@ def scan_all_csv(
         }
     )
     payload = _payload_with_near_match_charts(candidates, rejected, config_json, rejected_candles, chart_dir, config.vcp)
+    _attach_rrg_references_if_available(payload, output_dir, config.timeframe)
     results_path = output_dir / "results.json"
     results_path.write_text(json.dumps(payload, indent=2))
     write_html_report(results_path, output_dir / "index.html")
@@ -194,9 +196,9 @@ def _scan_csv(
                     technique=active_technique,
                     setup=setup_name,
                 )
-                candidates.append(scan_result.to_json())
+                candidates.append(_result_json_with_direction(scan_result, candles))
             else:
-                rejected_item = scan_result.to_json()
+                rejected_item = _result_json_with_direction(scan_result, candles)
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -205,6 +207,7 @@ def _scan_csv(
     config_json["technique"] = active_technique
     config_json["setup"] = active_setup
     payload = _payload_with_near_match_charts(candidates, rejected, config_json, rejected_candles, chart_dir, config.vcp)
+    _attach_rrg_references_if_available(payload, output_dir, config.timeframe)
     results_path = output_dir / "results.json"
     results_path.write_text(json.dumps(payload, indent=2))
     write_html_report(results_path, output_dir / "index.html")
@@ -252,6 +255,7 @@ def scan_market(
 
     _print_scan_plan(active_timeframe, active_technique, setup_names, universe, data_provider)
     downloaded = _download_market_data(universe, period, active_timeframe, data_provider)
+    direction_contexts = _direction_contexts_for_universe(universe, downloaded)
 
     for index, item in enumerate(universe, start=1):
         _print_scan_progress(index, len(universe), item, "scan-market")
@@ -345,9 +349,9 @@ def scan_market(
                     technique=active_technique,
                     setup=setup_name,
                 )
-                candidates.append(scan_result.to_json())
+                candidates.append(_result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol)))
             else:
-                rejected_item = scan_result.to_json()
+                rejected_item = _result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol))
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -374,6 +378,7 @@ def scan_market(
         vcp_config,
         near_match_chart_limit,
     )
+    _attach_rrg_references_if_available(payload, output_dir, active_timeframe)
     apply_watchlist_changes(payload, previous_results_path)
     results_path = output_dir / "results.json"
     results_path.write_text(json.dumps(payload, indent=2))
@@ -418,6 +423,7 @@ def scan_all_market(
     pattern_runs = _all_pattern_runs()
     _print_scan_plan(active_timeframe, "all-patterns", [setup for _technique, setup in pattern_runs], universe, data_provider)
     downloaded = _download_market_data(universe, period, active_timeframe, data_provider)
+    direction_contexts = _direction_contexts_for_universe(universe, downloaded)
 
     for index, item in enumerate(universe, start=1):
         _print_scan_progress(index, len(universe), item, "scan-all-market")
@@ -488,9 +494,9 @@ def scan_all_market(
                     technique=technique_name,
                     setup=setup_name,
                 )
-                candidates.append(scan_result.to_json())
+                candidates.append(_result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol)))
             else:
-                rejected_item = scan_result.to_json()
+                rejected_item = _result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol))
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -519,6 +525,7 @@ def scan_all_market(
         vcp_config,
         near_match_chart_limit,
     )
+    _attach_rrg_references_if_available(payload, output_dir, active_timeframe)
     apply_watchlist_changes(payload, previous_results_path)
     results_path = output_dir / "results.json"
     results_path.write_text(json.dumps(payload, indent=2))
@@ -938,6 +945,53 @@ def _payload_with_near_match_charts(
                 break
     refresh_trigger_warnings(payload)
     return payload
+
+
+def _attach_rrg_references_if_available(payload: dict, output_dir: Path, timeframe: str) -> dict:
+    try:
+        from .rrg_dashboard import attach_rrg_references
+
+        return attach_rrg_references(payload, output_dir, timeframe)
+    except Exception as exc:
+        payload["rrg_reference"] = {
+            "enabled": True,
+            "status": "error",
+            "attached_count": 0,
+            "error": str(exc),
+            "note": "RRG is reference-only. The pattern scan completed and the watchlist was not filtered by RRG.",
+        }
+        return payload
+
+
+def _result_json_with_direction(
+    scan_result: ScanResult,
+    candles: list[Candle],
+    context: DirectionMarketContext | None = None,
+) -> dict:
+    return annotate_result_with_direction_authority(scan_result.to_json(), candles, context)
+
+
+def _direction_contexts_for_universe(
+    universe: list[UniverseSymbol],
+    downloaded: dict[str, list | Exception],
+) -> dict[str, DirectionMarketContext]:
+    candles_by_symbol: dict[str, list[Candle]] = {}
+    markets_by_symbol: dict[str, str] = {}
+    for item in universe:
+        data = downloaded.get(item.yahoo_symbol)
+        if isinstance(data, Exception) or not data:
+            continue
+        candles_by_symbol[item.symbol] = data
+        markets_by_symbol[item.symbol] = item.market
+    contexts = {}
+    context_by_market = {}
+    for item in universe:
+        if item.market not in context_by_market:
+            context_by_market[item.market] = build_market_context(candles_by_symbol, markets_by_symbol, item.market)
+        context = context_by_market[item.market]
+        if context is not None:
+            contexts[item.symbol] = context
+    return contexts
 
 
 def _review_setup_chart_rows(review_setups: list[dict], limit: int = REVIEW_SETUP_CHART_LIMIT) -> list[dict]:

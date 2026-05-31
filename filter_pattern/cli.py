@@ -5,7 +5,9 @@ import shutil
 import sys
 from pathlib import Path
 
+from .direction_backtest import run_direction_backtest
 from .report import write_combined_html_report, write_html_report
+from .rrg_dashboard import build_crypto_rrg_demo, build_usstock_rrg_demo, build_vnstock_rrg_demo
 from .scanner import scan_all_csv, scan_all_market, scan_csv, scan_market
 from .techniques import NHATHOAI_SETUP_CHOICES, TECHNIQUE_CHOICES
 
@@ -134,6 +136,108 @@ def main(argv: list[str] | None = None) -> int:
     )
     all_market_parser.add_argument("--limit", type=int, help="scan only the first N universe symbols")
 
+    direction_backtest_parser = subparsers.add_parser(
+        "direction-backtest",
+        help="backtest the direction authority across a selected market universe",
+    )
+    direction_backtest_parser.add_argument("--out", required=True, help="output directory")
+    direction_backtest_parser.add_argument("--timeframe", default="D1", choices=["D1", "H4"], help="timeframe to backtest")
+    direction_backtest_parser.add_argument("--period", default="5y", help="history period, for example 2y, 5y, 10y")
+    direction_backtest_parser.add_argument(
+        "--universe",
+        default="default",
+        choices=["default", "sp500", "broad"],
+        help="symbol universe to backtest",
+    )
+    direction_backtest_parser.add_argument(
+        "--markets",
+        default="all",
+        help="comma-separated market filter, for example: 'US stock,Commodity,Forex,Crypto'",
+    )
+    direction_backtest_parser.add_argument(
+        "--data-provider",
+        default="yahoo",
+        choices=["yahoo", "mixed", "ccxt", "vnstock"],
+        help="market data provider",
+    )
+    direction_backtest_parser.add_argument("--limit", type=int, help="backtest only the first N universe symbols")
+    direction_backtest_parser.add_argument("--horizon", type=int, default=20, help="forward bars used to score direction")
+    direction_backtest_parser.add_argument("--step", type=int, default=5, help="bars between historical samples")
+    direction_backtest_parser.add_argument(
+        "--min-history",
+        type=int,
+        default=220,
+        help="minimum candles required before first historical sample",
+    )
+
+    usstock_rrg_parser = subparsers.add_parser(
+        "usstock-rrg-demo",
+        help="build a US stock dashboard that filters by RRG before scanning patterns",
+    )
+    usstock_rrg_parser.add_argument("--out", required=True, help="output directory")
+    usstock_rrg_parser.add_argument("--timeframe", default="D1", choices=["D1", "H4"], help="timeframe to scan")
+    usstock_rrg_parser.add_argument("--config", help="optional YAML config for VCP thresholds and pattern defaults")
+    usstock_rrg_parser.add_argument("--period", default="2y", help="Yahoo Finance history period")
+    usstock_rrg_parser.add_argument(
+        "--technique",
+        default=None,
+        choices=TECHNIQUE_CHOICES,
+        help="pattern technique to scan; defaults to config.yml technique, or nhathoai for this demo",
+    )
+    usstock_rrg_parser.add_argument(
+        "--setup",
+        default=None,
+        choices=NHATHOAI_SETUP_CHOICES,
+        help="setup name for --technique nhathoai; defaults to config.yml setup, or all",
+    )
+    usstock_rrg_parser.add_argument("--max-sectors", type=int, help="optional cap on accepted RRG sectors")
+    usstock_rrg_parser.add_argument("--max-symbols", type=int, help="optional cap on accepted RRG stock symbols")
+
+    vnstock_rrg_parser = subparsers.add_parser(
+        "vnstock-rrg-demo",
+        help="build a Vietnam stock dashboard that filters by Fialda RRG before scanning patterns",
+    )
+    vnstock_rrg_parser.add_argument("--out", required=True, help="output directory")
+    vnstock_rrg_parser.add_argument("--timeframe", default="D1", choices=["D1", "H4"], help="timeframe to scan")
+    vnstock_rrg_parser.add_argument("--config", help="optional YAML config for VCP thresholds and pattern defaults")
+    vnstock_rrg_parser.add_argument("--period", default="2y", help="VNStock history period")
+    vnstock_rrg_parser.add_argument(
+        "--technique",
+        default=None,
+        choices=TECHNIQUE_CHOICES,
+        help="pattern technique to scan; defaults to config.yml technique, or nhathoai for this demo",
+    )
+    vnstock_rrg_parser.add_argument(
+        "--setup",
+        default=None,
+        choices=NHATHOAI_SETUP_CHOICES,
+        help="setup name for --technique nhathoai; defaults to config.yml setup, or all",
+    )
+    vnstock_rrg_parser.add_argument("--max-sectors", type=int, help="optional cap on accepted RRG sectors")
+    vnstock_rrg_parser.add_argument("--max-symbols", type=int, help="optional cap on accepted RRG stock symbols")
+
+    crypto_rrg_parser = subparsers.add_parser(
+        "crypto-rrg-demo",
+        help="build a crypto dashboard that filters symbols by StockCharts RRG before scanning patterns",
+    )
+    crypto_rrg_parser.add_argument("--out", required=True, help="output directory")
+    crypto_rrg_parser.add_argument("--timeframe", default="D1", choices=["D1", "H4"], help="timeframe to scan")
+    crypto_rrg_parser.add_argument("--config", help="optional YAML config for VCP thresholds and pattern defaults")
+    crypto_rrg_parser.add_argument("--period", default="2y", help="CCXT history period")
+    crypto_rrg_parser.add_argument(
+        "--technique",
+        default=None,
+        choices=TECHNIQUE_CHOICES,
+        help="pattern technique to scan; defaults to config.yml technique, or nhathoai for this demo",
+    )
+    crypto_rrg_parser.add_argument(
+        "--setup",
+        default=None,
+        choices=NHATHOAI_SETUP_CHOICES,
+        help="setup name for --technique nhathoai; defaults to config.yml setup, or all",
+    )
+    crypto_rrg_parser.add_argument("--max-symbols", type=int, help="optional cap on accepted RRG crypto symbols")
+
     init_parser = subparsers.add_parser("init-config", help="create a starter config.yml from the example")
     init_parser.add_argument("--out", default="config.yml", help="config path to create")
     init_parser.add_argument("--force", action="store_true", help="overwrite the output file if it exists")
@@ -195,6 +299,63 @@ def main(argv: list[str] | None = None) -> int:
                 args.markets,
                 args.near_match_chart_limit,
                 args.previous_results,
+            )
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "direction-backtest":
+            results_path = run_direction_backtest(
+                args.out,
+                args.timeframe,
+                args.period,
+                args.universe,
+                args.markets,
+                args.data_provider,
+                args.limit,
+                args.horizon,
+                args.step,
+                args.min_history,
+            )
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "usstock-rrg-demo":
+            results_path = build_usstock_rrg_demo(
+                args.out,
+                args.timeframe,
+                args.config,
+                args.period,
+                args.technique,
+                args.setup,
+                args.max_sectors,
+                args.max_symbols,
+            )
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "vnstock-rrg-demo":
+            results_path = build_vnstock_rrg_demo(
+                args.out,
+                args.timeframe,
+                args.config,
+                args.period,
+                args.technique,
+                args.setup,
+                args.max_sectors,
+                args.max_symbols,
+            )
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "crypto-rrg-demo":
+            results_path = build_crypto_rrg_demo(
+                args.out,
+                args.timeframe,
+                args.config,
+                args.period,
+                args.technique,
+                args.setup,
+                args.max_symbols,
             )
             print(f"Wrote {results_path}")
             print(f"Wrote {Path(args.out) / 'index.html'}")

@@ -192,6 +192,265 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
     assert "Wrote" in captured.out
 
 
+def test_direction_backtest_cli_passes_options_to_runner(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run_direction_backtest(
+        out: str,
+        timeframe: str,
+        period: str,
+        universe: str,
+        markets: str,
+        data_provider: str,
+        limit: int,
+        horizon: int,
+        step: int,
+        min_history: int,
+    ) -> Path:
+        seen.update(
+            {
+                "out": out,
+                "timeframe": timeframe,
+                "period": period,
+                "universe": universe,
+                "markets": markets,
+                "data_provider": data_provider,
+                "limit": limit,
+                "horizon": horizon,
+                "step": step,
+                "min_history": min_history,
+            }
+        )
+        return tmp_path / "direction-backtest/results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.run_direction_backtest", fake_run_direction_backtest)
+
+    exit_code = main(
+        [
+            "direction-backtest",
+            "--out",
+            str(tmp_path / "direction-backtest"),
+            "--timeframe",
+            "D1",
+            "--period",
+            "5y",
+            "--universe",
+            "broad",
+            "--markets",
+            "Crypto,Commodity",
+            "--data-provider",
+            "mixed",
+            "--limit",
+            "20",
+            "--horizon",
+            "15",
+            "--step",
+            "3",
+            "--min-history",
+            "180",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["out"] == str(tmp_path / "direction-backtest")
+    assert seen["universe"] == "broad"
+    assert seen["markets"] == "Crypto,Commodity"
+    assert seen["data_provider"] == "mixed"
+    assert seen["limit"] == 20
+    assert seen["horizon"] == 15
+    assert seen["step"] == 3
+    assert seen["min_history"] == 180
+    assert "Wrote" in captured.out
+
+
+def test_usstock_rrg_demo_cli_passes_options_to_runner(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_runner(
+        out: str,
+        timeframe: str,
+        config: str,
+        period: str,
+        technique: str,
+        setup: str,
+        max_sectors: int,
+        max_symbols: int,
+    ) -> Path:
+        seen.update(
+            {
+                "out": out,
+                "timeframe": timeframe,
+                "config": config,
+                "period": period,
+                "technique": technique,
+                "setup": setup,
+                "max_sectors": max_sectors,
+                "max_symbols": max_symbols,
+            }
+        )
+        return tmp_path / "results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.build_usstock_rrg_demo", fake_runner)
+
+    exit_code = main(
+        [
+            "usstock-rrg-demo",
+            "--out",
+            str(tmp_path / "reports/rrg"),
+            "--timeframe",
+            "D1",
+            "--config",
+            "config.yml",
+            "--period",
+            "2y",
+            "--technique",
+            "nhathoai",
+            "--setup",
+            "all",
+            "--max-sectors",
+            "3",
+            "--max-symbols",
+            "40",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["out"] == str(tmp_path / "reports/rrg")
+    assert seen["timeframe"] == "D1"
+    assert seen["config"] == "config.yml"
+    assert seen["period"] == "2y"
+    assert seen["technique"] == "nhathoai"
+    assert seen["setup"] == "all"
+    assert seen["max_sectors"] == 3
+    assert seen["max_symbols"] == 40
+    assert "Wrote" in captured.out
+
+
+def test_vnstock_rrg_demo_cli_passes_options_to_runner(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_runner(
+        out: str,
+        timeframe: str,
+        config: str,
+        period: str,
+        technique: str,
+        setup: str,
+        max_sectors: int,
+        max_symbols: int,
+    ) -> Path:
+        seen.update(
+            {
+                "out": out,
+                "timeframe": timeframe,
+                "config": config,
+                "period": period,
+                "technique": technique,
+                "setup": setup,
+                "max_sectors": max_sectors,
+                "max_symbols": max_symbols,
+            }
+        )
+        return tmp_path / "reports/vn-rrg/results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.build_vnstock_rrg_demo", fake_runner)
+
+    exit_code = main(
+        [
+            "vnstock-rrg-demo",
+            "--out",
+            str(tmp_path / "reports/vn-rrg"),
+            "--timeframe",
+            "D1",
+            "--config",
+            "config.yml",
+            "--period",
+            "2y",
+            "--technique",
+            "nhathoai",
+            "--setup",
+            "all",
+            "--max-sectors",
+            "3",
+            "--max-symbols",
+            "40",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["out"] == str(tmp_path / "reports/vn-rrg")
+    assert seen["timeframe"] == "D1"
+    assert seen["config"] == "config.yml"
+    assert seen["period"] == "2y"
+    assert seen["technique"] == "nhathoai"
+    assert seen["setup"] == "all"
+    assert seen["max_sectors"] == 3
+    assert seen["max_symbols"] == 40
+    assert "Wrote" in captured.out
+
+
+def test_crypto_rrg_demo_cli_passes_options_to_runner(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_runner(
+        out: str,
+        timeframe: str,
+        config: str,
+        period: str,
+        technique: str,
+        setup: str,
+        max_symbols: int,
+    ) -> Path:
+        seen.update(
+            {
+                "out": out,
+                "timeframe": timeframe,
+                "config": config,
+                "period": period,
+                "technique": technique,
+                "setup": setup,
+                "max_symbols": max_symbols,
+            }
+        )
+        return tmp_path / "reports/crypto-rrg/results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.build_crypto_rrg_demo", fake_runner)
+
+    exit_code = main(
+        [
+            "crypto-rrg-demo",
+            "--out",
+            str(tmp_path / "reports/crypto-rrg"),
+            "--timeframe",
+            "H4",
+            "--config",
+            "config.yml",
+            "--period",
+            "2y",
+            "--technique",
+            "nhathoai",
+            "--setup",
+            "all",
+            "--max-symbols",
+            "40",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["out"] == str(tmp_path / "reports/crypto-rrg")
+    assert seen["timeframe"] == "H4"
+    assert seen["config"] == "config.yml"
+    assert seen["period"] == "2y"
+    assert seen["technique"] == "nhathoai"
+    assert seen["setup"] == "all"
+    assert seen["max_symbols"] == 40
+    assert "Wrote" in captured.out
+
+
 def test_combine_report_cli_passes_inputs_to_report_writer(tmp_path: Path, monkeypatch, capsys) -> None:
     seen: dict[str, object] = {}
 

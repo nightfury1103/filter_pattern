@@ -44,7 +44,63 @@ def test_scan_market_uses_downloaded_data_and_writes_candidate(tmp_path: Path, m
     assert payload["scanned_symbols"] == 1
     assert payload["qualified_count"] == 1
     assert payload["candidates"][0]["chart_path"]
+    assert payload["candidates"][0]["direction_authority"]["setup_direction"] == "long"
+    assert payload["candidates"][0]["direction_authority"]["decision"]
     assert (tmp_path / "reports/latest/index.html").exists()
+
+
+def test_scan_market_attaches_rrg_reference_after_old_pattern_candidates_are_found(tmp_path: Path, monkeypatch) -> None:
+    def fake_loader(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
+
+    seen: dict[str, list[str]] = {}
+
+    def fake_attach(payload: dict, output_dir: Path, timeframe: str = "D1") -> dict:
+        seen["symbols"] = [item["symbol"] for item in payload["candidates"]]
+        payload["candidates"][0]["rrg"] = {
+            "benchmark": "SPY",
+            "rrg_chart_path": str(output_dir / "rrg-reference" / "aapl-rrg-proof.jpg"),
+            "confidence": {"label": "RRG Neutral Reference", "blocks_pattern": False},
+        }
+        return payload
+
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_loader)
+    monkeypatch.setattr("filter_pattern.rrg_dashboard.attach_rrg_references", fake_attach)
+
+    results_path = scan_market(tmp_path / "reports/latest", limit=1)
+    payload = json.loads(results_path.read_text())
+
+    assert seen["symbols"] == [payload["candidates"][0]["symbol"]]
+    assert payload["qualified_count"] == 1
+    assert payload["candidates"][0]["rrg"]["confidence"]["blocks_pattern"] is False
+
+
+def test_scan_market_passes_all_supported_markets_to_rrg_reference_attachment(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL"),
+        UniverseSymbol("FPT", "Vietnam stock", "HOSE:FPT", "FPT.VN"),
+        UniverseSymbol("BTCUSDT", "Crypto", "BINANCE:BTCUSDT", "BTC-USD"),
+        UniverseSymbol("EURUSD", "Forex", "OANDA:EURUSD", "EURUSD=X"),
+        UniverseSymbol("XAUUSD", "Commodity", "OANDA:XAUUSD", "GC=F"),
+        UniverseSymbol("GLD", "Commodity ETF", "AMEX:GLD", "GLD"),
+    ]
+
+    def fake_loader(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        return {symbol: make_series([20, 12, 6], current_close=96, late_volume=80_000) for symbol in symbols}
+
+    seen: dict[str, list[str]] = {}
+
+    def fake_attach(payload: dict, output_dir: Path, timeframe: str = "D1") -> dict:
+        seen["markets"] = sorted({item["market"] for item in payload["candidates"]})
+        return payload
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", lambda name: universe)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_loader)
+    monkeypatch.setattr("filter_pattern.rrg_dashboard.attach_rrg_references", fake_attach)
+
+    scan_market(tmp_path / "reports/all-markets", universe_name="default", markets="all")
+
+    assert seen["markets"] == ["Commodity", "Commodity ETF", "Crypto", "Forex", "US stock", "Vietnam stock"]
 
 
 def test_scan_all_csv_uses_tradingview_csv_source_and_all_patterns(tmp_path: Path) -> None:
