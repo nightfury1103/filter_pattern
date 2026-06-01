@@ -92,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         help="setup name for --technique nhathoai; defaults to config.yml setup, or all",
     )
     market_parser.add_argument("--limit", type=int, help="scan only the first N universe symbols")
+    market_parser.add_argument("--shard-index", type=int, default=0, help="zero-based shard index for parallel scans")
+    market_parser.add_argument("--shard-count", type=int, default=1, help="total number of parallel scan shards")
 
     all_market_parser = subparsers.add_parser(
         "scan-all-market",
@@ -135,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
         help="previous results.json to compare against for watchlist change tracking",
     )
     all_market_parser.add_argument("--limit", type=int, help="scan only the first N universe symbols")
+    all_market_parser.add_argument("--shard-index", type=int, default=0, help="zero-based shard index for parallel scans")
+    all_market_parser.add_argument("--shard-count", type=int, default=1, help="total number of parallel scan shards")
 
     direction_backtest_parser = subparsers.add_parser(
         "direction-backtest",
@@ -275,6 +279,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.config,
                 args.period,
                 args.limit,
+                args.shard_index,
+                args.shard_count,
                 args.universe,
                 args.broker,
                 args.technique,
@@ -294,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.config,
                 args.period,
                 args.limit,
+                args.shard_index,
+                args.shard_count,
                 args.universe,
                 args.broker,
                 args.data_provider,

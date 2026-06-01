@@ -116,6 +116,8 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
         config: str,
         period: str,
         limit: int,
+        shard_index: int,
+        shard_count: int,
         universe: str,
         broker: str,
         technique: str,
@@ -132,6 +134,8 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
                 "config": config,
                 "period": period,
                 "limit": limit,
+                "shard_index": shard_index,
+                "shard_count": shard_count,
                 "universe": universe,
                 "broker": broker,
                 "technique": technique,
@@ -175,6 +179,10 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
             "rb",
             "--limit",
             "5",
+            "--shard-index",
+            "1",
+            "--shard-count",
+            "3",
         ]
     )
 
@@ -189,6 +197,8 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
     assert seen["near_match_chart_limit"] == 3
     assert seen["previous_results"] == "reports/previous.json"
     assert seen["limit"] == 5
+    assert seen["shard_index"] == 1
+    assert seen["shard_count"] == 3
     assert "Wrote" in captured.out
 
 

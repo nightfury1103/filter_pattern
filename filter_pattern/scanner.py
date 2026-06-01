@@ -233,6 +233,8 @@ def scan_market(
     config_path: str | Path | None = None,
     period: str = "2y",
     limit: int | None = None,
+    shard_index: int = 0,
+    shard_count: int = 1,
     universe_name: str = "default",
     broker_filter: str = "all",
     technique: str | None = None,
@@ -263,6 +265,7 @@ def scan_market(
         raise ValueError("unknown broker filter. Choose one of: all, exness")
     universe = _filter_markets(universe, markets)
     universe, crypto_settings = _expand_crypto_if_supported(universe, data_provider)
+    universe = _shard_universe(universe, shard_index, shard_count)
     if limit is not None:
         universe = universe[:limit]
 
@@ -381,6 +384,8 @@ def scan_market(
             "data_provider": data_provider,
             **crypto_settings,
             "markets": markets or "all",
+            "shard_index": shard_index,
+            "shard_count": shard_count,
             "technique": active_technique,
             "setup": active_setup,
             "vcp": vcp_config.__dict__,
@@ -405,6 +410,8 @@ def scan_all_market(
     config_path: str | Path | None = None,
     period: str = "2y",
     limit: int | None = None,
+    shard_index: int = 0,
+    shard_count: int = 1,
     universe_name: str = "default",
     broker_filter: str = "all",
     data_provider: str = "yahoo",
@@ -430,6 +437,7 @@ def scan_all_market(
         raise ValueError("unknown broker filter. Choose one of: all, exness")
     universe = _filter_markets(universe, markets)
     universe, crypto_settings = _expand_crypto_if_supported(universe, data_provider)
+    universe = _shard_universe(universe, shard_index, shard_count)
     if limit is not None:
         universe = universe[:limit]
 
@@ -526,6 +534,8 @@ def scan_all_market(
             "data_provider": data_provider,
             **crypto_settings,
             "markets": markets or "all",
+            "shard_index": shard_index,
+            "shard_count": shard_count,
             "technique": "all-patterns",
             "setup": "all",
             "vcp": vcp_config.__dict__,
@@ -776,6 +786,18 @@ def _filter_markets(universe: list[UniverseSymbol], markets: str | None) -> list
         requested = ", ".join(sorted(allowed))
         raise ValueError(f"market filter matched no symbols: {requested}. Available markets: {available}")
     return filtered
+
+
+def _shard_universe(universe: list[UniverseSymbol], shard_index: int = 0, shard_count: int = 1) -> list[UniverseSymbol]:
+    if shard_count < 1:
+        raise ValueError("shard count must be at least 1")
+    if shard_count <= 1:
+        if shard_index not in {0, -1}:
+            raise ValueError("shard index must be 0 when shard count is 1")
+        return universe
+    if shard_index < 0 or shard_index >= shard_count:
+        raise ValueError("shard index must be between 0 and shard count - 1")
+    return [item for index, item in enumerate(universe) if index % shard_count == shard_index]
 
 
 def _expand_crypto_if_supported(universe: list[UniverseSymbol], data_provider: str) -> tuple[list[UniverseSymbol], dict[str, object]]:

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from filter_pattern.models import Candle, VCPEvidence
-from filter_pattern.scanner import _review_setup_chart_rows, scan, scan_all_csv, scan_all_market, scan_market
+from filter_pattern.scanner import _review_setup_chart_rows, _shard_universe, scan, scan_all_csv, scan_all_market, scan_market
 from filter_pattern.universe import UniverseSymbol
 from tests.test_detector import make_flat_series, make_series
 
@@ -779,3 +779,18 @@ def test_scan_all_market_includes_original_vcp_and_all_nhathoai_setups(tmp_path:
         "compression",
     }
     assert (tmp_path / "reports/all/index.html").exists()
+
+
+def test_shard_universe_splits_symbols_round_robin() -> None:
+    universe = [
+        UniverseSymbol(f"SYM{index}", "US stock", f"NASDAQ:SYM{index}", f"SYM{index}")
+        for index in range(7)
+    ]
+
+    shards = [_shard_universe(universe, shard_index=index, shard_count=3) for index in range(3)]
+
+    assert [[item.symbol for item in shard] for shard in shards] == [
+        ["SYM0", "SYM3", "SYM6"],
+        ["SYM1", "SYM4"],
+        ["SYM2", "SYM5"],
+    ]
