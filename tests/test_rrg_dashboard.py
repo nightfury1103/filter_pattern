@@ -106,6 +106,30 @@ def test_cross_market_stockcharts_rrg_symbol_mapping() -> None:
     assert rrg_dashboard._commodity_stockcharts_symbol("DBC", "Commodity ETF") == "DBC"
 
 
+def test_commodity_rrg_references_keep_all_alias_symbols(monkeypatch) -> None:
+    payload = {
+        "rrgdata": [
+            {"rrgdata": {"$WTIC": {"jdkratio": 99.0, "jdkmom": 99.6, "price": 75.0}}},
+            {"rrgdata": {"$WTIC": {"jdkratio": 99.5, "jdkmom": 99.8, "price": 76.0}}},
+            {"rrgdata": {"$WTIC": {"jdkratio": 100.1, "jdkmom": 100.0, "price": 77.0}}},
+            {"rrgdata": {"$WTIC": {"jdkratio": 100.8, "jdkmom": 100.4, "price": 78.0}}},
+        ]
+    }
+
+    def fake_fetch(symbols: list[str], benchmark: str) -> dict:
+        assert symbols == ["$WTIC"]
+        assert benchmark == "$ONE"
+        return payload
+
+    monkeypatch.setattr(rrg_dashboard, "_fetch_stockcharts_rrg", fake_fetch)
+    monkeypatch.setattr(rrg_dashboard.time, "sleep", lambda _seconds: None)
+
+    selections = rrg_dashboard._commodity_rrg_references(["USOIL", "WTI"], "Commodity")
+
+    assert set(selections) == {"USOIL", "WTI"}
+    assert selections["USOIL"].rrg_series == selections["WTI"].rrg_series
+
+
 def test_rrg_reference_attaches_to_review_setup_rows(tmp_path, monkeypatch) -> None:
     review_row = {
         "symbol": "XZNUSD",

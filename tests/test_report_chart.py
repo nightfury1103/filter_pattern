@@ -458,6 +458,50 @@ def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
     assert "ATOMUSDT.P_nhathoai_irb.png" in html
 
 
+def test_report_renders_rrg_reference_on_lifecycle_review_card(tmp_path: Path) -> None:
+    review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
+    review_row.update(
+        {
+            "market": "Crypto",
+            "tradingview_symbol": "BINANCE:ATOMUSDT.P",
+            "csv_path": "ccxt:ATOMUSDT",
+            "chart_path": str(tmp_path / "charts" / "ATOMUSDT.P_nhathoai_irb.jpg"),
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "pivot": 2.19,
+            "current_close": 2.105,
+            "distance_to_pivot_pct": 3.88,
+            "reasons": ["Pattern: IRB", "Direction: Long"],
+            "failures": ["Inner block break is not triggered or close enough"],
+        }
+    )
+    rrg_path = tmp_path / "rrg-reference" / "atomusdt-rrg-proof.jpg"
+    rrg_path.parent.mkdir(parents=True, exist_ok=True)
+    rrg_path.write_bytes(b"fake jpg")
+    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+    payload["review_setups"][0]["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "rrg_chart_path": str(rrg_path),
+        "stock_intent": {"quadrant": "IMPROVING", "dx1": 0.4, "dy1": 0.6},
+        "confidence": {"label": "RRG Early Reference", "tone": "early", "blocks_pattern": False},
+    }
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert 'data-status="review"' in html
+    assert "Lifecycle Pattern" in html
+    assert "RRG Confidence" in html
+    assert "RRG Early Reference" in html
+    assert "atomusdt-rrg-proof.jpg" in html
+
+
 def test_watchlist_change_tracking_marks_new_unchanged_and_dropped(tmp_path: Path) -> None:
     previous_candidate = _candidate("AAPL", "dd", 84, "WAITING")
     previous_payload = result_payload([previous_candidate], [], {"timeframe": "D1"})

@@ -890,8 +890,11 @@ def _commodity_rrg_references(symbols: list[str], market: str) -> dict[str, RRGS
     if not mapped:
         return {}
 
-    display_by_stockcharts = {stockcharts_symbol: symbol for symbol, stockcharts_symbol in mapped}
-    stockcharts_symbols = list(display_by_stockcharts)
+    symbols_by_stockcharts: dict[str, list[str]] = defaultdict(list)
+    for symbol, stockcharts_symbol in mapped:
+        if symbol not in symbols_by_stockcharts[stockcharts_symbol]:
+            symbols_by_stockcharts[stockcharts_symbol].append(symbol)
+    stockcharts_symbols = list(symbols_by_stockcharts)
     benchmark = "DBC" if market == "Commodity ETF" else "$ONE"
     sector = "Commodity ETF" if market == "Commodity ETF" else "Commodity"
     combined: dict[str, list[dict]] = {}
@@ -902,10 +905,10 @@ def _commodity_rrg_references(symbols: list[str], market: str) -> dict[str, RRGS
 
     selections: dict[str, RRGSelection] = {}
     for stockcharts_symbol, points in combined.items():
-        symbol = display_by_stockcharts.get(stockcharts_symbol, stockcharts_symbol)
-        selection = _selection_from_points(symbol, sector, benchmark, points)
-        if selection is not None:
-            selections[symbol] = selection
+        for symbol in symbols_by_stockcharts.get(stockcharts_symbol, [stockcharts_symbol]):
+            selection = _selection_from_points(symbol, sector, benchmark, points)
+            if selection is not None:
+                selections[symbol] = selection
     return selections
 
 
