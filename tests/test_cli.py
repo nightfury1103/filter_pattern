@@ -477,3 +477,39 @@ def test_combine_report_cli_passes_inputs_to_report_writer(tmp_path: Path, monke
     assert seen["inputs"] == ["reports/vcp/results.json", "reports/ema/results.json"]
     assert seen["out"] == str(tmp_path / "combined/index.html")
     assert "Wrote" in captured.out
+
+
+def test_combine_report_cli_can_write_combined_results_json(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_write_combined_html_report(inputs: list[str], out: str) -> Path:
+        seen["html_inputs"] = inputs
+        seen["html_out"] = out
+        return tmp_path / "combined/index.html"
+
+    def fake_write_combined_results_json(inputs: list[str], out: str) -> Path:
+        seen["json_inputs"] = inputs
+        seen["json_out"] = out
+        return tmp_path / "combined/results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.write_combined_html_report", fake_write_combined_html_report)
+    monkeypatch.setattr("filter_pattern.cli.write_combined_results_json", fake_write_combined_results_json)
+
+    exit_code = main(
+        [
+            "combine-report",
+            "--inputs",
+            "reports/us/results.json",
+            "reports/crypto/results.json",
+            "--out",
+            str(tmp_path / "combined/index.html"),
+            "--results-out",
+            str(tmp_path / "combined/results.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["json_inputs"] == ["reports/us/results.json", "reports/crypto/results.json"]
+    assert seen["json_out"] == str(tmp_path / "combined/results.json")
+    assert "results.json" in captured.out

@@ -78,6 +78,18 @@ def refresh_trigger_warnings(payload: dict) -> dict:
 
 
 def write_combined_html_report(results_paths: list[str | Path], output_path: str | Path) -> Path:
+    payload = combined_result_payload(results_paths)
+    return write_html_payload(payload, output_path)
+
+
+def write_combined_results_json(results_paths: list[str | Path], output_path: str | Path) -> Path:
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(json.dumps(combined_result_payload(results_paths), indent=2))
+    return output_file
+
+
+def combined_result_payload(results_paths: list[str | Path]) -> dict:
     payloads = []
     for results_path in results_paths:
         results_file = Path(results_path)
@@ -86,7 +98,7 @@ def write_combined_html_report(results_paths: list[str | Path], output_path: str
         payloads.append(json.loads(results_file.read_text()))
     if not payloads:
         raise ValueError("at least one results.json input is required")
-    return write_html_payload(_combined_payload(payloads, results_paths), output_path)
+    return _combined_payload(payloads, results_paths)
 
 
 def write_html_payload(payload: dict, output_path: str | Path) -> Path:
@@ -895,10 +907,14 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
     candidates: list[dict] = []
     rejected: list[dict] = []
     dropped: list[dict] = []
+    explicit_near_matches: list[dict] = []
+    explicit_review_setups: list[dict] = []
     for payload in payloads:
         candidates.extend(payload.get("candidates", []))
         rejected.extend(payload.get("rejected", []))
         dropped.extend(payload.get("watchlist_dropped", []))
+        explicit_near_matches.extend(payload.get("near_matches", []))
+        explicit_review_setups.extend(payload.get("review_setups", []))
 
     timeframes = sorted(
         {
@@ -915,13 +931,34 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
         "source_count": len(source_paths),
     }
     payload = result_payload(candidates, rejected, config)
-    payload["near_matches"] = _near_matches(rejected, limit=50)
-    payload["review_setups"] = _review_setups(rejected)
+    payload["near_matches"] = _combined_near_matches(explicit_near_matches, rejected)
+    payload["review_setups"] = _combined_review_setups(explicit_review_setups, rejected)
     _attach_lower_timeframe_reviews(payload)
     payload["trigger_warnings"] = _trigger_warnings(candidates + payload["near_matches"] + payload["review_setups"])
     payload["watchlist_dropped"] = dropped
     payload["watchlist_changes"] = _watchlist_change_summary(candidates, dropped)
     return payload
+
+
+def _combined_near_matches(explicit_rows: list[dict], rejected: list[dict]) -> list[dict]:
+    rows = [dict(row) for row in explicit_rows] or _near_matches(rejected, limit=50)
+    rows.sort(key=lambda item: _numeric(item.get("near_match_score")) or 0.0, reverse=True)
+    return rows[:50]
+
+
+def _combined_review_setups(explicit_rows: list[dict], rejected: list[dict]) -> list[dict]:
+    rows = [dict(row) for row in explicit_rows] or _review_setups(rejected)
+    rows.sort(
+        key=lambda item: (
+            _numeric(item.get("review_score")) or 0.0,
+            _score_value(item) or 0.0,
+            str(item.get("market", "")),
+            str(item.get("symbol", "")),
+            str(item.get("setup", "")),
+        ),
+        reverse=True,
+    )
+    return rows[:REVIEW_SETUP_LIMIT]
 
 
 def _attach_lower_timeframe_reviews(payload: dict) -> None:

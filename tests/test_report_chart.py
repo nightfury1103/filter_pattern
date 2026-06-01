@@ -8,7 +8,13 @@ from pathlib import Path
 from filter_pattern.chart import _minimum_body_height, _price_label, _date_formatter, _session_positions, render_chart
 from filter_pattern.detector import detect_vcp
 from filter_pattern.models import Candle, ScanResult, SymbolSpec
-from filter_pattern.report import apply_watchlist_changes, result_payload, write_combined_html_report, write_html_report
+from filter_pattern.report import (
+    apply_watchlist_changes,
+    result_payload,
+    write_combined_html_report,
+    write_combined_results_json,
+    write_html_report,
+)
 from tests.test_detector import make_config, make_series
 
 
@@ -218,6 +224,44 @@ def test_combined_report_merges_multiple_results_and_adds_filters(tmp_path: Path
     assert 'id="techniqueFilter"' in html
     assert 'id="setupFilter"' in html
     assert html.count('data-status="qualified"') == 2
+
+
+def test_combined_results_preserve_review_rrg_references(tmp_path: Path) -> None:
+    review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
+    review_row.update(
+        {
+            "market": "Crypto",
+            "tradingview_symbol": "BINANCE:ATOMUSDT.P",
+            "csv_path": "ccxt:ATOMUSDT",
+            "chart_path": str(tmp_path / "crypto" / "charts" / "atomusdt.jpg"),
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "pivot": 2.19,
+            "current_close": 2.105,
+            "distance_to_pivot_pct": 3.88,
+            "reasons": ["Pattern: IRB", "Direction: Long"],
+            "failures": ["Inner block break is not triggered or close enough"],
+        }
+    )
+    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+    payload["review_setups"][0]["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "rrg_chart_path": str(tmp_path / "crypto" / "rrg-reference" / "atomusdt-rrg-proof.jpg"),
+        "stock_intent": {"quadrant": "IMPROVING", "dx1": 0.4, "dy1": 0.6},
+        "confidence": {"label": "RRG Early Reference", "tone": "early", "blocks_pattern": False},
+    }
+    first_path = tmp_path / "crypto" / "results.json"
+    first_path.parent.mkdir(parents=True)
+    first_path.write_text(json.dumps(payload))
+
+    combined_results = write_combined_results_json([first_path], tmp_path / "combined" / "results.json")
+    combined_payload = json.loads(combined_results.read_text())
+
+    assert combined_payload["review_setups"][0]["rrg"]["rrg_chart_path"].endswith("atomusdt-rrg-proof.jpg")
 
 
 def test_combined_report_links_h4_volume_confirmation_to_d1_near_trigger(tmp_path: Path) -> None:

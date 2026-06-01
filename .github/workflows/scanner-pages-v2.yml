@@ -31,14 +31,29 @@ env:
   H4_PERIOD: 60d
   D1_UNIVERSE: default
   H4_UNIVERSE: default
-  D1_MARKETS: all
   H4_MARKETS: "Commodity,Forex,Crypto"
   NEAR_MATCH_CHART_LIMIT: "5"
 
 jobs:
-  scan_d1:
+  scan_d1_shard:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - id: us-stock
+            label: US stock
+            markets: "US stock"
+          - id: vietnam-stock
+            label: Vietnam stock
+            markets: "Vietnam stock"
+          - id: crypto
+            label: Crypto
+            markets: "Crypto"
+          - id: commodity-forex
+            label: Commodity, Commodity ETF, Forex
+            markets: "Commodity,Commodity ETF,Forex"
 
     steps:
       - name: Checkout scanner source
@@ -63,7 +78,7 @@ jobs:
             git archive origin/gh-pages | tar -x -C public
           fi
 
-      - name: Scan D1
+      - name: Scan D1 shard
         shell: bash
         run: |
           set -euo pipefail
@@ -71,22 +86,23 @@ jobs:
           echo "event_schedule=${{ github.event.schedule || '' }}"
           echo "utc_now=$(date -u '+%Y-%m-%d %H:%M:%S %Z')"
           echo "hcm_now=$(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "d1_shard=${{ matrix.shard.label }}"
           python -m filter_pattern.cli scan-all-market \
             --timeframe D1 \
-            --out public/d1 \
+            --out "public/d1-shards/d1-shard-${{ matrix.shard.id }}" \
             --period "$D1_PERIOD" \
             --universe "$D1_UNIVERSE" \
             --broker "$BROKER" \
             --data-provider "$DATA_PROVIDER" \
-            --markets "$D1_MARKETS" \
+            --markets "${{ matrix.shard.markets }}" \
             --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
-            --previous-results public/d1/results.json
+            --previous-results "public/d1-shards/d1-shard-${{ matrix.shard.id }}/results.json"
 
-      - name: Upload D1 report artifact
+      - name: Upload D1 shard report artifact
         uses: actions/upload-artifact@v4
         with:
-          name: d1-report
-          path: public/d1
+          name: d1-shard-${{ matrix.shard.id }}
+          path: public/d1-shards/d1-shard-${{ matrix.shard.id }}
           if-no-files-found: error
 
   scan_h4:
@@ -146,9 +162,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
-      - scan_d1
+      - scan_d1_shard
       - scan_h4
-    if: ${{ always() && (needs.scan_d1.result == 'success' || needs.scan_d1.result == 'skipped') && (needs.scan_h4.result == 'success' || needs.scan_h4.result == 'skipped') && (needs.scan_d1.result == 'success' || needs.scan_h4.result == 'success') }}
+    if: ${{ always() && (needs.scan_d1_shard.result == 'success' || needs.scan_d1_shard.result == 'skipped') && (needs.scan_h4.result == 'success' || needs.scan_h4.result == 'skipped') && (needs.scan_d1_shard.result == 'success' || needs.scan_h4.result == 'success') }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -177,19 +193,36 @@ jobs:
           fi
 
       - name: Remove stale D1 files before artifact restore
-        if: needs.scan_d1.result == 'success'
+        if: needs.scan_d1_shard.result == 'success'
         shell: bash
         run: |
           set -euo pipefail
           rm -rf public/d1
           mkdir -p public/d1
+          rm -rf public/d1-shards
+          mkdir -p public/d1-shards
 
-      - name: Download D1 report artifact
-        if: needs.scan_d1.result == 'success'
+      - name: Download D1 shard report artifacts
+        if: needs.scan_d1_shard.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: d1-report
-          path: public/d1
+          pattern: d1-shard-*
+          path: public/d1-shards
+
+      - name: Build combined D1 report
+        if: needs.scan_d1_shard.result == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t D1_INPUTS < <(find public/d1-shards -mindepth 2 -maxdepth 2 -name results.json | sort)
+          if [[ "${#D1_INPUTS[@]}" -eq 0 ]]; then
+            echo "No D1 shard results were downloaded." >&2
+            exit 1
+          fi
+          python -m filter_pattern.cli combine-report \
+            --inputs "${D1_INPUTS[@]}" \
+            --out public/d1/index.html \
+            --results-out public/d1/results.json
 
       - name: Remove stale H4 files before artifact restore
         if: needs.scan_h4.result == 'success'
@@ -211,9 +244,16 @@ jobs:
         run: |
           set -euo pipefail
           touch public/.nojekyll
-          if [[ -f public/d1/results.json && -f public/h4/results.json ]]; then
+          ROOT_INPUTS=()
+          if [[ -f public/d1/results.json ]]; then
+            ROOT_INPUTS+=(public/d1/results.json)
+          fi
+          if [[ -f public/h4/results.json ]]; then
+            ROOT_INPUTS+=(public/h4/results.json)
+          fi
+          if [[ "${#ROOT_INPUTS[@]}" -gt 0 ]]; then
             python -m filter_pattern.cli combine-report \
-              --inputs public/d1/results.json public/h4/results.json \
+              --inputs "${ROOT_INPUTS[@]}" \
               --out public/index.html
           elif [[ -f public/d1/index.html ]]; then
             cp public/d1/index.html public/index.html
