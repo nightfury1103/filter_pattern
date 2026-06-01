@@ -19,6 +19,19 @@ from .universe import UniverseSymbol, expand_crypto_universe, get_universe
 
 NEAR_MATCH_CHART_LIMIT = 20
 REVIEW_SETUP_CHART_LIMIT = 350
+COMMODITY_PROXY_ENV = "COMMODITY_PROXY_MAP"
+DEFAULT_COMMODITY_PROXY_SYMBOLS = {
+    "XAUUSD": ("PAXGUSDT", "XAUTUSDT"),
+    "GOLD": ("PAXGUSDT", "XAUTUSDT"),
+    "XAGUSD": ("KAGUSDT",),
+    "SILVER": ("KAGUSDT",),
+}
+
+
+class ProxyCandleSeries(list):
+    def __init__(self, candles: list[Candle], proxy_data: dict):
+        super().__init__(candles)
+        self.proxy_data = proxy_data
 
 
 def scan(config_path: str | Path, out_dir: str | Path, timeframe: str = "D1", technique: str | None = None) -> Path:
@@ -259,8 +272,8 @@ def scan_market(
 
     for index, item in enumerate(universe, start=1):
         _print_scan_progress(index, len(universe), item, "scan-market")
-        symbol = _symbol_from_universe(item, data_provider)
         data = downloaded.get(item.yahoo_symbol)
+        symbol = _symbol_from_universe(item, data_provider, data)
         if isinstance(data, Exception):
             rejected.append(
                 ScanResult(
@@ -427,8 +440,8 @@ def scan_all_market(
 
     for index, item in enumerate(universe, start=1):
         _print_scan_progress(index, len(universe), item, "scan-all-market")
-        symbol = _symbol_from_universe(item, data_provider)
         data = downloaded.get(item.yahoo_symbol)
+        symbol = _symbol_from_universe(item, data_provider, data)
         if isinstance(data, Exception):
             rejected.append(
                 ScanResult(
@@ -564,15 +577,16 @@ def _download_market_data(
             for item in universe
             if item.market != "Crypto"
         }
-        ccxt_results = load_ccxt_ohlcv_many(
-            [item.symbol for item in crypto_items],
-            period=period,
-            timeframe=timeframe,
-            exchange_id=crypto_settings.exchanges,
-            market_type=crypto_settings.market_type,
-        )
-        for item in crypto_items:
-            results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
+        if crypto_items:
+            ccxt_results = load_ccxt_ohlcv_many(
+                [item.symbol for item in crypto_items],
+                period=period,
+                timeframe=timeframe,
+                exchange_id=crypto_settings.exchanges,
+                market_type=crypto_settings.market_type,
+            )
+            for item in crypto_items:
+                results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
         return results
     if provider == "vnstock":
         vietnam_items = [item for item in universe if item.market == "Vietnam stock"]
@@ -589,10 +603,12 @@ def _download_market_data(
         crypto_items = [item for item in universe if item.market == "Crypto"]
         vietnam_items = [item for item in universe if item.market == "Vietnam stock"]
         yahoo_items = [item for item in universe if item.market not in {"Crypto", "Vietnam stock"}]
+        commodity_items = [item for item in yahoo_items if item.market == "Commodity"]
         results: dict[str, list | Exception] = {}
         yahoo_symbols = [item.yahoo_symbol for item in yahoo_items + vietnam_items]
         yahoo_results = load_yahoo_ohlcv_many(yahoo_symbols, period=period, timeframe=timeframe)
         results.update(yahoo_results)
+        _apply_commodity_proxy_fallback(results, commodity_items, period, timeframe, crypto_settings)
         yahoo_vietnam_results = {item.yahoo_symbol: yahoo_results.get(item.yahoo_symbol) for item in vietnam_items}
         results.update(yahoo_vietnam_results)
         vietnam_fallback_items = [
@@ -617,17 +633,135 @@ def _download_market_data(
                 else:
                     failed += 1
             print(f"Yahoo Vietnam fallback: VNStock recovered {recovered}, still failed {failed}")
-        ccxt_results = load_ccxt_ohlcv_many(
-            [item.symbol for item in crypto_items],
-            period=period,
-            timeframe=timeframe,
-            exchange_id=crypto_settings.exchanges,
-            market_type=crypto_settings.market_type,
-        )
-        for item in crypto_items:
-            results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
+        if crypto_items:
+            ccxt_results = load_ccxt_ohlcv_many(
+                [item.symbol for item in crypto_items],
+                period=period,
+                timeframe=timeframe,
+                exchange_id=crypto_settings.exchanges,
+                market_type=crypto_settings.market_type,
+            )
+            for item in crypto_items:
+                results[item.yahoo_symbol] = ccxt_results.get(item.symbol, ValueError(f"No CCXT data returned for {item.symbol}"))
         return results
     raise ValueError("unknown data provider. Choose one of: yahoo, mixed, ccxt, vnstock")
+
+
+def _apply_commodity_proxy_fallback(
+    results: dict[str, list | Exception],
+    commodity_items: list[UniverseSymbol],
+    period: str,
+    timeframe: str,
+    crypto_settings: object,
+) -> None:
+    fallback_items = []
+    proxy_symbols: list[str] = []
+    for item in commodity_items:
+        yahoo_data = results.get(item.yahoo_symbol)
+        reason = _commodity_proxy_fallback_reason(yahoo_data, timeframe)
+        if reason is None:
+            continue
+        candidates = _commodity_proxy_candidates(item.symbol)
+        if not candidates:
+            continue
+        fallback_items.append((item, reason, candidates))
+        for candidate in candidates:
+            if candidate not in proxy_symbols:
+                proxy_symbols.append(candidate)
+
+    if not proxy_symbols:
+        return
+
+    print(
+        "Yahoo commodity proxy fallback: trying CCXT proxy for "
+        f"{len(fallback_items)} symbol(s): {', '.join(item.symbol for item, _reason, _candidates in fallback_items[:20])}"
+        f"{'...' if len(fallback_items) > 20 else ''}"
+    )
+    ccxt_results = load_ccxt_ohlcv_many(
+        proxy_symbols,
+        period=period,
+        timeframe=timeframe,
+        exchange_id=crypto_settings.exchanges,
+        market_type=crypto_settings.market_type,
+    )
+    recovered = 0
+    failed = 0
+    for item, reason, candidates in fallback_items:
+        fallback = None
+        proxy_symbol = ""
+        for candidate in candidates:
+            candidate_result = ccxt_results.get(candidate)
+            if isinstance(candidate_result, Exception) or _commodity_proxy_fallback_reason(candidate_result, timeframe) is not None:
+                continue
+            fallback = candidate_result
+            proxy_symbol = candidate
+            break
+        if fallback is None:
+            failed += 1
+            continue
+        results[item.yahoo_symbol] = ProxyCandleSeries(
+            fallback,
+            {
+                "enabled": True,
+                "source": "ccxt",
+                "proxy_symbol": proxy_symbol,
+                "original_yahoo_symbol": item.yahoo_symbol,
+                "reason": reason,
+            },
+        )
+        recovered += 1
+    print(f"Yahoo commodity proxy fallback: CCXT proxy recovered {recovered}, still failed {failed}")
+
+
+def _commodity_proxy_fallback_reason(data: object, timeframe: str) -> str | None:
+    if isinstance(data, Exception) or data is None:
+        return "Yahoo commodity data unavailable"
+    if not isinstance(data, list) or not data:
+        return "Yahoo commodity data unavailable"
+    min_rows = 80 if timeframe.upper() == "D1" else 60
+    if len(data) < min_rows:
+        return "Yahoo commodity data is too sparse"
+    window = data[-min(len(data), 140):]
+    highs = [float(candle.high) for candle in window if getattr(candle, "high", None) is not None]
+    lows = [float(candle.low) for candle in window if getattr(candle, "low", None) is not None]
+    closes = [float(candle.close) for candle in window if getattr(candle, "close", None) is not None]
+    if not highs or not lows or not closes:
+        return "Yahoo commodity data unavailable"
+    reference = max(abs(closes[-1]), 1e-12)
+    range_pct = ((max(highs) - min(lows)) / reference) * 100
+    unique_closes = len({round(close, 8) for close in closes})
+    volumes = [float(getattr(candle, "volume", 0.0) or 0.0) for candle in window]
+    no_volume = max(volumes or [0.0]) <= 0.0
+    if range_pct < 0.25 or unique_closes <= 3 or (range_pct < 1.0 and no_volume):
+        return "Yahoo commodity data is flat/stale"
+    return None
+
+
+def _commodity_proxy_candidates(symbol: str) -> tuple[str, ...]:
+    normalized = symbol.upper().strip()
+    env_map = _commodity_proxy_env_map()
+    if normalized in env_map:
+        return env_map[normalized]
+    return DEFAULT_COMMODITY_PROXY_SYMBOLS.get(normalized, ())
+
+
+def _commodity_proxy_env_map() -> dict[str, tuple[str, ...]]:
+    raw = os.environ.get(COMMODITY_PROXY_ENV, "")
+    mapping: dict[str, tuple[str, ...]] = {}
+    for chunk in raw.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if ":" in chunk:
+            symbol, proxies = chunk.split(":", 1)
+        elif "=" in chunk:
+            symbol, proxies = chunk.split("=", 1)
+        else:
+            continue
+        proxy_symbols = tuple(proxy.strip().upper() for proxy in proxies.replace("|", "/").split("/") if proxy.strip())
+        if symbol.strip() and proxy_symbols:
+            mapping[symbol.strip().upper()] = proxy_symbols
+    return mapping
 
 
 def _filter_markets(universe: list[UniverseSymbol], markets: str | None) -> list[UniverseSymbol]:
@@ -968,7 +1102,11 @@ def _result_json_with_direction(
     candles: list[Candle],
     context: DirectionMarketContext | None = None,
 ) -> dict:
-    return annotate_result_with_direction_authority(scan_result.to_json(), candles, context)
+    row = annotate_result_with_direction_authority(scan_result.to_json(), candles, context)
+    proxy_data = _proxy_data(candles)
+    if proxy_data:
+        row["proxy_data"] = proxy_data
+    return row
 
 
 def _direction_contexts_for_universe(
@@ -1029,16 +1167,26 @@ def _result_key(item: dict) -> str:
     )
 
 
-def _symbol_from_universe(item: UniverseSymbol, data_provider: str = "yahoo") -> SymbolSpec:
+def _symbol_from_universe(item: UniverseSymbol, data_provider: str = "yahoo", data: object = None) -> SymbolSpec:
     provider = data_provider.lower()
     source_path = f"yahoo:{item.yahoo_symbol}"
     if item.market == "Vietnam stock" and provider == "vnstock":
         source_path = f"vnstock:{item.symbol}"
     if item.market == "Crypto" and provider in {"mixed", "ccxt"}:
         source_path = f"ccxt:{item.symbol}"
+    proxy_data = _proxy_data(data)
+    if proxy_data:
+        source_path = f"{proxy_data.get('source', 'proxy')}-proxy:{proxy_data.get('proxy_symbol', '')}"
     return SymbolSpec(
         symbol=item.symbol,
         market=item.market,
         tradingview_symbol=item.tradingview_symbol,
         csv_path=Path(source_path),
     )
+
+
+def _proxy_data(data: object) -> dict | None:
+    proxy_data = getattr(data, "proxy_data", None)
+    if isinstance(proxy_data, dict):
+        return proxy_data
+    return None

@@ -476,6 +476,10 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       height: auto;
       background: #ffffff;
     }}
+    .lazy-chart {{
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+    }}
     .chart-pair {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -769,6 +773,34 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     const filterCount = document.getElementById('filterCount');
     const coverageSection = document.getElementById('coverageSection');
     const filterable = Array.from(document.querySelectorAll('[data-filterable="true"]'));
+    const deferredImages = Array.from(document.querySelectorAll('img[data-src]'));
+
+    function loadDeferredImage(image) {{
+      const src = image.dataset.src;
+      if (!src) {{
+        return;
+      }}
+      image.src = src;
+      image.removeAttribute('data-src');
+    }}
+
+    if ('IntersectionObserver' in window) {{
+      const imageObserver = new IntersectionObserver((entries, observer) => {{
+        for (const entry of entries) {{
+          if (entry.isIntersecting) {{
+            loadDeferredImage(entry.target);
+            observer.unobserve(entry.target);
+          }}
+        }}
+      }}, {{ rootMargin: '800px 0px' }});
+      for (const image of deferredImages) {{
+        imageObserver.observe(image);
+      }}
+    }} else {{
+      for (const image of deferredImages) {{
+        loadDeferredImage(image);
+      }}
+    }}
 
     function applyFilters() {{
       const text = search.value.trim().toLowerCase();
@@ -1194,26 +1226,30 @@ def _all_setup_labels() -> tuple[str, ...]:
 
 
 def _chart_img(src: str, alt: str) -> str:
-    return f'<img src="{src}" alt="{escape(alt)}" loading="lazy" decoding="async">'
+    alt_text = escape(alt)
+    return (
+        f'<img class="lazy-chart" data-src="{src}" alt="{alt_text}" loading="lazy" decoding="async" width="1920" height="1080">'
+        f'<noscript><img src="{src}" alt="{alt_text}"></noscript>'
+    )
 
 
 def _chart_frame_html(item: dict, report_dir: Path, alt: str, label: str) -> str:
     chart_path = item.get("chart_path") or ""
     if not chart_path:
         return ""
-    chart_src = escape(_relative_path(chart_path, report_dir))
+    chart_src, chart_preview_src = _chart_sources(str(chart_path), report_dir)
     rrg = item.get("rrg") or {}
     rrg_chart = rrg.get("rrg_chart_path")
     if not rrg_chart:
-        return f'<div class="chart-frame">{_chart_img(chart_src, alt)}</div>'
+        return f'<div class="chart-frame"><a class="chart-tile" href="{chart_src}">{_chart_img(chart_preview_src, alt)}</a></div>'
 
-    rrg_src = escape(_relative_path(str(rrg_chart), report_dir))
+    rrg_src, rrg_preview_src = _chart_sources(str(rrg_chart), report_dir)
     confidence = rrg.get("confidence") or {}
     confidence_label = str(confidence.get("label") or "RRG Reference")
     return f"""<div class="chart-frame">
       <div class="chart-pair">
-        <a class="chart-tile" href="{chart_src}"><strong>{escape(label)}</strong>{_chart_img(chart_src, alt)}</a>
-        <a class="chart-tile" href="{rrg_src}"><strong>RRG Confidence</strong>{_chart_img(rrg_src, f'{item.get("symbol", "")} RRG confidence chart')}</a>
+        <a class="chart-tile" href="{chart_src}"><strong>{escape(label)}</strong>{_chart_img(chart_preview_src, alt)}</a>
+        <a class="chart-tile" href="{rrg_src}"><strong>RRG Confidence</strong>{_chart_img(rrg_preview_src, f'{item.get("symbol", "")} RRG confidence chart')}</a>
       </div>
       <div class="rrg-reference" style="margin:0 10px 10px;">
         <div class="reasons">{escape(confidence_label)}</div>
@@ -1339,8 +1375,8 @@ def _lower_timeframe_confirmation_html(item: dict, report_dir: Path) -> str:
         chart_path = str(review.get("chart_path") or "")
         chart_html = ""
         if chart_path:
-            chart_src = escape(_relative_path(chart_path, report_dir))
-            chart_html = _chart_img(chart_src, f"{timeframe} lower timeframe review chart")
+            chart_src, chart_preview_src = _chart_sources(chart_path, report_dir)
+            chart_html = f'<a class="chart-tile" href="{chart_src}">{_chart_img(chart_preview_src, f"{timeframe} lower timeframe review chart")}</a>'
         cards.append(
             f"""<div class="lower-tf-card">
         <div class="lower-tf-head">
@@ -2006,6 +2042,21 @@ def _relative_path(path: str, report_dir: Path) -> str:
         return str(resolved.relative_to(report_dir.resolve()))
     except ValueError:
         return path
+
+
+def _chart_sources(path: str, report_dir: Path) -> tuple[str, str]:
+    full_src = escape(_relative_path(path, report_dir))
+    preview_path = _preview_path(path)
+    if preview_path is not None and preview_path.exists():
+        return full_src, escape(_relative_path(str(preview_path), report_dir))
+    return full_src, full_src
+
+
+def _preview_path(path: str) -> Path | None:
+    if not path:
+        return None
+    path_obj = Path(path)
+    return path_obj.parent / "preview" / path_obj.name
 
 
 def _fmt(value: object, suffix: str = "") -> str:

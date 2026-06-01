@@ -334,6 +334,97 @@ def test_mixed_provider_falls_back_to_vnstock_for_missing_vietnam_data(tmp_path:
     assert payload["candidates"][0]["symbol"] == "FPT"
 
 
+def test_mixed_provider_falls_back_to_commodity_proxy_when_yahoo_is_flat(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("XAUUSD", "Commodity", "OANDA:XAUUSD", "GC=F"),
+    ]
+    seen: dict[str, list[str]] = {}
+    flat_candles = [
+        Candle(
+            datetime=datetime(2026, 1, 1) + timedelta(days=index),
+            open=2297.0,
+            high=2297.0,
+            low=2297.0,
+            close=2297.0,
+            volume=0.0,
+        )
+        for index in range(140)
+    ]
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_yahoo(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        seen["yahoo"] = symbols
+        return {"GC=F": flat_candles}
+
+    def fake_ccxt(
+        symbols: list[str],
+        period: str = "2y",
+        timeframe: str = "D1",
+        exchange_id: str = "",
+        market_type: str = "spot",
+    ):
+        seen["ccxt"] = symbols
+        return {"PAXGUSDT": make_series([20, 12, 6], current_close=96, late_volume=80_000)}
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
+    monkeypatch.setattr("filter_pattern.scanner.load_ccxt_ohlcv_many", fake_ccxt)
+    monkeypatch.setattr("filter_pattern.rrg_dashboard.attach_rrg_references", lambda payload, _out_dir, _timeframe: payload)
+
+    results_path = scan_market(tmp_path / "reports/mixed-commodity-proxy", data_provider="mixed", markets="Commodity")
+    payload = json.loads(results_path.read_text())
+
+    assert seen["yahoo"] == ["GC=F"]
+    assert seen["ccxt"] == ["PAXGUSDT", "XAUTUSDT"]
+    assert payload["candidates"][0]["symbol"] == "XAUUSD"
+    assert payload["candidates"][0]["csv_path"] == "ccxt-proxy:PAXGUSDT"
+    assert payload["candidates"][0]["proxy_data"] == {
+        "enabled": True,
+        "source": "ccxt",
+        "proxy_symbol": "PAXGUSDT",
+        "original_yahoo_symbol": "GC=F",
+        "reason": "Yahoo commodity data is flat/stale",
+    }
+
+
+def test_commodity_proxy_map_can_come_from_environment(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("XZNUSD", "Commodity", "EXNESS:XZNUSD", "ZNC=F"),
+    ]
+    seen: dict[str, list[str]] = {}
+
+    def fake_universe(name: str):
+        return universe
+
+    def fake_yahoo(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
+        return {symbol: ValueError("missing yahoo data") for symbol in symbols}
+
+    def fake_ccxt(
+        symbols: list[str],
+        period: str = "2y",
+        timeframe: str = "D1",
+        exchange_id: str = "",
+        market_type: str = "spot",
+    ):
+        seen["ccxt"] = symbols
+        return {"ZINCUSDT": make_series([20, 12, 6], current_close=96, late_volume=80_000)}
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", fake_universe)
+    monkeypatch.setattr("filter_pattern.scanner.load_yahoo_ohlcv_many", fake_yahoo)
+    monkeypatch.setattr("filter_pattern.scanner.load_ccxt_ohlcv_many", fake_ccxt)
+    monkeypatch.setattr("filter_pattern.rrg_dashboard.attach_rrg_references", lambda payload, _out_dir, _timeframe: payload)
+    monkeypatch.setenv("COMMODITY_PROXY_MAP", "XZNUSD:ZINCUSDT")
+
+    results_path = scan_market(tmp_path / "reports/mixed-commodity-env-proxy", data_provider="mixed", markets="Commodity")
+    payload = json.loads(results_path.read_text())
+
+    assert seen["ccxt"] == ["ZINCUSDT"]
+    assert payload["candidates"][0]["symbol"] == "XZNUSD"
+    assert payload["candidates"][0]["csv_path"] == "ccxt-proxy:ZINCUSDT"
+
+
 def test_scan_market_rejects_long_candidate_below_ema21(tmp_path: Path, monkeypatch) -> None:
     universe = [UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL")]
 

@@ -40,6 +40,8 @@ DEFAULT_STOCKCHARTS_AUTH = "89768844867688448576149"
 RRG_TAIL_ROWS = 10
 RRG_REQUEST_DAYS = 60
 RRG_CHUNK_SIZE = 45
+RRG_PREVIEW_DPI = 72
+RRG_PREVIEW_QUALITY = 64
 FIALDA_SYMBOL_CHUNK_SIZE = 80
 FIALDA_SECTOR_IDS = ("1", "12", "31", "61", "91", "100", "124", "130", "138", "166")
 
@@ -782,7 +784,7 @@ def _accepted_crypto_symbols(symbols: list[str], timeframe: str) -> list[RRGSele
 def _rrg_reference_rows(payload: dict) -> list[dict]:
     rows: list[dict] = []
     seen: set[int] = set()
-    for bucket in ("candidates", "trigger_warnings"):
+    for bucket in ("candidates", "trigger_warnings", "review_setups", "near_matches"):
         for row in payload.get(bucket, []) or []:
             marker = id(row)
             if marker in seen:
@@ -1291,25 +1293,37 @@ def _render_stock_rrg_proof(selected: RRGSelection, selections: list[RRGSelectio
         ax.scatter(
             xs[-1],
             ys[-1],
-            s=42 if is_selected else 20,
-            facecolors="white" if is_selected else color,
+            s=82 if is_selected else 20,
+            facecolors=color if is_selected else color,
             edgecolor=color if is_selected else "white",
-            linewidth=2.0 if is_selected else 0.5,
-            alpha=0.72 if is_selected else alpha,
+            linewidth=2.8 if is_selected else 0.5,
+            alpha=0.92 if is_selected else alpha,
             zorder=zorder + 2,
         )
         if is_selected:
-            ax.text(
+            ax.scatter(
                 xs[-1],
                 ys[-1],
-                "HEAD",
-                fontsize=10,
+                s=260,
+                facecolors="none",
+                edgecolor=color,
+                linewidth=3.4,
+                alpha=0.96,
+                zorder=zorder + 5,
+            )
+            ax.annotate(
+                "CURRENT",
+                xy=(xs[-1], ys[-1]),
+                xytext=(18, 18),
+                textcoords="offset points",
+                fontsize=11,
                 weight="bold",
                 color="white",
-                ha="center",
-                va="center",
-                bbox={"boxstyle": "round,pad=0.28", "facecolor": color, "edgecolor": "white", "linewidth": 1.2},
-                zorder=zorder + 5,
+                ha="left",
+                va="bottom",
+                bbox={"boxstyle": "round,pad=0.32", "facecolor": color, "edgecolor": "white", "linewidth": 1.4},
+                arrowprops={"arrowstyle": "->", "color": color, "lw": 2.2, "shrinkA": 0, "shrinkB": 8},
+                zorder=zorder + 6,
             )
         if is_selected or index < 20:
             ax.text(
@@ -1341,7 +1355,7 @@ def _render_stock_rrg_proof(selected: RRGSelection, selections: list[RRGSelectio
     fig.text(
         0.055,
         0.932,
-        f"Daily RRG | Tail: last {RRG_TAIL_ROWS} rows | Stock: {selected.intent['quadrant']} | Head dy {selected.intent['dy1']:.3f}",
+        f"Daily RRG | Tail: older -> current, last {RRG_TAIL_ROWS} rows | Stock: {selected.intent['quadrant']} | Current dy {selected.intent['dy1']:.3f}",
         fontsize=10.5,
         color="#475569",
         ha="left",
@@ -1350,8 +1364,20 @@ def _render_stock_rrg_proof(selected: RRGSelection, selections: list[RRGSelectio
     plt.subplots_adjust(left=0.075, right=0.99, top=0.86, bottom=0.10)
     output_path = out_dir / f"{_safe_name(selected.symbol)}-rrg-proof.jpg"
     fig.savefig(output_path, format="jpg", pil_kwargs={"quality": 86, "optimize": True, "progressive": True})
+    preview_path = _preview_path(output_path)
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        preview_path,
+        dpi=RRG_PREVIEW_DPI,
+        format="jpg",
+        pil_kwargs={"quality": RRG_PREVIEW_QUALITY, "optimize": True, "progressive": True},
+    )
     plt.close(fig)
     return output_path
+
+
+def _preview_path(output_path: Path) -> Path:
+    return output_path.parent / "preview" / output_path.name
 
 
 def _rrg_arrow_props(color: str, alpha: float, *, is_selected: bool, is_final: bool) -> dict:
@@ -1359,9 +1385,9 @@ def _rrg_arrow_props(color: str, alpha: float, *, is_selected: bool, is_final: b
         return {
             "arrowstyle": "-|>,head_width=0.65,head_length=1.0",
             "color": color,
-            "lw": 4.4,
+            "lw": 5.2,
             "alpha": 1.0,
-            "mutation_scale": 26,
+            "mutation_scale": 30,
             "shrinkA": 0,
             "shrinkB": 0,
         }
@@ -1561,7 +1587,9 @@ def _candidate_card(item: dict, base_dir: Path) -> str:
     evidence = item.get("evidence", {})
     rrg = item.get("rrg", {})
     chart = _relative_image(item.get("chart_path"), base_dir)
+    chart_preview = _relative_preview_image(item.get("chart_path"), base_dir)
     rrg_chart = _relative_image(rrg.get("rrg_chart_path"), base_dir)
+    rrg_preview = _relative_preview_image(rrg.get("rrg_chart_path"), base_dir)
     setup = str(item.get("setup", ""))
     setup_label = setup.upper()
     sector = str(rrg.get("sector", ""))
@@ -1588,8 +1616,8 @@ def _candidate_card(item: dict, base_dir: Path) -> str:
   </div>
   <div class="setup-strip">{escape(setup_label)} setup <span>{escape(str(item.get("symbol", "")))} · current pattern chart and RRG proof</span></div>
   <div class="chart-row">
-    <a class="shot shot-main" href="{escape(chart)}"><strong>Current Setup Pattern</strong><img src="{escape(chart)}" alt="{escape(str(item.get("symbol", "")))} setup chart" loading="lazy" decoding="async"></a>
-    <a class="shot shot-rrg" href="{escape(rrg_chart)}"><strong>RRG Proof - Final Arrowhead Is Current Position</strong><img src="{escape(rrg_chart)}" alt="{escape(str(item.get("symbol", "")))} RRG proof" loading="lazy" decoding="async"></a>
+    <a class="shot shot-main" href="{escape(chart)}"><strong>Current Setup Pattern</strong><img src="{escape(chart_preview)}" alt="{escape(str(item.get("symbol", "")))} setup chart" loading="lazy" decoding="async"></a>
+    <a class="shot shot-rrg" href="{escape(rrg_chart)}"><strong>RRG Proof - CURRENT marker is latest position</strong><img src="{escape(rrg_preview)}" alt="{escape(str(item.get("symbol", "")))} RRG proof" loading="lazy" decoding="async"></a>
   </div>
 </article>"""
 
@@ -1644,6 +1672,16 @@ def _relative_image(path: object, base_dir: Path) -> str:
             return Path(path).relative_to(base_dir).as_posix()
         except ValueError:
             return Path(path).as_posix()
+
+
+def _relative_preview_image(path: object, base_dir: Path) -> str:
+    if not path:
+        return ""
+    path_obj = Path(path)
+    preview_path = path_obj.parent / "preview" / path_obj.name
+    if preview_path.exists():
+        return _relative_image(preview_path, base_dir)
+    return _relative_image(path, base_dir)
 
 
 def _fmt(value: object) -> str:

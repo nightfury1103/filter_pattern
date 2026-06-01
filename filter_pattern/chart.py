@@ -28,6 +28,8 @@ BASE_LINE_WIDTH = 2.4
 PRIMARY_LINE_WIDTH = 3.0
 EMA_LINE_WIDTH = 3.4
 ANNOTATION_FONT_SIZE = 10
+PREVIEW_DPI = 64
+PREVIEW_QUALITY = 64
 
 
 def render_chart(
@@ -135,8 +137,20 @@ def render_chart(
         format="jpg",
         pil_kwargs={"quality": 82, "optimize": True, "progressive": True},
     )
+    preview_path = _preview_path(output_path)
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        preview_path,
+        dpi=PREVIEW_DPI,
+        format="jpg",
+        pil_kwargs={"quality": PREVIEW_QUALITY, "optimize": True, "progressive": True},
+    )
     plt.close(fig)
     return output_path
+
+
+def _preview_path(output_path: Path) -> Path:
+    return output_path.parent / "preview" / output_path.name
 
 
 def _draw_candles(ax, candles: list[Candle], dates: list[float], width: float) -> None:

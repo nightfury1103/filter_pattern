@@ -106,6 +106,48 @@ def test_cross_market_stockcharts_rrg_symbol_mapping() -> None:
     assert rrg_dashboard._commodity_stockcharts_symbol("DBC", "Commodity ETF") == "DBC"
 
 
+def test_rrg_reference_attaches_to_review_setup_rows(tmp_path, monkeypatch) -> None:
+    review_row = {
+        "symbol": "XZNUSD",
+        "market": "Commodity",
+        "tradingview_symbol": "EXNESS:XZNUSD",
+        "timeframe": "D1",
+        "technique": "nhathoai",
+        "setup": "compression",
+        "chart_path": str(tmp_path / "charts/xznusd.jpg"),
+        "evidence": {"score": 85, "status": "rejected"},
+    }
+    selection = RRGSelection(
+        symbol="XZNUSD",
+        sector="Commodity",
+        benchmark="$ONE",
+        latest={"x": 101.0, "y": 102.0},
+        intent={"quadrant": "LEADING", "dx1": 0.2, "dy1": 0.4, "dx2": 0.1, "dy2": 0.2, "two_steps_down": False},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[{"x": 99.8, "y": 99.9}, {"x": 100.0, "y": 100.2}, {"x": 100.4, "y": 101.0}, {"x": 101.0, "y": 102.0}],
+    )
+
+    def fake_commodity_rrg_references(symbols: list[str], market: str) -> dict[str, RRGSelection]:
+        assert symbols == ["XZNUSD"]
+        assert market == "Commodity"
+        return {"XZNUSD": selection}
+
+    def fake_render_rrg_proof(selected: RRGSelection, selections: list[RRGSelection], out_dir):
+        path = out_dir / "xznusd-rrg-proof.jpg"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fake jpg")
+        return path
+
+    monkeypatch.setattr(rrg_dashboard, "_commodity_rrg_references", fake_commodity_rrg_references)
+    monkeypatch.setattr(rrg_dashboard, "_render_stock_rrg_proof", fake_render_rrg_proof)
+
+    payload = rrg_dashboard.attach_rrg_references({"review_setups": [review_row]}, tmp_path, "D1")
+
+    assert payload["rrg_reference"]["status"] == "attached"
+    assert payload["review_setups"][0]["rrg"]["rrg_chart_path"].endswith("xznusd-rrg-proof.jpg")
+
+
 def test_vn_symbol_sector_map_uses_top_level_icb() -> None:
     icb_tree = [
         {
@@ -275,16 +317,24 @@ def test_crypto_dashboard_uses_crypto_labels_without_sector_count(tmp_path) -> N
 
 
 def test_candidate_card_keeps_setup_name_directly_above_chart_row(tmp_path) -> None:
+    chart_path = tmp_path / "charts/AAPL.jpg"
+    rrg_path = tmp_path / "rrg/aapl.jpg"
+    chart_preview = chart_path.parent / "preview" / chart_path.name
+    rrg_preview = rrg_path.parent / "preview" / rrg_path.name
+    chart_preview.parent.mkdir(parents=True)
+    rrg_preview.parent.mkdir(parents=True)
+    chart_preview.write_bytes(b"preview")
+    rrg_preview.write_bytes(b"preview")
     html = rrg_dashboard._candidate_card(
         {
             "symbol": "AAPL",
             "setup": "rb",
-            "chart_path": str(tmp_path / "charts/AAPL.jpg"),
+            "chart_path": str(chart_path),
             "evidence": {"score": 98},
             "rrg": {
                 "sector": "Information Technology",
                 "benchmark": "XLK",
-                "rrg_chart_path": str(tmp_path / "rrg/aapl.jpg"),
+                "rrg_chart_path": str(rrg_path),
                 "stock_intent": {"quadrant": "LEADING", "dy1": 0.42},
             },
         },
@@ -294,6 +344,11 @@ def test_candidate_card_keeps_setup_name_directly_above_chart_row(tmp_path) -> N
     assert 'class="setup-strip"' in html
     assert "RB setup" in html
     assert html.index('class="setup-strip"') < html.index('class="chart-row"')
+    assert "CURRENT marker is latest position" in html
+    assert 'href="charts/AAPL.jpg"' in html
+    assert 'src="charts/preview/AAPL.jpg"' in html
+    assert 'href="rrg/aapl.jpg"' in html
+    assert 'src="rrg/preview/aapl.jpg"' in html
 
 
 def test_selected_rrg_final_arrow_is_the_visual_head() -> None:
@@ -303,3 +358,28 @@ def test_selected_rrg_final_arrow_is_the_visual_head() -> None:
     assert final_props["arrowstyle"].startswith("-|>")
     assert final_props["mutation_scale"] > earlier_props["mutation_scale"]
     assert final_props["lw"] > earlier_props["lw"]
+
+
+def test_rrg_proof_writes_fast_preview_image(tmp_path) -> None:
+    selected = RRGSelection(
+        symbol="AAPL",
+        sector="Information Technology",
+        benchmark="XLK",
+        latest={"x": 101.4, "y": 102.2},
+        intent={"quadrant": "LEADING", "dy1": 0.6},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[
+            {"x": 99.8, "y": 99.6},
+            {"x": 100.2, "y": 100.4},
+            {"x": 100.8, "y": 101.6},
+            {"x": 101.4, "y": 102.2},
+        ],
+    )
+
+    rrg_path = rrg_dashboard._render_stock_rrg_proof(selected, [selected], tmp_path / "rrg")
+
+    preview_path = rrg_path.parent / "preview" / rrg_path.name
+    assert rrg_path.exists()
+    assert preview_path.exists()
+    assert preview_path.stat().st_size < rrg_path.stat().st_size

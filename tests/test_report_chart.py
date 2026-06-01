@@ -48,9 +48,14 @@ def test_chart_and_report_smoke(tmp_path: Path) -> None:
     assert chart_path.exists()
     assert chart_path.suffix == ".jpg"
     assert chart_path.stat().st_size > 0
+    preview_path = chart_path.parent / "preview" / chart_path.name
+    assert preview_path.exists()
+    assert preview_path.stat().st_size < chart_path.stat().st_size
     assert report_path.exists()
     html = report_path.read_text()
     assert "AAPL" in html
+    assert 'href="charts/AAPL_minervini-vcp_all.jpg"' in html
+    assert 'data-src="charts/preview/AAPL_minervini-vcp_all.jpg"' in html
     assert "Scanned Universe (1 symbols)" in html
     assert 'id="marketFilter"' in html
     assert 'id="techniqueFilter"' in html
@@ -444,8 +449,11 @@ def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
 
     assert "Continue Watching" in html
     assert 'data-status="review"' in html
+    assert 'class="lazy-chart"' in html
+    assert 'data-src="charts/ATOMUSDT.P_nhathoai_irb.png"' in html
     assert 'loading="lazy"' in html
     assert 'decoding="async"' in html
+    assert "IntersectionObserver" in html
     assert "ATOMUSDT" in html
     assert "ATOMUSDT.P_nhathoai_irb.png" in html
 
