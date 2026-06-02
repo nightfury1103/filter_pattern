@@ -264,6 +264,48 @@ def test_combined_results_preserve_review_rrg_references(tmp_path: Path) -> None
     assert combined_payload["review_setups"][0]["rrg"]["rrg_chart_path"].endswith("atomusdt-rrg-proof.jpg")
 
 
+def test_combined_results_can_materialize_shard_assets(tmp_path: Path) -> None:
+    shard_dir = tmp_path / "public" / "d1-shards" / "d1-shard-crypto"
+    chart_path = shard_dir / "charts" / "atomusdt.jpg"
+    preview_path = shard_dir / "charts" / "preview" / "atomusdt.jpg"
+    rrg_path = shard_dir / "rrg-reference" / "atomusdt-rrg-proof.jpg"
+    chart_path.parent.mkdir(parents=True)
+    preview_path.parent.mkdir(parents=True)
+    rrg_path.parent.mkdir(parents=True)
+    chart_path.write_bytes(b"full chart")
+    preview_path.write_bytes(b"preview chart")
+    rrg_path.write_bytes(b"rrg chart")
+
+    row = _candidate("ATOMUSDT", "irb", 60, "WAITING")
+    row.update({"market": "Crypto", "chart_path": str(chart_path)})
+    row["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "rrg_chart_path": str(rrg_path),
+        "stock_intent": {"quadrant": "IMPROVING", "dx1": 0.4, "dy1": 0.6},
+        "confidence": {"label": "RRG Early Reference", "tone": "early", "blocks_pattern": False},
+    }
+    source_results = shard_dir / "results.json"
+    source_results.write_text(json.dumps(result_payload([row], [], {"timeframe": "D1"})))
+
+    combined_results = write_combined_results_json(
+        [source_results],
+        tmp_path / "public" / "d1" / "results.json",
+        copy_assets=True,
+        asset_root=tmp_path / "public" / "d1",
+    )
+    combined_payload = json.loads(combined_results.read_text())
+    copied_chart = tmp_path / "public" / "d1" / "assets" / "d1-shard-crypto" / "charts" / "atomusdt.jpg"
+    copied_preview = copied_chart.parent / "preview" / "atomusdt.jpg"
+    copied_rrg = tmp_path / "public" / "d1" / "assets" / "d1-shard-crypto" / "rrg-reference" / "atomusdt-rrg-proof.jpg"
+
+    assert copied_chart.exists()
+    assert copied_preview.exists()
+    assert copied_rrg.exists()
+    assert combined_payload["candidates"][0]["chart_path"] == str(copied_chart)
+    assert combined_payload["candidates"][0]["rrg"]["rrg_chart_path"] == str(copied_rrg)
+
+
 def test_combined_report_links_h4_volume_confirmation_to_d1_near_trigger(tmp_path: Path) -> None:
     d1_candidate = _candidate("AAPL", "bb", 84, "WAITING")
     h4_candidate = _candidate("AAPL", "compression", 88, "TRIGGERED")

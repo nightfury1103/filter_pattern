@@ -229,16 +229,6 @@ jobs:
       - name: Install scanner
         run: python -m pip install -e .
 
-      - name: Restore current published site
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p public
-          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
-            git fetch --depth=1 origin gh-pages
-            git archive origin/gh-pages | tar -x -C public
-          fi
-
       - name: Remove stale D1 files before artifact restore
         if: needs.scan_d1_shard.result == 'success'
         shell: bash
@@ -269,7 +259,9 @@ jobs:
           python -m filter_pattern.cli combine-report \
             --inputs "${D1_INPUTS[@]}" \
             --out public/d1/index.html \
-            --results-out public/d1/results.json
+            --results-out public/d1/results.json \
+            --copy-assets
+          rm -rf public/d1-shards
 
       - name: Remove stale H4 files before artifact restore
         if: needs.scan_h4_shard.result == 'success'
@@ -301,7 +293,9 @@ jobs:
           python -m filter_pattern.cli combine-report \
             --inputs "${H4_INPUTS[@]}" \
             --out public/h4/index.html \
-            --results-out public/h4/results.json
+            --results-out public/h4/results.json \
+            --copy-assets
+          rm -rf public/h4-shards
 
       - name: Build site entry report
         shell: bash

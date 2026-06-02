@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections import defaultdict
 from datetime import datetime, timezone
 from html import escape
@@ -77,16 +78,44 @@ def refresh_trigger_warnings(payload: dict) -> dict:
     return payload
 
 
-def write_combined_html_report(results_paths: list[str | Path], output_path: str | Path) -> Path:
+def write_combined_html_report(results_paths: list[str | Path], output_path: str | Path, copy_assets: bool = False) -> Path:
     payload = combined_result_payload(results_paths)
+    if copy_assets:
+        materialize_combined_assets(payload, Path(output_path).parent)
     return write_html_payload(payload, output_path)
 
 
-def write_combined_results_json(results_paths: list[str | Path], output_path: str | Path) -> Path:
+def write_combined_results_json(
+    results_paths: list[str | Path],
+    output_path: str | Path,
+    copy_assets: bool = False,
+    asset_root: str | Path | None = None,
+) -> Path:
     output_file = Path(output_path)
+    payload = combined_result_payload(results_paths)
+    if copy_assets:
+        materialize_combined_assets(payload, Path(asset_root) if asset_root is not None else output_file.parent)
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(json.dumps(combined_result_payload(results_paths), indent=2))
+    output_file.write_text(json.dumps(payload, indent=2))
     return output_file
+
+
+def write_combined_outputs(
+    results_paths: list[str | Path],
+    html_output_path: str | Path,
+    results_output_path: str | Path | None = None,
+    copy_assets: bool = False,
+) -> tuple[Path, Path | None]:
+    html_output = Path(html_output_path)
+    payload = combined_result_payload(results_paths)
+    if copy_assets:
+        materialize_combined_assets(payload, html_output.parent)
+    results_output = None
+    if results_output_path is not None:
+        results_output = Path(results_output_path)
+        results_output.parent.mkdir(parents=True, exist_ok=True)
+        results_output.write_text(json.dumps(payload, indent=2))
+    return write_html_payload(payload, html_output), results_output
 
 
 def combined_result_payload(results_paths: list[str | Path]) -> dict:
@@ -99,6 +128,26 @@ def combined_result_payload(results_paths: list[str | Path]) -> dict:
     if not payloads:
         raise ValueError("at least one results.json input is required")
     return _combined_payload(payloads, results_paths)
+
+
+def materialize_combined_assets(payload: dict, output_dir: str | Path) -> dict:
+    base_dir = Path(output_dir)
+    for container, key, path_value in _payload_asset_paths(payload):
+        source = Path(str(path_value))
+        if not source.exists():
+            continue
+        destination = _combined_asset_destination(source, base_dir)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.resolve() != destination.resolve():
+            shutil.copy2(source, destination)
+        preview = _preview_path(str(source))
+        if preview is not None and preview.exists():
+            preview_destination = destination.parent / "preview" / destination.name
+            preview_destination.parent.mkdir(parents=True, exist_ok=True)
+            if preview.resolve() != preview_destination.resolve():
+                shutil.copy2(preview, preview_destination)
+        container[key] = str(destination)
+    return payload
 
 
 def write_html_payload(payload: dict, output_path: str | Path) -> Path:
@@ -959,6 +1008,35 @@ def _combined_review_setups(explicit_rows: list[dict], rejected: list[dict]) -> 
         reverse=True,
     )
     return rows[:REVIEW_SETUP_LIMIT]
+
+
+def _payload_asset_paths(value: object):
+    if isinstance(value, dict):
+        for key in ("chart_path", "rrg_chart_path"):
+            path_value = value.get(key)
+            if path_value:
+                yield value, key, path_value
+        for child in value.values():
+            yield from _payload_asset_paths(child)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _payload_asset_paths(item)
+
+
+def _combined_asset_destination(source: Path, output_dir: Path) -> Path:
+    try:
+        source.resolve().relative_to(output_dir.resolve())
+        return source
+    except ValueError:
+        pass
+    parts = source.parts
+    for marker in ("d1-shards", "h4-shards"):
+        if marker not in parts:
+            continue
+        index = parts.index(marker)
+        relative = Path(*parts[index + 1 :])
+        return output_dir / "assets" / relative
+    return output_dir / "assets" / source.name
 
 
 def _attach_lower_timeframe_reviews(payload: dict) -> None:
