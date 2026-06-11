@@ -461,6 +461,35 @@ def test_crypto_rrg_demo_cli_passes_options_to_runner(tmp_path: Path, monkeypatc
     assert "Wrote" in captured.out
 
 
+def test_crypto_rrg_overview_cli_passes_options_to_runner(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_runner(out: str, timeframe: str, max_symbols: int) -> Path:
+        seen.update({"out": out, "timeframe": timeframe, "max_symbols": max_symbols})
+        return tmp_path / "reports/crypto-rrg-overview/results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.build_crypto_rrg_overview", fake_runner)
+
+    exit_code = main(
+        [
+            "crypto-rrg-overview",
+            "--out",
+            str(tmp_path / "reports/crypto-rrg-overview"),
+            "--timeframe",
+            "D1",
+            "--max-symbols",
+            "80",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["out"] == str(tmp_path / "reports/crypto-rrg-overview")
+    assert seen["timeframe"] == "D1"
+    assert seen["max_symbols"] == 80
+    assert "Wrote" in captured.out
+
+
 def test_combine_report_cli_passes_inputs_to_report_writer(tmp_path: Path, monkeypatch, capsys) -> None:
     seen: dict[str, object] = {}
 

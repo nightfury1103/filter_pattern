@@ -62,6 +62,7 @@ def test_stockcharts_auth_can_come_from_environment(monkeypatch) -> None:
 
     def fake_get(url: str, **kwargs) -> FakeResponse:
         seen["url"] = url
+        seen["headers"] = kwargs.get("headers", {})
         return FakeResponse()
 
     monkeypatch.setenv("STOCKCHARTS_RRG_AUTH", "env-token")
@@ -70,6 +71,9 @@ def test_stockcharts_auth_can_come_from_environment(monkeypatch) -> None:
     rrg_dashboard._fetch_stockcharts_rrg(["XLF"], "SPY")
 
     assert "auth=env-token" in seen["url"]
+    assert "_=" in seen["url"]
+    assert seen["headers"]["Cache-Control"] == "no-cache"
+    assert seen["headers"]["Pragma"] == "no-cache"
 
 
 def test_fialda_rrg_series_uses_ratio_and_momentum_fields() -> None:

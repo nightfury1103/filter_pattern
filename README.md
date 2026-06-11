@@ -108,6 +108,7 @@ Provider options:
 - `--data-provider ccxt`: crypto-only data source; non-crypto symbols are reported as unsupported for this provider.
 - `--data-provider vnstock`: Vietnam-stock-only source for direct VNStock testing.
 
+VNStock is an optional dependency. Install it with `python -m pip install -e '.[vnstock]'` before using the direct VNStock provider or Vietnam fallback data.
 For crypto, CCXT tries Binance first, then Bybit, then OKX. This keeps the scanner closer to TradingView USDT-pair charts than Yahoo's `*-USD` crypto data.
 VNStock guest access is rate-limited, so the scanner throttles fallback calls with `VNSTOCK_REQUESTS_PER_MINUTE=18` by default. Use a lower value if the API rejects requests, or a higher value only if your VNStock account allows it.
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .direction_backtest import run_direction_backtest
 from .report import write_combined_html_report, write_combined_outputs, write_html_report
-from .rrg_dashboard import build_crypto_rrg_demo, build_usstock_rrg_demo, build_vnstock_rrg_demo
+from .rrg_dashboard import build_crypto_rrg_demo, build_crypto_rrg_overview, build_usstock_rrg_demo, build_vnstock_rrg_demo
 from .scanner import scan_all_csv, scan_all_market, scan_csv, scan_market
 from .techniques import NHATHOAI_SETUP_CHOICES, TECHNIQUE_CHOICES
 
@@ -242,6 +242,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     crypto_rrg_parser.add_argument("--max-symbols", type=int, help="optional cap on accepted RRG crypto symbols")
 
+    crypto_rrg_overview_parser = subparsers.add_parser(
+        "crypto-rrg-overview",
+        help="build a full crypto StockCharts RRG overview before pattern filtering",
+    )
+    crypto_rrg_overview_parser.add_argument("--out", required=True, help="output directory")
+    crypto_rrg_overview_parser.add_argument("--timeframe", default="D1", choices=["D1", "H4"], help="RRG timeframe")
+    crypto_rrg_overview_parser.add_argument("--max-symbols", type=int, help="optional cap after RRG ranking")
+
     init_parser = subparsers.add_parser("init-config", help="create a starter config.yml from the example")
     init_parser.add_argument("--out", default="config.yml", help="config path to create")
     init_parser.add_argument("--force", action="store_true", help="overwrite the output file if it exists")
@@ -367,6 +375,11 @@ def main(argv: list[str] | None = None) -> int:
                 args.setup,
                 args.max_symbols,
             )
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "crypto-rrg-overview":
+            results_path = build_crypto_rrg_overview(args.out, args.timeframe, args.max_symbols)
             print(f"Wrote {results_path}")
             print(f"Wrote {Path(args.out) / 'index.html'}")
             return 0

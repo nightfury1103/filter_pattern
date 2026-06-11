@@ -109,6 +109,55 @@ def test_report_renders_rrg_confidence_reference_beside_candidate_chart(tmp_path
     assert "msft-rrg-proof.jpg" in html
 
 
+def test_report_renders_market_rrg_overview(tmp_path: Path) -> None:
+    first = _candidate("BTCUSDT", "bb", 86, "WAITING")
+    first.update({"market": "Crypto", "timeframe": "D1"})
+    first["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "latest": {"x": 103.2, "y": 104.1},
+        "rrg_series": [
+            {"x": 101.6, "y": 102.5, "end": "2026-06-01"},
+            {"x": 102.4, "y": 103.1, "end": "2026-06-02"},
+            {"x": 103.2, "y": 104.1, "end": "2026-06-03"},
+        ],
+        "stock_intent": {"quadrant": "LEADING", "dx1": 0.7, "dy1": 0.9},
+        "confidence": {"label": "RRG Supportive Reference"},
+    }
+    second = _candidate("XAUUSD", "compression", 78, "WAITING")
+    second.update({"market": "Commodity", "timeframe": "D1"})
+    second["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Commodity",
+        "latest": {"x": 96.3, "y": 97.4},
+        "rrg_series": [
+            {"x": 97.1, "y": 98.2, "end": "2026-06-01"},
+            {"x": 96.8, "y": 97.8, "end": "2026-06-02"},
+            {"x": 96.3, "y": 97.4, "end": "2026-06-03"},
+        ],
+        "stock_intent": {"quadrant": "LAGGING", "dx1": -0.2, "dy1": -0.4},
+        "confidence": {"label": "RRG Warning Reference"},
+    }
+    payload = result_payload([first, second], [], {"timeframe": "D1"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert "Market RRG Overview" in html
+    assert "Daily RRG Chart" in html
+    assert "Latest RRG row: 2026-06-03" in html
+    assert 'class="rrg-svg"' in html
+    assert "Leading" in html
+    assert "Lagging" in html
+    assert "BTCUSDT" in html
+    assert "XAUUSD" in html
+    assert "Support / risk" in html
+    assert "Crypto" in html
+    assert "Commodity" in html
+
+
 def test_report_uses_full_width_chart_layout_without_right_side_panel(tmp_path: Path) -> None:
     cfg = make_config()
     candles = make_series([20, 12, 6], current_close=96, late_volume=80_000)

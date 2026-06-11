@@ -246,6 +246,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     )
     setup_panel = _setup_distribution_panel(candidates)
     market_panel = _market_distribution_panel(scanned_by_market, data_errors_by_market)
+    rrg_overview = _rrg_market_overview_section(candidates + trigger_warnings + review_setups + near_matches)
     new_count = int(change_counts.get("NEW", 0))
     dropped_count = len(dropped)
     changed_count = sum(int(change_counts.get(key, 0)) for key in ("NEW", "TRIGGERED", "IMPROVED", "WEAKER", "STATUS_CHANGED"))
@@ -430,6 +431,175 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       color: var(--muted);
       font-size: 13px;
     }}
+    .rrg-overview {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101723;
+      margin: 12px 0 14px;
+      padding: 14px;
+    }}
+    .overview-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 12px;
+    }}
+    .overview-head h2 {{
+      margin: 0 0 4px;
+      font-size: 18px;
+      color: #f8fafc;
+    }}
+    .overview-head p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .overview-score {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(86px, 1fr));
+      gap: 8px;
+      min-width: 300px;
+    }}
+    .overview-score div {{
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px;
+      background: #0f141e;
+    }}
+    .overview-score strong {{
+      display: block;
+      color: #ffffff;
+      font-size: 20px;
+      line-height: 1;
+      margin-bottom: 5px;
+    }}
+    .overview-score span {{
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }}
+    .rrg-chart-shell {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f141e;
+      padding: 10px;
+      margin-bottom: 12px;
+    }}
+    .rrg-chart-title {{
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 800;
+      margin: 0 0 8px;
+    }}
+    .rrg-chart-title span {{
+      color: var(--muted);
+      font-weight: 700;
+    }}
+    .rrg-svg {{
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 6px;
+      background: #0b1220;
+    }}
+    .rrg-axis {{ stroke: #e5e7eb; stroke-width: 1.4; opacity: .86; }}
+    .rrg-gridline {{ stroke: #334155; stroke-width: .8; opacity: .55; }}
+    .rrg-tail {{ fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .92; }}
+    .rrg-dot {{ stroke: #f8fafc; stroke-width: 1.8; }}
+    .rrg-label {{ fill: #f8fafc; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: #0b1220; stroke-width: 3px; stroke-linejoin: round; }}
+    .rrg-small-label {{ fill: #cbd5e1; font-size: 11px; font-weight: 700; }}
+    .rrg-legend {{ fill: #cbd5e1; font-size: 11px; font-weight: 700; }}
+    .quadrant-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .quadrant-card {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f141e;
+      overflow: hidden;
+      min-height: 178px;
+    }}
+    .quadrant-card.leading {{ border-top: 4px solid #22c55e; }}
+    .quadrant-card.improving {{ border-top: 4px solid #38bdf8; }}
+    .quadrant-card.weakening {{ border-top: 4px solid #f97316; }}
+    .quadrant-card.lagging {{ border-top: 4px solid #ef4444; }}
+    .quadrant-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }}
+    .quadrant-head strong {{ color: #ffffff; }}
+    .quadrant-head span {{ color: var(--muted); font-size: 12px; }}
+    .quadrant-count {{
+      min-width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: #172033;
+      color: #ffffff;
+      font-weight: 800;
+    }}
+    .quadrant-list {{
+      display: grid;
+      gap: 6px;
+      padding: 10px;
+    }}
+    .overview-symbol {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 7px;
+      padding: 7px;
+      background: #111a29;
+      font-size: 12px;
+    }}
+    .overview-symbol b {{ color: #f8fafc; overflow-wrap: anywhere; }}
+    .overview-symbol span {{ color: #9ca3af; display: block; margin-top: 2px; }}
+    .overview-symbol em {{ color: #cbd5e1; font-style: normal; font-variant-numeric: tabular-nums; }}
+    .market-rrg-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }}
+    .market-rrg {{
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0f141e;
+      padding: 9px;
+      font-size: 12px;
+    }}
+    .market-rrg strong {{ color: #f8fafc; display: block; margin-bottom: 7px; }}
+    .market-bars {{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3px;
+    }}
+    .market-bars span {{
+      min-height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+    }}
+    .market-bars .leading {{ background: #15803d; }}
+    .market-bars .improving {{ background: #0369a1; }}
+    .market-bars .weakening {{ background: #c2410c; }}
+    .market-bars .lagging {{ background: #b91c1c; }}
     .layout {{ display: block; }}
     .main-column {{ min-width: 0; }}
     .side-panel {{
@@ -718,6 +888,9 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       .side-panel {{ position: static; }}
       .stats {{ grid-template-columns: repeat(4, 1fr); }}
       .toolbar {{ grid-template-columns: repeat(2, 1fr); }}
+      .overview-head {{ display: block; }}
+      .overview-score {{ min-width: 0; margin-top: 12px; }}
+      .quadrant-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .card-content {{ grid-template-columns: 1fr; }}
       .chart-pair {{ grid-template-columns: 1fr; }}
       .chart-frame {{ border-bottom: 1px solid #cbd5e1; }}
@@ -729,6 +902,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       .toolbar {{ grid-template-columns: 1fr; position: static; }}
       .card-head {{ flex-direction: column; }}
       .score {{ text-align: left; }}
+      .overview-score, .quadrant-grid {{ grid-template-columns: 1fr; }}
       .stats, .metrics {{ grid-template-columns: 1fr; }}
     }}
   </style>
@@ -784,6 +958,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <div class="stat"><strong>{escape(avg_score)}</strong><span>Average score</span></div>
         <div class="stat"><strong>{escape(str(data_errors))}</strong><span>Data unavailable</span></div>
       </section>
+      {rrg_overview}
       <div class="toolbar">
         <input id="search" type="search" placeholder="Search symbol, setup, market, TradingView id">
         <select id="timeframeFilter"><option value="all">All timeframes</option>{timeframe_options}</select>
@@ -2015,6 +2190,282 @@ def _prefixed_evidence_line(lines: list, prefix: str) -> str | None:
 
 def _not_configured_rows(rejected: list[dict]) -> list[dict]:
     return [item for item in rejected if item.get("evidence", {}).get("status") == "not_configured"]
+
+
+def _rrg_market_overview_section(rows: list[dict]) -> str:
+    items = _rrg_overview_items(rows)
+    if not items:
+        return ""
+
+    quadrants = ["LEADING", "IMPROVING", "WEAKENING", "LAGGING"]
+    by_quadrant = {quadrant: [] for quadrant in quadrants}
+    by_market: dict[str, dict[str, int]] = defaultdict(lambda: {quadrant: 0 for quadrant in quadrants})
+    for item in items:
+        quadrant = item["quadrant"]
+        by_quadrant[quadrant].append(item)
+        by_market[item["market"]][quadrant] += 1
+
+    for quadrant in quadrants:
+        by_quadrant[quadrant].sort(key=_rrg_overview_rank, reverse=True)
+
+    supportive = len(by_quadrant["LEADING"]) + len(by_quadrant["IMPROVING"])
+    risk = len(by_quadrant["WEAKENING"]) + len(by_quadrant["LAGGING"])
+    ratio = f"{supportive}:{risk}" if risk else f"{supportive}:0"
+    chart = _rrg_overview_chart_svg(items)
+    quadrant_cards = "\n".join(_rrg_quadrant_card(quadrant, by_quadrant[quadrant]) for quadrant in quadrants)
+    market_cards = "\n".join(_rrg_market_card(market, counts) for market, counts in sorted(by_market.items()))
+    return f"""
+      <section class="rrg-overview">
+        <div class="overview-head">
+          <div>
+            <h2>Market RRG Overview</h2>
+            <p>Reference map for symbols with RRG data. Pattern quality still comes from the price chart.</p>
+          </div>
+          <div class="overview-score">
+            <div><strong>{len(items)}</strong><span>RRG symbols</span></div>
+            <div><strong>{supportive}</strong><span>Leading + improving</span></div>
+            <div><strong>{escape(ratio)}</strong><span>Support / risk</span></div>
+          </div>
+        </div>
+        {chart}
+        <div class="quadrant-grid">{quadrant_cards}</div>
+        <div class="market-rrg-grid">{market_cards}</div>
+      </section>
+"""
+
+
+def _rrg_overview_items(rows: list[dict]) -> list[dict]:
+    by_symbol: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        rrg = row.get("rrg") or {}
+        intent = rrg.get("stock_intent") or {}
+        quadrant = str(intent.get("quadrant") or "").upper()
+        if quadrant not in {"LEADING", "IMPROVING", "WEAKENING", "LAGGING"}:
+            continue
+        symbol = str(row.get("symbol") or "").strip()
+        if not symbol:
+            continue
+        item = {
+            "symbol": symbol,
+            "market": str(row.get("market") or "Unknown"),
+            "timeframe": str(row.get("timeframe") or ""),
+            "setup": str(row.get("setup") or ""),
+            "status": str((row.get("evidence") or {}).get("status") or ""),
+            "score": _score_value(row) or 0.0,
+            "quadrant": quadrant,
+            "x": _numeric((rrg.get("latest") or {}).get("x")) or _numeric(intent.get("x")) or 0.0,
+            "y": _numeric((rrg.get("latest") or {}).get("y")) or _numeric(intent.get("y")) or 0.0,
+            "dx": _numeric(intent.get("dx1")) or 0.0,
+            "dy": _numeric(intent.get("dy1")) or 0.0,
+            "series": _rrg_overview_series(rrg, intent),
+            "latest_date": _rrg_latest_date(rrg),
+        }
+        key = (item["timeframe"], symbol)
+        if key not in by_symbol or _rrg_overview_rank(item) > _rrg_overview_rank(by_symbol[key]):
+            by_symbol[key] = item
+    return list(by_symbol.values())
+
+
+def _rrg_overview_rank(item: dict) -> tuple[float, float, float]:
+    quadrant_bonus = {
+        "LEADING": 4.0,
+        "IMPROVING": 3.0,
+        "WEAKENING": 2.0,
+        "LAGGING": 1.0,
+    }.get(str(item.get("quadrant")), 0.0)
+    return (
+        quadrant_bonus,
+        float(item.get("dy") or 0.0) + float(item.get("dx") or 0.0),
+        float(item.get("score") or 0.0),
+    )
+
+
+def _rrg_overview_series(rrg: dict, intent: dict) -> list[tuple[float, float]]:
+    series = []
+    for point in rrg.get("rrg_series") or rrg.get("series") or []:
+        x = _numeric((point or {}).get("x"))
+        y = _numeric((point or {}).get("y"))
+        if x is not None and y is not None:
+            series.append((x, y))
+    if len(series) >= 2:
+        return series[-10:]
+
+    latest = rrg.get("latest") or {}
+    x = _numeric(latest.get("x")) or _numeric(intent.get("x"))
+    y = _numeric(latest.get("y")) or _numeric(intent.get("y"))
+    dx = _numeric(intent.get("dx1")) or 0.0
+    dy = _numeric(intent.get("dy1")) or 0.0
+    if x is None or y is None:
+        return []
+    if dx or dy:
+        return [(x - dx, y - dy), (x, y)]
+    return [(x, y)]
+
+
+def _rrg_overview_chart_svg(items: list[dict]) -> str:
+    points = [point for item in items for point in item.get("series", [])]
+    if not points:
+        return ""
+
+    xs = [float(point[0]) for point in points] + [100.0]
+    ys = [float(point[1]) for point in points] + [100.0]
+    x_min, x_max = _rrg_axis_bounds(xs)
+    y_min, y_max = _rrg_axis_bounds(ys)
+    width = 1000
+    height = 560
+    left = 72
+    right = 38
+    top = 44
+    bottom = 58
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+
+    def sx(value: float) -> float:
+        return left + (value - x_min) / (x_max - x_min) * plot_w
+
+    def sy(value: float) -> float:
+        return top + (y_max - value) / (y_max - y_min) * plot_h
+
+    x100 = sx(100.0)
+    y100 = sy(100.0)
+    grid_lines = []
+    for value in _rrg_tick_values(x_min, x_max):
+        x = sx(value)
+        grid_lines.append(f'<line class="rrg-gridline" x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{height - bottom}"/>')
+        grid_lines.append(f'<text class="rrg-small-label" x="{x:.1f}" y="{height - 24}" text-anchor="middle">{_fmt(value)}</text>')
+    for value in _rrg_tick_values(y_min, y_max):
+        y = sy(value)
+        grid_lines.append(f'<line class="rrg-gridline" x1="{left}" y1="{y:.1f}" x2="{width - right}" y2="{y:.1f}"/>')
+        grid_lines.append(f'<text class="rrg-small-label" x="18" y="{y + 4:.1f}">{_fmt(value)}</text>')
+
+    latest_dates = sorted({str(item.get("latest_date")) for item in items if item.get("latest_date")})
+    latest_text = f" · Latest RRG row: {latest_dates[-1]}" if latest_dates else ""
+    sorted_items = sorted(items, key=_rrg_overview_rank, reverse=True)
+    label_symbols = {str(item.get("symbol")) for item in sorted_items[:24]}
+    paths = []
+    for item in sorted_items:
+        series = item.get("series") or [(item.get("x", 100.0), item.get("y", 100.0))]
+        if not series:
+            continue
+        color = _rrg_quadrant_color(str(item.get("quadrant")))
+        coords = [(sx(float(x)), sy(float(y))) for x, y in series]
+        if len(coords) >= 2:
+            path = " ".join(f"{'M' if index == 0 else 'L'} {x:.1f} {y:.1f}" for index, (x, y) in enumerate(coords))
+            paths.append(f'<path class="rrg-tail" d="{path}" stroke="{color}"><title>{escape(str(item.get("symbol")))} daily RRG tail</title></path>')
+        x, y = coords[-1]
+        symbol = str(item.get("symbol"))
+        paths.append(f'<circle class="rrg-dot" cx="{x:.1f}" cy="{y:.1f}" r="5.2" fill="{color}"><title>{escape(symbol)} current</title></circle>')
+        if symbol in label_symbols:
+            label_x = min(width - right - 4, x + 8)
+            label_y = max(top + 12, y - 8)
+            paths.append(f'<text class="rrg-label" x="{label_x:.1f}" y="{label_y:.1f}">{escape(symbol)}</text>')
+
+    return f"""
+        <div class="rrg-chart-shell">
+          <div class="rrg-chart-title"><strong>Daily RRG Chart</strong><span>Tail: older -> current · center line = 100{escape(latest_text)}</span></div>
+          <svg class="rrg-svg" viewBox="0 0 {width} {height}" role="img" aria-label="Daily RRG overview chart">
+            <rect x="{left}" y="{top}" width="{max(0, x100 - left):.1f}" height="{max(0, y100 - top):.1f}" fill="#123251" opacity=".54"/>
+            <rect x="{x100:.1f}" y="{top}" width="{max(0, width - right - x100):.1f}" height="{max(0, y100 - top):.1f}" fill="#12391f" opacity=".58"/>
+            <rect x="{left}" y="{y100:.1f}" width="{max(0, x100 - left):.1f}" height="{max(0, height - bottom - y100):.1f}" fill="#3b1518" opacity=".58"/>
+            <rect x="{x100:.1f}" y="{y100:.1f}" width="{max(0, width - right - x100):.1f}" height="{max(0, height - bottom - y100):.1f}" fill="#3a240d" opacity=".58"/>
+            {''.join(grid_lines)}
+            <line class="rrg-axis" x1="{left}" y1="{y100:.1f}" x2="{width - right}" y2="{y100:.1f}"/>
+            <line class="rrg-axis" x1="{x100:.1f}" y1="{top}" x2="{x100:.1f}" y2="{height - bottom}"/>
+            <text class="rrg-label" x="{left + 14}" y="{top + 24}">IMPROVING</text>
+            <text class="rrg-label" x="{width - right - 14}" y="{top + 24}" text-anchor="end">LEADING</text>
+            <text class="rrg-label" x="{left + 14}" y="{height - bottom - 14}">LAGGING</text>
+            <text class="rrg-label" x="{width - right - 14}" y="{height - bottom - 14}" text-anchor="end">WEAKENING</text>
+            {''.join(paths)}
+            <text class="rrg-legend" x="{left}" y="{height - 8}">JdK RS-Ratio</text>
+            <text class="rrg-legend" x="{width - 12}" y="{top}" transform="rotate(90 {width - 12} {top})">JdK RS-Momentum</text>
+          </svg>
+        </div>
+"""
+
+
+def _rrg_axis_bounds(values: list[float]) -> tuple[float, float]:
+    low = min(values)
+    high = max(values)
+    low = min(low, 96.0)
+    high = max(high, 104.0)
+    padding = max((high - low) * 0.14, 0.8)
+    return low - padding, high + padding
+
+
+def _rrg_tick_values(low: float, high: float) -> list[float]:
+    start = int(low)
+    end = int(high) + 1
+    return [float(value) for value in range(start, end + 1) if value % 2 == 0]
+
+
+def _rrg_quadrant_color(quadrant: str) -> str:
+    return {
+        "LEADING": "#22c55e",
+        "IMPROVING": "#38bdf8",
+        "WEAKENING": "#f97316",
+        "LAGGING": "#ef4444",
+    }.get(quadrant, "#cbd5e1")
+
+
+def _rrg_latest_date(rrg: dict) -> str:
+    for point in reversed(rrg.get("rrg_series") or rrg.get("series") or []):
+        for key in ("end", "date", "start"):
+            value = (point or {}).get(key)
+            if value:
+                return str(value)
+    latest = rrg.get("latest") or {}
+    for key in ("end", "date", "start"):
+        value = latest.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
+def _rrg_quadrant_card(quadrant: str, items: list[dict], limit: int = 8) -> str:
+    label = quadrant.title()
+    detail = {
+        "LEADING": "Strong relative strength",
+        "IMPROVING": "Momentum turning up",
+        "WEAKENING": "Momentum cooling",
+        "LAGGING": "Weak relative strength",
+    }[quadrant]
+    rows = "\n".join(_rrg_overview_symbol(item) for item in items[:limit])
+    if not rows:
+        rows = '<div class="overview-symbol"><div><b>No symbols</b><span>Nothing currently mapped here</span></div><em>-</em></div>'
+    extra = len(items) - limit
+    if extra > 0:
+        rows += f'<div class="overview-symbol"><div><b>+{extra} more</b><span>Use filters below to inspect the full list</span></div><em></em></div>'
+    return f"""
+          <div class="quadrant-card {escape(quadrant.lower())}">
+            <div class="quadrant-head"><div><strong>{escape(label)}</strong><span>{escape(detail)}</span></div><div class="quadrant-count">{len(items)}</div></div>
+            <div class="quadrant-list">{rows}</div>
+          </div>
+"""
+
+
+def _rrg_overview_symbol(item: dict) -> str:
+    movement = f"dx {_fmt(item.get('dx'))} / dy {_fmt(item.get('dy'))}"
+    meta = f"{item.get('market')} · {item.get('timeframe')} · {item.get('setup')} · {item.get('status')}"
+    return (
+        '<div class="overview-symbol">'
+        f'<div><b>{escape(str(item.get("symbol")))}</b><span>{escape(meta)}</span></div>'
+        f"<em>{escape(movement)}</em>"
+        "</div>"
+    )
+
+
+def _rrg_market_card(market: str, counts: dict[str, int]) -> str:
+    return f"""
+          <div class="market-rrg">
+            <strong>{escape(market)}</strong>
+            <div class="market-bars">
+              <span class="leading" title="Leading">{counts.get("LEADING", 0)}</span>
+              <span class="improving" title="Improving">{counts.get("IMPROVING", 0)}</span>
+              <span class="weakening" title="Weakening">{counts.get("WEAKENING", 0)}</span>
+              <span class="lagging" title="Lagging">{counts.get("LAGGING", 0)}</span>
+            </div>
+          </div>
+"""
 
 
 def _coverage_section(scanned_by_market: dict[str, list[str]], data_errors_by_market: dict[str, int]) -> str:

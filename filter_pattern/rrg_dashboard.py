@@ -688,6 +688,95 @@ def build_crypto_rrg_demo(
     return results_path
 
 
+def build_crypto_rrg_overview(
+    out_dir: str | Path,
+    timeframe: str = "D1",
+    max_symbols: int | None = None,
+) -> Path:
+    active_timeframe = timeframe.upper()
+    if active_timeframe not in {"D1", "H4"}:
+        raise ValueError("supported timeframes are D1 and H4")
+
+    output_dir = Path(out_dir)
+    rrg_dir = output_dir / "rrg"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _clear_images(rrg_dir)
+
+    crypto_items = [item for item in get_universe("default") if item.market == "Crypto"]
+    selections = _all_crypto_rrg_symbols([item.symbol for item in crypto_items], active_timeframe)
+    selections.sort(key=lambda item: float(item.intent.get("score") or 0), reverse=True)
+    if max_symbols is not None:
+        selections = selections[: max(0, max_symbols)]
+
+    overview_path = _render_rrg_overview_chart(selections, rrg_dir / "crypto-daily-rrg-overview.jpg", "Crypto Daily RRG vs $ONE")
+    rows = [
+        {
+            "symbol": item.symbol,
+            "market": "Crypto",
+            "timeframe": active_timeframe,
+            "technique": "rrg-overview",
+            "setup": "all",
+            "evidence": {
+                "qualified": False,
+                "status": "rrg_overview",
+                "score": item.intent.get("score", 0),
+                "reasons": [f"RRG quadrant: {item.intent.get('quadrant')}"],
+                "failures": [],
+            },
+            "rrg": _rrg_json(item),
+        }
+        for item in selections
+    ]
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "timeframe": active_timeframe,
+        "market": "Crypto",
+        "rrg_filter": {
+            "approved_symbol_count": len(selections),
+            "tail_rows": RRG_TAIL_ROWS,
+            "request_days": RRG_REQUEST_DAYS,
+            "benchmark": "$ONE",
+            "period": _crypto_rrg_period(active_timeframe),
+            "overview_chart_path": str(overview_path),
+        },
+        "candidates": rows,
+        "rejected": [],
+        "config": {
+            "timeframe": active_timeframe,
+            "technique": "rrg-overview",
+            "setup": "all",
+            "data_source": "StockCharts crypto RRG",
+            "broker_filter": "none",
+        },
+    }
+    results_path = output_dir / "results.json"
+    results_path.write_text(json.dumps(payload, indent=2))
+    _write_crypto_rrg_overview_dashboard(payload, output_dir / "index.html")
+    return results_path
+
+
+def _all_crypto_rrg_symbols(symbols: list[str], timeframe: str) -> list[RRGSelection]:
+    stockcharts_symbols = [_crypto_stockcharts_symbol(symbol) for symbol in symbols]
+    display_by_stockcharts = dict(zip(stockcharts_symbols, symbols, strict=False))
+    combined: dict[str, list[dict]] = {}
+    for index in range(0, len(stockcharts_symbols), RRG_CHUNK_SIZE):
+        chunk = stockcharts_symbols[index : index + RRG_CHUNK_SIZE]
+        combined.update(_series_from_stockcharts(_fetch_crypto_rrg(chunk, timeframe), chunk))
+        time.sleep(0.08)
+
+    selections: list[RRGSelection] = []
+    for stockcharts_symbol, points in combined.items():
+        selection = _selection_from_points(
+            display_by_stockcharts.get(stockcharts_symbol, _crypto_from_stockcharts_symbol(stockcharts_symbol)),
+            "Crypto",
+            "$ONE",
+            points,
+        )
+        if selection is not None:
+            selections.append(selection)
+    return selections
+
+
 def _demo_config(config_path: str | Path | None, technique: str | None, setup: str | None) -> tuple[VCPConfig, str, str]:
     if config_path is None:
         return VCPConfig(), technique or "nhathoai", setup or "all"
@@ -966,12 +1055,15 @@ def _fetch_crypto_rrg(symbols: list[str], timeframe: str) -> dict:
         "b": "$ONE",
         "d": str(RRG_REQUEST_DAYS),
         "p": _crypto_rrg_period(timeframe),
+        "_": str(int(time.time())),
     }
     response = requests.get(
         STOCKCHARTS_RRG_URL + "?" + urlencode(params, safe="$,/"),
         headers={
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json, text/plain, */*",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
             "Referer": "https://stockcharts.com/freecharts/rrg/?period=daily&group=cryptousdbase&isArrowMode=true",
         },
         timeout=60,
@@ -1207,10 +1299,16 @@ def _fetch_stockcharts_rrg(symbols: list[str], benchmark: str) -> dict:
         "b": benchmark,
         "d": str(RRG_REQUEST_DAYS),
         "p": "d",
+        "_": str(int(time.time())),
     }
     response = requests.get(
         STOCKCHARTS_RRG_URL + "?" + urlencode(params, safe="$,/"),
-        headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json, text/plain, */*"},
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json, text/plain, */*",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
         timeout=60,
     )
     response.raise_for_status()
@@ -1367,6 +1465,86 @@ def _render_stock_rrg_proof(selected: RRGSelection, selections: list[RRGSelectio
     plt.subplots_adjust(left=0.075, right=0.99, top=0.86, bottom=0.10)
     output_path = out_dir / f"{_safe_name(selected.symbol)}-rrg-proof.jpg"
     fig.savefig(output_path, format="jpg", pil_kwargs={"quality": 86, "optimize": True, "progressive": True})
+    preview_path = _preview_path(output_path)
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        preview_path,
+        dpi=RRG_PREVIEW_DPI,
+        format="jpg",
+        pil_kwargs={"quality": RRG_PREVIEW_QUALITY, "optimize": True, "progressive": True},
+    )
+    plt.close(fig)
+    return output_path
+
+
+def _render_rrg_overview_chart(selections: list[RRGSelection], output_path: Path, title: str) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not selections:
+        raise ValueError("no RRG selections available for overview chart")
+    all_x = [point["x"] for item in selections for point in item.rrg_series]
+    all_y = [point["y"] for item in selections for point in item.rrg_series]
+    x_pad = max(2.5, (max(all_x) - min(all_x)) * 0.14)
+    y_pad = max(2.0, (max(all_y) - min(all_y)) * 0.16)
+    xlim = (min(min(all_x) - x_pad, 94), max(max(all_x) + x_pad, 106))
+    ylim = (min(min(all_y) - y_pad, 94), max(max(all_y) + y_pad, 106))
+
+    fig, ax = plt.subplots(figsize=(20, 11.4), dpi=150)
+    fig.patch.set_facecolor("#f8fafc")
+    ax.set_facecolor("#ffffff")
+    _draw_rrg_background(ax, xlim, ylim)
+
+    ranked = sorted(selections, key=lambda item: float(item.intent.get("score") or 0), reverse=True)
+    label_symbols = {item.symbol for item in ranked[:36]}
+    for index, item in enumerate(ranked):
+        xs = [point["x"] for point in item.rrg_series]
+        ys = [point["y"] for point in item.rrg_series]
+        quadrant = rrg_quadrant(xs[-1], ys[-1])
+        color = QUADRANT_COLORS[quadrant]
+        alpha = 0.86 if item.symbol in label_symbols else 0.28
+        width = 1.65 if item.symbol in label_symbols else 0.85
+        zorder = 6 if item.symbol in label_symbols else 2
+        ax.plot(xs, ys, color=color, linewidth=width, alpha=alpha, zorder=zorder)
+        for step in range(1, len(xs)):
+            is_final = step == len(xs) - 1
+            ax.annotate(
+                "",
+                xy=(xs[step], ys[step]),
+                xytext=(xs[step - 1], ys[step - 1]),
+                arrowprops=_rrg_arrow_props(color, alpha, is_selected=False, is_final=is_final),
+                zorder=zorder + 1,
+            )
+        ax.scatter(xs[-1], ys[-1], s=34 if item.symbol in label_symbols else 12, facecolors=color, edgecolor="white", linewidth=0.7, alpha=alpha, zorder=zorder + 2)
+        if item.symbol in label_symbols:
+            ax.text(
+                xs[-1] + 0.08,
+                ys[-1] + 0.08,
+                item.symbol,
+                fontsize=8.2,
+                weight="bold",
+                color="#111827",
+                path_effects=[pe.withStroke(linewidth=2.8, foreground="white", alpha=0.95)],
+                zorder=zorder + 3,
+            )
+
+    _label_rrg_quadrants(ax, xlim, ylim)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.set_xlabel("JdK RS-Ratio < 100 weaker vs $ONE | stronger > 100", fontsize=12, weight="bold")
+    ax.set_ylabel("JdK RS-Momentum < 100 falling | rising > 100", fontsize=12, weight="bold")
+    latest_dates = sorted({str(point.get("end") or point.get("date") or point.get("start")) for item in selections for point in item.rrg_series if point.get("end") or point.get("date") or point.get("start")})
+    latest = f" | Latest row: {latest_dates[-1]}" if latest_dates else ""
+    fig.text(0.055, 0.965, title, fontsize=21, weight="bold", color="#0f172a", ha="left", va="top")
+    fig.text(
+        0.055,
+        0.932,
+        f"Daily RRG | Tail: older -> current, last {RRG_TAIL_ROWS} rows | Symbols: {len(selections)}{latest}",
+        fontsize=10.5,
+        color="#475569",
+        ha="left",
+        va="top",
+    )
+    plt.subplots_adjust(left=0.075, right=0.99, top=0.86, bottom=0.10)
+    fig.savefig(output_path, format="jpg", pil_kwargs={"quality": 88, "optimize": True, "progressive": True})
     preview_path = _preview_path(output_path)
     preview_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(
@@ -1586,6 +1764,97 @@ applyFilters();
     return output_path
 
 
+def _write_crypto_rrg_overview_dashboard(payload: dict, output_path: Path) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    overview_chart = _relative_image(payload.get("rrg_filter", {}).get("overview_chart_path"), output_path.parent)
+    overview_preview = _relative_preview_image(payload.get("rrg_filter", {}).get("overview_chart_path"), output_path.parent)
+    rows = payload.get("candidates", [])
+    quadrant_counts: dict[str, int] = defaultdict(int)
+    for row in rows:
+        quadrant_counts[str(row.get("rrg", {}).get("stock_intent", {}).get("quadrant", ""))] += 1
+    table_rows = "\n".join(_crypto_rrg_overview_row(row) for row in rows)
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crypto Daily RRG Overview</title>
+<style>
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:#0f1218; color:#e5e7eb; font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0; }}
+.shell {{ max-width:1900px; margin:0 auto; padding:18px; }}
+.top {{ display:flex; justify-content:space-between; gap:18px; align-items:end; margin-bottom:14px; }}
+h1 {{ margin:0 0 4px; font-size:26px; }}
+.muted {{ color:#94a3b8; font-size:13px; }}
+.metrics {{ display:grid; grid-template-columns:repeat(5,minmax(110px,1fr)); gap:10px; margin:0 0 14px; }}
+.metric {{ background:#111827; border:1px solid #273244; border-radius:8px; padding:12px; }}
+.metric strong {{ display:block; font-size:24px; color:white; margin-bottom:5px; }}
+.metric span {{ color:#94a3b8; font-size:12px; font-weight:800; text-transform:uppercase; }}
+.chart {{ display:block; background:#fff; border:1px solid #273244; border-radius:8px; overflow:hidden; margin-bottom:14px; }}
+.chart strong {{ display:block; padding:10px 12px; background:#111827; color:#e5e7eb; border-bottom:1px solid #273244; }}
+.chart img {{ display:block; width:100%; height:auto; }}
+table {{ width:100%; border-collapse:collapse; background:#111827; border:1px solid #273244; border-radius:8px; overflow:hidden; font-size:13px; }}
+th,td {{ padding:9px 10px; border-bottom:1px solid #273244; text-align:left; }}
+th {{ color:#cbd5e1; background:#151f2e; font-size:12px; text-transform:uppercase; }}
+td {{ color:#e5e7eb; }}
+.pill {{ display:inline-flex; min-width:92px; justify-content:center; border-radius:999px; padding:4px 8px; font-size:11px; font-weight:900; }}
+.LEADING {{ background:#14532d; color:#dcfce7; }}
+.IMPROVING {{ background:#075985; color:#e0f2fe; }}
+.WEAKENING {{ background:#9a3412; color:#ffedd5; }}
+.LAGGING {{ background:#991b1b; color:#fee2e2; }}
+@media (max-width:900px) {{ .top {{ display:block; }} .metrics {{ grid-template-columns:repeat(2,1fr); }} table {{ font-size:12px; }} }}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="top">
+    <div><h1>Crypto Daily RRG Overview</h1><div class="muted">Full StockCharts crypto RRG return set vs $ONE. Use this page to compare against StockCharts before pattern review.</div></div>
+    <div class="muted">Generated {escape(str(payload.get("generated_at", "")))}</div>
+  </div>
+  <section class="metrics">
+    <div class="metric"><strong>{len(rows)}</strong><span>Symbols</span></div>
+    <div class="metric"><strong>{quadrant_counts.get("LEADING", 0)}</strong><span>Leading</span></div>
+    <div class="metric"><strong>{quadrant_counts.get("IMPROVING", 0)}</strong><span>Improving</span></div>
+    <div class="metric"><strong>{quadrant_counts.get("WEAKENING", 0)}</strong><span>Weakening</span></div>
+    <div class="metric"><strong>{quadrant_counts.get("LAGGING", 0)}</strong><span>Lagging</span></div>
+  </section>
+  <a class="chart" href="{escape(overview_chart)}"><strong>Daily RRG Chart - all returned crypto symbols</strong><img src="{escape(overview_preview)}" alt="Crypto daily RRG overview"></a>
+  <table>
+    <thead><tr><th>Symbol</th><th>Quadrant</th><th>dx</th><th>dy</th><th>Score</th><th>Latest row</th></tr></thead>
+    <tbody>{table_rows}</tbody>
+  </table>
+</main>
+</body>
+</html>"""
+    output_path.write_text(html)
+    return output_path
+
+
+def _crypto_rrg_overview_row(row: dict) -> str:
+    intent = row.get("rrg", {}).get("stock_intent", {})
+    quadrant = str(intent.get("quadrant", ""))
+    latest = _latest_rrg_row_date(row.get("rrg", {}))
+    return (
+        "<tr>"
+        f"<td><strong>{escape(str(row.get('symbol', '')))}</strong></td>"
+        f"<td><span class=\"pill {escape(quadrant)}\">{escape(quadrant)}</span></td>"
+        f"<td>{_fmt(intent.get('dx1'))}</td>"
+        f"<td>{_fmt(intent.get('dy1'))}</td>"
+        f"<td>{_fmt(intent.get('score'))}</td>"
+        f"<td>{escape(latest)}</td>"
+        "</tr>"
+    )
+
+
+def _latest_rrg_row_date(rrg: dict) -> str:
+    for point in reversed(rrg.get("rrg_series") or []):
+        value = point.get("end") or point.get("date") or point.get("start")
+        if value:
+            return str(value)
+    latest = rrg.get("latest") or {}
+    return str(latest.get("end") or latest.get("date") or latest.get("start") or "")
+
+
 def _candidate_card(item: dict, base_dir: Path) -> str:
     evidence = item.get("evidence", {})
     rrg = item.get("rrg", {})
@@ -1659,6 +1928,7 @@ def _rrg_json(item: RRGSelection, rrg_path: Path | None = None) -> dict:
         "confidence": rrg_confidence(item.intent),
         "sector_latest": item.sector_latest,
         "sector_intent": item.sector_intent,
+        "rrg_series": item.rrg_series,
     }
     if rrg_path is not None:
         data["rrg_chart_path"] = str(rrg_path)
