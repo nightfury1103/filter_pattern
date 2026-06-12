@@ -5,6 +5,7 @@ import math
 import os
 import re
 import time
+from collections.abc import Callable
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -72,6 +73,14 @@ QUADRANT_BACKGROUNDS = {
     "LAGGING": "#fee2e2",
 }
 RRG_REFERENCE_MARKETS = {"US stock", "Vietnam stock", "Crypto", "Forex", "Commodity", "Commodity ETF"}
+RRG_MARKET_REPRESENTATIVES = {
+    "US stock": ["SPY"],
+    "Vietnam stock": ["VNINDEX"],
+    "Crypto": ["BTCUSDT"],
+    "Forex": ["DXY"],
+    "Commodity": ["XAUUSD"],
+    "Commodity ETF": ["DBC"],
+}
 COMMODITY_STOCKCHARTS_SYMBOLS = {
     "XAUUSD": "$GOLD",
     "GOLD": "$GOLD",
@@ -224,6 +233,14 @@ def attach_rrg_references(payload: dict, output_dir: str | Path, timeframe: str 
         "Commodity": lambda symbols: _commodity_rrg_references(symbols, "Commodity"),
         "Commodity ETF": lambda symbols: _commodity_rrg_references(symbols, "Commodity ETF"),
     }
+    representative_fetchers = {
+        "US stock": _usstock_rrg_references,
+        "Crypto": lambda symbols: _crypto_rrg_references(symbols, "D1"),
+        "Vietnam stock": _vnstock_rrg_references,
+        "Forex": _forex_rrg_references,
+        "Commodity": lambda symbols: _commodity_rrg_references(symbols, "Commodity"),
+        "Commodity ETF": lambda symbols: _commodity_rrg_references(symbols, "Commodity ETF"),
+    }
     for market, symbols in sorted(symbols_by_market.items()):
         if not symbols:
             continue
@@ -231,6 +248,8 @@ def attach_rrg_references(payload: dict, output_dir: str | Path, timeframe: str 
             selections.update(fetchers[market](sorted(symbols)))
         except Exception as exc:  # RRG is reference-only; never fail the old pattern scan.
             errors.append(f"{market}: {exc}")
+
+    market_representatives = _market_representative_rrg_rows(symbols_by_market, representative_fetchers, errors)
 
     chart_cache: dict[str, Path] = {}
     attached = 0
@@ -256,10 +275,50 @@ def attach_rrg_references(payload: dict, output_dir: str | Path, timeframe: str 
         "status": "attached" if attached else "no_data",
         "attached_count": attached,
         "symbol_count": sum(len(symbols) for symbols in symbols_by_market.values()),
+        "market_representatives": market_representatives,
         "errors": errors[:8],
         "note": "RRG is attached as a non-blocking reference. It does not decide whether a pattern stays on the watchlist.",
     }
     return payload
+
+
+def _market_representative_rrg_rows(
+    symbols_by_market: dict[str, set[str]],
+    fetchers: dict[str, Callable[[list[str]], dict[str, RRGSelection]]],
+    errors: list[str],
+) -> list[dict]:
+    rows: list[dict] = []
+    for market in sorted(symbols_by_market):
+        symbols = RRG_MARKET_REPRESENTATIVES.get(market) or []
+        if not symbols:
+            continue
+        try:
+            selections = fetchers[market](symbols)
+        except Exception as exc:  # Keep representative context non-blocking.
+            errors.append(f"{market} representative: {exc}")
+            continue
+        for symbol in symbols:
+            selected = selections.get(symbol)
+            if selected is None:
+                continue
+            rows.append(
+                {
+                    "symbol": _market_representative_display_symbol(market, symbol),
+                    "market": market,
+                    "timeframe": "D1",
+                    "setup": "market",
+                    "evidence": {"status": "RRG_MARKET_REPRESENTATIVE", "score": 0},
+                    "rrg": _rrg_json(selected),
+                }
+            )
+            break
+    return rows
+
+
+def _market_representative_display_symbol(market: str, symbol: str) -> str:
+    if market == "Crypto" and symbol.endswith("USDT"):
+        return symbol.removesuffix("USDT")
+    return symbol
 
 
 def build_usstock_rrg_demo(

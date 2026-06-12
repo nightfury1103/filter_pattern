@@ -246,7 +246,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     )
     setup_panel = _setup_distribution_panel(candidates)
     market_panel = _market_distribution_panel(scanned_by_market, data_errors_by_market)
-    rrg_overview = _rrg_market_overview_section(candidates + trigger_warnings + review_setups + near_matches)
+    rrg_rows = candidates + trigger_warnings + review_setups + near_matches
+    rrg_overview = _rrg_market_overview_section(payload, rrg_rows)
     new_count = int(change_counts.get("NEW", 0))
     dropped_count = len(dropped)
     changed_count = sum(int(change_counts.get(key, 0)) for key in ("NEW", "TRIGGERED", "IMPROVED", "WEAKER", "STATUS_CHANGED"))
@@ -487,6 +488,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       padding: 10px;
       margin-bottom: 12px;
     }}
+    .rrg-chart-shell[hidden] {{ display: none; }}
     .rrg-chart-title {{
       display: flex;
       justify-content: space-between;
@@ -510,10 +512,12 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .rrg-axis {{ stroke: #e5e7eb; stroke-width: 1.4; opacity: .86; }}
     .rrg-gridline {{ stroke: #334155; stroke-width: .8; opacity: .55; }}
     .rrg-tail {{ fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .92; }}
+    .rrg-arrow-segment {{ opacity: 1; }}
     .rrg-dot {{ stroke: #f8fafc; stroke-width: 1.8; }}
     .rrg-label {{ fill: #f8fafc; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: #0b1220; stroke-width: 3px; stroke-linejoin: round; }}
     .rrg-small-label {{ fill: #cbd5e1; font-size: 11px; font-weight: 700; }}
     .rrg-legend {{ fill: #cbd5e1; font-size: 11px; font-weight: 700; }}
+    .rrg-arrow-head {{ fill: currentColor; }}
     .quadrant-grid {{
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1038,10 +1042,38 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       }}
     }}
 
+    function updateRrgOverview(market) {{
+      const shells = Array.from(document.querySelectorAll('[data-rrg-market]'));
+      if (!shells.length) {{
+        return;
+      }}
+      const activeMarket = market === 'all' ? 'all' : market;
+      let activeShell = null;
+      for (const shell of shells) {{
+        if (shell.dataset.rrgMarket === activeMarket) {{
+          activeShell = shell;
+          break;
+        }}
+      }}
+      if (!activeShell) {{
+        activeShell = shells.find((shell) => shell.dataset.rrgMarket === 'all') || shells[0];
+      }}
+      for (const shell of shells) {{
+        shell.hidden = shell !== activeShell;
+      }}
+      const mode = document.getElementById('rrgChartMode');
+      if (mode) {{
+        mode.textContent = activeShell.dataset.rrgMarket === 'all'
+          ? 'All markets: representative RRG trails'
+          : `${{activeShell.dataset.rrgMarket}}: daily market RRG`;
+      }}
+    }}
+
     function applyFilters() {{
       const text = search.value.trim().toLowerCase();
       const timeframe = timeframeFilter.value;
       const market = marketFilter.value;
+      updateRrgOverview(market);
       const broker = brokerFilter.value;
       const status = statusFilter.value;
       const technique = techniqueFilter.value;
@@ -2192,7 +2224,7 @@ def _not_configured_rows(rejected: list[dict]) -> list[dict]:
     return [item for item in rejected if item.get("evidence", {}).get("status") == "not_configured"]
 
 
-def _rrg_market_overview_section(rows: list[dict]) -> str:
+def _rrg_market_overview_section(payload: dict, rows: list[dict]) -> str:
     items = _rrg_overview_items(rows)
     if not items:
         return ""
@@ -2211,7 +2243,19 @@ def _rrg_market_overview_section(rows: list[dict]) -> str:
     supportive = len(by_quadrant["LEADING"]) + len(by_quadrant["IMPROVING"])
     risk = len(by_quadrant["WEAKENING"]) + len(by_quadrant["LAGGING"])
     ratio = f"{supportive}:{risk}" if risk else f"{supportive}:0"
-    chart = _rrg_overview_chart_svg(items)
+    representative_items = _rrg_market_representative_items(payload, items)
+    charts = [_rrg_overview_chart_svg(representative_items, "all", "Market Representative RRG", "Representative trail per market")]
+    for market, market_items in sorted(_rrg_items_by_market(items).items()):
+        charts.append(
+            _rrg_overview_chart_svg(
+                market_items,
+                market,
+                f"Daily RRG Chart - {market}",
+                "Detailed daily RRG for the selected market",
+                hidden=True,
+            )
+        )
+    chart = "\n".join(charts)
     quadrant_cards = "\n".join(_rrg_quadrant_card(quadrant, by_quadrant[quadrant]) for quadrant in quadrants)
     market_cards = "\n".join(_rrg_market_card(market, counts) for market, counts in sorted(by_market.items()))
     return f"""
@@ -2219,7 +2263,7 @@ def _rrg_market_overview_section(rows: list[dict]) -> str:
         <div class="overview-head">
           <div>
             <h2>Market RRG Overview</h2>
-            <p>Reference map for symbols with RRG data. Pattern quality still comes from the price chart.</p>
+            <p>All markets use representative RRG trails. Selecting one market switches this chart to that market's daily RRG.</p>
           </div>
           <div class="overview-score">
             <div><strong>{len(items)}</strong><span>RRG symbols</span></div>
@@ -2227,6 +2271,7 @@ def _rrg_market_overview_section(rows: list[dict]) -> str:
             <div><strong>{escape(ratio)}</strong><span>Support / risk</span></div>
           </div>
         </div>
+        <div id="rrgChartMode" class="filter-count">All markets: representative RRG trails</div>
         {chart}
         <div class="quadrant-grid">{quadrant_cards}</div>
         <div class="market-rrg-grid">{market_cards}</div>
@@ -2266,6 +2311,26 @@ def _rrg_overview_items(rows: list[dict]) -> list[dict]:
     return list(by_symbol.values())
 
 
+def _rrg_market_representative_items(payload: dict, fallback_items: list[dict]) -> list[dict]:
+    representatives = (payload.get("rrg_reference") or {}).get("market_representatives") or []
+    items = _rrg_overview_items(representatives)
+    if items:
+        return sorted(items, key=lambda item: str(item.get("market") or ""))
+    by_market = _rrg_items_by_market(fallback_items)
+    return [
+        sorted(market_items, key=_rrg_overview_rank, reverse=True)[0]
+        for _market, market_items in sorted(by_market.items())
+        if market_items
+    ]
+
+
+def _rrg_items_by_market(items: list[dict]) -> dict[str, list[dict]]:
+    by_market: dict[str, list[dict]] = defaultdict(list)
+    for item in items:
+        by_market[str(item.get("market") or "Unknown")].append(item)
+    return by_market
+
+
 def _rrg_overview_rank(item: dict) -> tuple[float, float, float]:
     quadrant_bonus = {
         "LEADING": 4.0,
@@ -2302,7 +2367,7 @@ def _rrg_overview_series(rrg: dict, intent: dict) -> list[tuple[float, float]]:
     return [(x, y)]
 
 
-def _rrg_overview_chart_svg(items: list[dict]) -> str:
+def _rrg_overview_chart_svg(items: list[dict], market: str = "all", title: str = "Daily RRG Chart", subtitle: str = "Tail: older -> current", hidden: bool = False) -> str:
     points = [point for item in items for point in item.get("series", [])]
     if not points:
         return ""
@@ -2342,28 +2407,45 @@ def _rrg_overview_chart_svg(items: list[dict]) -> str:
     latest_text = f" · Latest RRG row: {latest_dates[-1]}" if latest_dates else ""
     sorted_items = sorted(items, key=_rrg_overview_rank, reverse=True)
     label_symbols = {str(item.get("symbol")) for item in sorted_items[:24]}
+    marker_prefix = _rrg_marker_prefix(market)
+    marker_defs = []
     paths = []
-    for item in sorted_items:
+    for index, item in enumerate(sorted_items):
         series = item.get("series") or [(item.get("x", 100.0), item.get("y", 100.0))]
         if not series:
             continue
         color = _rrg_quadrant_color(str(item.get("quadrant")))
         coords = [(sx(float(x)), sy(float(y))) for x, y in series]
+        marker_id = f"{marker_prefix}-arrow-{index}"
+        marker_defs.append(
+            f'<marker id="{escape(marker_id)}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4.8" markerHeight="4.8" orient="auto-start-reverse">'
+            f'<path class="rrg-arrow-head" d="M 0 0 L 10 5 L 0 10 z" style="color:{color}"></path>'
+            '</marker>'
+        )
         if len(coords) >= 2:
             path = " ".join(f"{'M' if index == 0 else 'L'} {x:.1f} {y:.1f}" for index, (x, y) in enumerate(coords))
             paths.append(f'<path class="rrg-tail" d="{path}" stroke="{color}"><title>{escape(str(item.get("symbol")))} daily RRG tail</title></path>')
         x, y = coords[-1]
         symbol = str(item.get("symbol"))
         paths.append(f'<circle class="rrg-dot" cx="{x:.1f}" cy="{y:.1f}" r="5.2" fill="{color}"><title>{escape(symbol)} current</title></circle>')
+        if len(coords) >= 2:
+            start_x, start_y = coords[-2]
+            arrow_path = f"M {start_x:.1f} {start_y:.1f} L {x:.1f} {y:.1f}"
+            paths.append(
+                f'<path class="rrg-tail rrg-arrow-segment" d="{arrow_path}" stroke="{color}" marker-end="url(#{escape(marker_id)})">'
+                f'<title>{escape(symbol)} direction: older to current</title></path>'
+            )
         if symbol in label_symbols:
             label_x = min(width - right - 4, x + 8)
             label_y = max(top + 12, y - 8)
             paths.append(f'<text class="rrg-label" x="{label_x:.1f}" y="{label_y:.1f}">{escape(symbol)}</text>')
 
+    hidden_attr = " hidden" if hidden else ""
     return f"""
-        <div class="rrg-chart-shell">
-          <div class="rrg-chart-title"><strong>Daily RRG Chart</strong><span>Tail: older -> current · center line = 100{escape(latest_text)}</span></div>
+        <div class="rrg-chart-shell" data-rrg-market="{escape(market)}"{hidden_attr}>
+          <div class="rrg-chart-title"><strong>{escape(title)}</strong><span>{escape(subtitle)} · center line = 100{escape(latest_text)}</span></div>
           <svg class="rrg-svg" viewBox="0 0 {width} {height}" role="img" aria-label="Daily RRG overview chart">
+            <defs>{''.join(marker_defs)}</defs>
             <rect x="{left}" y="{top}" width="{max(0, x100 - left):.1f}" height="{max(0, y100 - top):.1f}" fill="#123251" opacity=".54"/>
             <rect x="{x100:.1f}" y="{top}" width="{max(0, width - right - x100):.1f}" height="{max(0, y100 - top):.1f}" fill="#12391f" opacity=".58"/>
             <rect x="{left}" y="{y100:.1f}" width="{max(0, x100 - left):.1f}" height="{max(0, height - bottom - y100):.1f}" fill="#3b1518" opacity=".58"/>
@@ -2381,6 +2463,11 @@ def _rrg_overview_chart_svg(items: list[dict]) -> str:
           </svg>
         </div>
 """
+
+
+def _rrg_marker_prefix(market: str) -> str:
+    safe = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(market))
+    return f"rrg-{safe.strip('-') or 'all'}"
 
 
 def _rrg_axis_bounds(values: list[float]) -> tuple[float, float]:

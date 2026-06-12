@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RRG Market Filter Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #0f1218;
+      --chrome: #151922;
+      --panel: #101723;
+      --panel-2: #0f141e;
+      --line: #2a3242;
+      --line-strong: #3d4658;
+      --text: #e7ecf3;
+      --muted: #98a4b7;
+      --blue: #38bdf8;
+      --green: #22c55e;
+      --orange: #f97316;
+      --red: #ef4444;
+      --yellow: #facc15;
+      --violet: #a78bfa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      padding: 14px 18px;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      line-height: 1.12;
+    }
+    .subhead {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: end;
+      gap: 10px;
+      align-items: center;
+    }
+    label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    select, button {
+      height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: #0f141e;
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 750;
+    }
+    main {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(132px, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      min-height: 74px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+    }
+    .stat strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+    h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #0f141e;
+      color: #cbd5e1;
+      padding: 6px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .rrg-shell {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0b1220;
+    }
+    .chart-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      background: #0f141e;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .chart-title span {
+      color: var(--muted);
+      font-weight: 700;
+    }
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .axis { stroke: #e5e7eb; stroke-width: 1.4; opacity: .86; }
+    .grid { stroke: #334155; stroke-width: .8; opacity: .55; }
+    .tail { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .tail-arrow { fill: currentColor; }
+    .dot { stroke: #f8fafc; stroke-width: 1.8; }
+    .label {
+      fill: #f8fafc;
+      font-size: 12px;
+      font-weight: 800;
+      paint-order: stroke;
+      stroke: #0b1220;
+      stroke-width: 3px;
+      stroke-linejoin: round;
+    }
+    .small {
+      fill: #cbd5e1;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .below {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 8px;
+    }
+    .market-card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 10px;
+      font-size: 12px;
+    }
+    .market-card strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #f8fafc;
+    }
+    .market-card span {
+      color: var(--muted);
+    }
+    .market-card b {
+      display: block;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #e5e7eb;
+    }
+    .detail-box {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 12px;
+    }
+    .detail-box h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+    .detail-box div {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      border-top: 1px solid rgba(148, 163, 184, .16);
+      padding: 8px 0;
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+    .detail-box div:first-of-type { border-top: 0; }
+    .detail-box span { color: var(--muted); }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .workflow {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 12px;
+    }
+    .workflow strong {
+      display: block;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    .workflow span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      header, .below, .cards {
+        grid-template-columns: 1fr;
+      }
+      .toolbar {
+        justify-content: start;
+      }
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Market RRG Overview Demo</h1>
+      <div class="subhead">All markets show representative trails only. Selecting a market reveals that market's detailed daily RRG.</div>
+    </div>
+    <div class="toolbar">
+      <label for="marketSelect">Market</label>
+      <select id="marketSelect">
+        <option value="all">All markets</option>
+        <option value="US stock">US stock</option>
+        <option value="Vietnam stock">Vietnam stock</option>
+        <option value="Crypto">Crypto</option>
+        <option value="Commodity">Commodity</option>
+        <option value="Commodity ETF">Commodity ETF</option>
+        <option value="Forex">Forex</option>
+      </select>
+      <button id="resetButton" type="button">Reset</button>
+    </div>
+  </header>
+  <main>
+    <section class="stats">
+      <div class="stat"><strong id="statLines">6</strong><span id="statLinesLabel">Representative market trails</span></div>
+      <div class="stat"><strong>D1</strong><span>Specific market RRG timeframe</span></div>
+      <div class="stat"><strong id="statMode">Overview</strong><span>Current chart mode</span></div>
+      <div class="stat"><strong id="statBias">3 : 3</strong><span>Supportive / risk markets</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 id="chartHeading">Overall RRG: one representative trail per market</h2>
+          <p id="chartNote">This keeps the multi-market chart readable. SPY stands for US stock, VNINDEX for Vietnam stock, BTC for crypto, and so on.</p>
+        </div>
+        <div class="pill" id="chartPill">All markets</div>
+      </div>
+      <div class="rrg-shell">
+        <div class="chart-title">
+          <strong id="chartTitle">RRG Market Direction</strong>
+          <span>Tail: older to current · center line = 100</span>
+        </div>
+        <svg id="rrgSvg" viewBox="0 0 1000 560" role="img" aria-label="RRG chart demo"></svg>
+      </div>
+      <div class="below">
+        <div class="list" id="marketList"></div>
+        <div class="detail-box">
+          <h3 id="detailTitle">Interaction behavior</h3>
+          <div><span>All markets</span><b>show representatives only</b></div>
+          <div><span>Market filter</span><b>switches to daily detail</b></div>
+          <div><span>Candidate cards</span><b>still filter normally below</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>How this would fit the report</h2>
+          <p>The chart changes with the existing market filter, without changing pattern scoring.</p>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="workflow">
+          <strong>Default: All markets</strong>
+          <span>Top overview has one readable trail per market representative, so direction is clear.</span>
+        </div>
+        <div class="workflow">
+          <strong>Filtered: One market</strong>
+          <span>The same section swaps to a D1 RRG with symbols inside that market only.</span>
+        </div>
+        <div class="workflow">
+          <strong>Scanning stays unchanged</strong>
+          <span>RRG remains reference context. It does not remove or approve pattern candidates.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const representatives = [
+      { market: "US stock", symbol: "SPY", color: "#22c55e", series: [[99.0, 98.6], [99.5, 99.2], [100.1, 99.9], [100.7, 100.6], [101.4, 101.2]] },
+      { market: "Vietnam stock", symbol: "VNINDEX", color: "#38bdf8", series: [[97.8, 98.8], [98.6, 99.4], [99.3, 100.1], [100.0, 100.8], [100.5, 101.4]] },
+      { market: "Crypto", symbol: "BTC", color: "#facc15", series: [[101.7, 102.1], [102.1, 101.4], [102.3, 100.8], [102.0, 100.2], [101.3, 99.8]] },
+      { market: "Commodity", symbol: "DBC", color: "#f97316", series: [[101.1, 100.4], [100.7, 99.8], [100.2, 99.2], [99.6, 98.6], [99.0, 98.2]] },
+      { market: "Commodity ETF", symbol: "GLD", color: "#a78bfa", series: [[98.2, 97.7], [98.7, 98.0], [99.1, 98.4], [99.7, 98.8], [100.2, 99.1]] },
+      { market: "Forex", symbol: "DXY", color: "#ef4444", series: [[100.8, 101.2], [100.4, 100.5], [99.9, 99.9], [99.3, 99.1], [98.8, 98.4]] }
+    ];
+
+    const details = {
+      "US stock": [
+        { symbol: "XLK", color: "#22c55e", series: [[99.7, 100.0], [100.2, 100.5], [100.8, 101.0], [101.5, 101.6], [102.1, 102.0]] },
+        { symbol: "XLF", color: "#38bdf8", series: [[98.7, 99.1], [99.0, 99.8], [99.4, 100.3], [99.9, 100.9], [100.4, 101.3]] },
+        { symbol: "XLV", color: "#facc15", series: [[101.2, 100.4], [101.4, 99.9], [101.2, 99.4], [100.8, 99.1], [100.2, 98.9]] },
+        { symbol: "XLY", color: "#ef4444", series: [[99.8, 98.9], [99.2, 98.4], [98.7, 98.0], [98.2, 97.8], [97.9, 97.6]] }
+      ],
+      "Vietnam stock": [
+        { symbol: "FPT", color: "#22c55e", series: [[99.1, 99.8], [99.8, 100.5], [100.6, 101.2], [101.2, 101.8], [101.8, 102.2]] },
+        { symbol: "VCB", color: "#38bdf8", series: [[98.5, 99.0], [99.0, 99.7], [99.7, 100.2], [100.1, 100.8], [100.6, 101.1]] },
+        { symbol: "HPG", color: "#f97316", series: [[101.0, 100.2], [100.6, 99.8], [100.1, 99.3], [99.6, 98.9], [99.2, 98.6]] },
+        { symbol: "MWG", color: "#ef4444", series: [[99.4, 98.8], [98.9, 98.3], [98.5, 98.0], [98.2, 97.8], [97.9, 97.5]] }
+      ],
+      "Crypto": [
+        { symbol: "BTC", color: "#facc15", series: [[101.7, 102.1], [102.1, 101.4], [102.3, 100.8], [102.0, 100.2], [101.3, 99.8]] },
+        { symbol: "ETH", color: "#22c55e", series: [[99.2, 99.7], [99.7, 100.4], [100.3, 101.0], [101.0, 101.5], [101.7, 102.0]] },
+        { symbol: "SOL", color: "#38bdf8", series: [[97.8, 98.9], [98.5, 99.6], [99.3, 100.3], [100.0, 100.9], [100.6, 101.4]] },
+        { symbol: "BNB", color: "#ef4444", series: [[100.6, 99.4], [100.1, 98.9], [99.5, 98.4], [99.0, 98.1], [98.6, 97.9]] }
+      ],
+      "Commodity": [
+        { symbol: "XAUUSD", color: "#a78bfa", series: [[98.9, 99.0], [99.3, 99.4], [99.7, 99.9], [100.0, 100.3], [100.4, 100.7]] },
+        { symbol: "USOIL", color: "#f97316", series: [[101.3, 100.5], [100.8, 99.8], [100.2, 99.1], [99.7, 98.6], [99.1, 98.1]] },
+        { symbol: "XAGUSD", color: "#38bdf8", series: [[97.9, 98.8], [98.5, 99.2], [99.0, 99.8], [99.6, 100.4], [100.0, 100.9]] },
+        { symbol: "NATGAS", color: "#ef4444", series: [[99.2, 98.6], [98.8, 98.2], [98.3, 97.9], [97.9, 97.7], [97.6, 97.4]] }
+      ],
+      "Commodity ETF": [
+        { symbol: "GLD", color: "#a78bfa", series: [[98.2, 97.7], [98.7, 98.0], [99.1, 98.4], [99.7, 98.8], [100.2, 99.1]] },
+        { symbol: "SLV", color: "#38bdf8", series: [[98.0, 99.0], [98.6, 99.7], [99.4, 100.3], [100.0, 100.8], [100.5, 101.2]] },
+        { symbol: "USO", color: "#f97316", series: [[101.0, 100.0], [100.5, 99.4], [100.0, 98.8], [99.5, 98.3], [99.0, 97.9]] },
+        { symbol: "DBA", color: "#22c55e", series: [[99.5, 100.2], [100.0, 100.6], [100.5, 101.0], [100.9, 101.4], [101.3, 101.8]] }
+      ],
+      "Forex": [
+        { symbol: "EURUSD", color: "#22c55e", series: [[98.6, 99.5], [99.1, 100.0], [99.7, 100.5], [100.2, 101.0], [100.8, 101.5]] },
+        { symbol: "GBPUSD", color: "#38bdf8", series: [[98.0, 98.8], [98.5, 99.4], [99.2, 100.0], [99.8, 100.5], [100.3, 100.9]] },
+        { symbol: "USDJPY", color: "#ef4444", series: [[100.8, 101.2], [100.4, 100.5], [99.9, 99.9], [99.3, 99.1], [98.8, 98.4]] },
+        { symbol: "AUDUSD", color: "#facc15", series: [[101.2, 100.4], [101.1, 99.9], [100.8, 99.5], [100.4, 99.1], [100.0, 98.8]] }
+      ]
+    };
+
+    const svg = document.getElementById("rrgSvg");
+    const marketSelect = document.getElementById("marketSelect");
+    const resetButton = document.getElementById("resetButton");
+    const marketList = document.getElementById("marketList");
+    const chartHeading = document.getElementById("chartHeading");
+    const chartNote = document.getElementById("chartNote");
+    const chartPill = document.getElementById("chartPill");
+    const chartTitle = document.getElementById("chartTitle");
+    const statLines = document.getElementById("statLines");
+    const statLinesLabel = document.getElementById("statLinesLabel");
+    const statMode = document.getElementById("statMode");
+    const statBias = document.getElementById("statBias");
+
+    function quadrant(point) {
+      const [x, y] = point;
+      if (x >= 100 && y >= 100) return "Leading";
+      if (x < 100 && y >= 100) return "Improving";
+      if (x >= 100 && y < 100) return "Weakening";
+      return "Lagging";
+    }
+
+    function renderChart(items, selectedMarket) {
+      const width = 1000;
+      const height = 560;
+      const left = 72;
+      const right = 38;
+      const top = 44;
+      const bottom = 58;
+      const allPoints = items.flatMap(item => item.series).concat([[100, 100]]);
+      const xs = allPoints.map(point => point[0]);
+      const ys = allPoints.map(point => point[1]);
+      const xMin = Math.min(96, Math.min(...xs) - 0.8);
+      const xMax = Math.max(104, Math.max(...xs) + 0.8);
+      const yMin = Math.min(96, Math.min(...ys) - 0.8);
+      const yMax = Math.max(104, Math.max(...ys) + 0.8);
+      const plotW = width - left - right;
+      const plotH = height - top - bottom;
+      const sx = value => left + (value - xMin) / (xMax - xMin) * plotW;
+      const sy = value => top + (yMax - value) / (yMax - yMin) * plotH;
+      const x100 = sx(100);
+      const y100 = sy(100);
+
+      const ticks = [];
+      for (let value = Math.ceil(xMin); value <= Math.floor(xMax); value += 1) {
+        if (value % 2 === 0) {
+          ticks.push(`<line class="grid" x1="${sx(value).toFixed(1)}" y1="${top}" x2="${sx(value).toFixed(1)}" y2="${height - bottom}"/>`);
+          ticks.push(`<text class="small" x="${sx(value).toFixed(1)}" y="${height - 24}" text-anchor="middle">${value}</text>`);
+        }
+      }
+      for (let value = Math.ceil(yMin); value <= Math.floor(yMax); value += 1) {
+        if (value % 2 === 0) {
+          ticks.push(`<line class="grid" x1="${left}" y1="${sy(value).toFixed(1)}" x2="${width - right}" y2="${sy(value).toFixed(1)}"/>`);
+          ticks.push(`<text class="small" x="18" y="${(sy(value) + 4).toFixed(1)}">${value}</text>`);
+        }
+      }
+
+      const defs = items.map((item, index) => `
+        <marker id="arrow-${index}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4.8" markerHeight="4.8" orient="auto-start-reverse">
+          <path class="tail-arrow" d="M 0 0 L 10 5 L 0 10 z" style="color:${item.color}"></path>
+        </marker>
+      `).join("");
+
+      const trails = items.map((item, index) => {
+        const coords = item.series.map(point => [sx(point[0]), sy(point[1])]);
+        const path = coords.map((point, index) => `${index === 0 ? "M" : "L"} ${point[0].toFixed(1)} ${point[1].toFixed(1)}`).join(" ");
+        const [x, y] = coords[coords.length - 1];
+        const [arrowStartX, arrowStartY] = coords.length > 1 ? coords[coords.length - 2] : coords[coords.length - 1];
+        const arrowPath = `M ${arrowStartX.toFixed(1)} ${arrowStartY.toFixed(1)} L ${x.toFixed(1)} ${y.toFixed(1)}`;
+        const title = selectedMarket === "all" ? `${item.market}: ${item.symbol}` : item.symbol;
+        return `
+          <path class="tail" d="${path}" stroke="${item.color}"><title>${title} tail: older to current</title></path>
+          <circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.6" fill="${item.color}"><title>${title} current</title></circle>
+          <path class="tail" d="${arrowPath}" stroke="${item.color}" marker-end="url(#arrow-${index})"><title>${title} direction: older to current</title></path>
+          <text class="label" x="${Math.min(width - right - 4, x + 9).toFixed(1)}" y="${Math.max(top + 12, y - 8).toFixed(1)}">${item.symbol}</text>
+        `;
+      }).join("");
+
+      svg.innerHTML = `
+        <defs>${defs}</defs>
+        <rect x="${left}" y="${top}" width="${Math.max(0, x100 - left).toFixed(1)}" height="${Math.max(0, y100 - top).toFixed(1)}" fill="#123251" opacity=".54"/>
+        <rect x="${x100.toFixed(1)}" y="${top}" width="${Math.max(0, width - right - x100).toFixed(1)}" height="${Math.max(0, y100 - top).toFixed(1)}" fill="#12391f" opacity=".58"/>
+        <rect x="${left}" y="${y100.toFixed(1)}" width="${Math.max(0, x100 - left).toFixed(1)}" height="${Math.max(0, height - bottom - y100).toFixed(1)}" fill="#3b1518" opacity=".58"/>
+        <rect x="${x100.toFixed(1)}" y="${y100.toFixed(1)}" width="${Math.max(0, width - right - x100).toFixed(1)}" height="${Math.max(0, height - bottom - y100).toFixed(1)}" fill="#3a240d" opacity=".58"/>
+        ${ticks.join("")}
+        <line class="axis" x1="${left}" y1="${y100.toFixed(1)}" x2="${width - right}" y2="${y100.toFixed(1)}"/>
+        <line class="axis" x1="${x100.toFixed(1)}" y1="${top}" x2="${x100.toFixed(1)}" y2="${height - bottom}"/>
+        <text class="label" x="${left + 14}" y="${top + 24}">IMPROVING</text>
+        <text class="label" x="${width - right - 14}" y="${top + 24}" text-anchor="end">LEADING</text>
+        <text class="label" x="${left + 14}" y="${height - bottom - 14}">LAGGING</text>
+        <text class="label" x="${width - right - 14}" y="${height - bottom - 14}" text-anchor="end">WEAKENING</text>
+        ${trails}
+        <text class="small" x="${left}" y="${height - 8}">JdK RS-Ratio</text>
+        <text class="small" x="${width - 12}" y="${top}" transform="rotate(90 ${width - 12} ${top})">JdK RS-Momentum</text>
+      `;
+    }
+
+    function renderCards(items, selectedMarket) {
+      marketList.innerHTML = items.map(item => {
+        const latest = item.series[item.series.length - 1];
+        const q = quadrant(latest);
+        const title = selectedMarket === "all" ? item.market : item.symbol;
+        const label = selectedMarket === "all" ? `${item.symbol} representative` : `${selectedMarket} component`;
+        return `
+          <div class="market-card">
+            <strong>${title}</strong>
+            <span>${label}</span>
+            <b style="color:${item.color}">${q} · ${latest[0].toFixed(1)} / ${latest[1].toFixed(1)}</b>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function render() {
+      const selected = marketSelect.value;
+      const isAll = selected === "all";
+      const items = isAll ? representatives : details[selected];
+      renderChart(items, selected);
+      renderCards(items, selected);
+      chartHeading.textContent = isAll ? "Overall RRG: one representative trail per market" : `${selected} RRG: daily detail inside the selected market`;
+      chartNote.textContent = isAll
+        ? "This keeps the multi-market chart readable. SPY stands for US stock, VNINDEX for Vietnam stock, BTC for crypto, and so on."
+        : "When a market filter is active, the overview section becomes a daily RRG for symbols inside that market.";
+      chartPill.textContent = isAll ? "All markets" : `${selected} · D1`;
+      chartTitle.textContent = isAll ? "RRG Market Direction" : `${selected} Daily RRG`;
+      statLines.textContent = String(items.length);
+      statLinesLabel.textContent = isAll ? "Representative market trails" : "Detailed symbol trails";
+      statMode.textContent = isAll ? "Overview" : "Market";
+      const supportive = items.filter(item => {
+        const q = quadrant(item.series[item.series.length - 1]);
+        return q === "Leading" || q === "Improving";
+      }).length;
+      statBias.textContent = `${supportive} : ${items.length - supportive}`;
+    }
+
+    marketSelect.addEventListener("change", render);
+    resetButton.addEventListener("click", () => {
+      marketSelect.value = "all";
+      render();
+    });
+    render();
+  </script>
+</body>
+</html>

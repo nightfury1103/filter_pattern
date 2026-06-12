@@ -176,6 +176,55 @@ def test_rrg_reference_attaches_to_review_setup_rows(tmp_path, monkeypatch) -> N
     assert payload["review_setups"][0]["rrg"]["rrg_chart_path"].endswith("xznusd-rrg-proof.jpg")
 
 
+def test_rrg_reference_adds_daily_market_representatives(tmp_path, monkeypatch) -> None:
+    candidate = {
+        "symbol": "AAPL",
+        "market": "US stock",
+        "timeframe": "H4",
+        "setup": "rb",
+        "evidence": {"score": 91, "status": "WAITING"},
+    }
+    symbol_selection = RRGSelection(
+        symbol="AAPL",
+        sector="Information Technology",
+        benchmark="XLK",
+        latest={"x": 100.5, "y": 101.0},
+        intent={"quadrant": "LEADING", "dx1": 0.4, "dy1": 0.8},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[{"x": 99.8, "y": 100.1}, {"x": 100.5, "y": 101.0}],
+    )
+    spy_selection = RRGSelection(
+        symbol="SPY",
+        sector="US stock",
+        benchmark="SPY",
+        latest={"x": 101.4, "y": 101.2},
+        intent={"quadrant": "LEADING", "dx1": 1.2, "dy1": 1.1},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[{"x": 99.0, "y": 98.6}, {"x": 101.4, "y": 101.2}],
+    )
+
+    calls: list[list[str]] = []
+
+    def fake_usstock_rrg_references(symbols: list[str]) -> dict[str, RRGSelection]:
+        calls.append(symbols)
+        return {selection.symbol: selection for selection in (symbol_selection, spy_selection) if selection.symbol in symbols}
+
+    monkeypatch.setattr(rrg_dashboard, "_usstock_rrg_references", fake_usstock_rrg_references)
+    monkeypatch.setattr(rrg_dashboard, "_render_stock_rrg_proof", lambda _selected, _selections, out_dir: out_dir / "aapl-rrg-proof.jpg")
+
+    payload = rrg_dashboard.attach_rrg_references({"candidates": [candidate]}, tmp_path, "H4")
+
+    assert ["AAPL"] in calls
+    assert ["SPY"] in calls
+    representatives = payload["rrg_reference"]["market_representatives"]
+    assert representatives[0]["symbol"] == "SPY"
+    assert representatives[0]["market"] == "US stock"
+    assert representatives[0]["timeframe"] == "D1"
+    assert representatives[0]["rrg"]["stock_intent"]["quadrant"] == "LEADING"
+
+
 def test_vn_symbol_sector_map_uses_top_level_icb() -> None:
     icb_tree = [
         {

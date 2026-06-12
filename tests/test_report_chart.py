@@ -158,6 +158,92 @@ def test_report_renders_market_rrg_overview(tmp_path: Path) -> None:
     assert "Commodity" in html
 
 
+def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp_path: Path) -> None:
+    crypto = _candidate("BTCUSDT", "bb", 86, "WAITING")
+    crypto.update({"market": "Crypto", "timeframe": "D1"})
+    crypto["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "latest": {"x": 103.2, "y": 104.1},
+        "rrg_series": [
+            {"x": 101.6, "y": 102.5, "end": "2026-06-01"},
+            {"x": 102.4, "y": 103.1, "end": "2026-06-02"},
+            {"x": 103.2, "y": 104.1, "end": "2026-06-03"},
+        ],
+        "stock_intent": {"quadrant": "LEADING", "dx1": 0.8, "dy1": 1.0},
+        "confidence": {"label": "RRG Supportive Reference"},
+    }
+    commodity = _candidate("XAUUSD", "compression", 78, "WAITING")
+    commodity.update({"market": "Commodity", "timeframe": "D1"})
+    commodity["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Commodity",
+        "latest": {"x": 96.3, "y": 97.4},
+        "rrg_series": [
+            {"x": 97.1, "y": 98.2, "end": "2026-06-01"},
+            {"x": 96.8, "y": 97.8, "end": "2026-06-02"},
+            {"x": 96.3, "y": 97.4, "end": "2026-06-03"},
+        ],
+        "stock_intent": {"quadrant": "LAGGING", "dx1": -0.5, "dy1": -0.4},
+        "confidence": {"label": "RRG Warning Reference"},
+    }
+    payload = result_payload([crypto, commodity], [], {"timeframe": "D1"})
+    payload["rrg_reference"] = {
+        "market_representatives": [
+            {
+                "symbol": "SPY",
+                "market": "US stock",
+                "timeframe": "D1",
+                "rrg": {
+                    "benchmark": "SPY",
+                    "sector": "US stock",
+                    "latest": {"x": 101.4, "y": 101.2},
+                    "rrg_series": [
+                        {"x": 99.0, "y": 98.6, "end": "2026-06-01"},
+                        {"x": 100.2, "y": 100.1, "end": "2026-06-02"},
+                        {"x": 101.4, "y": 101.2, "end": "2026-06-03"},
+                    ],
+                    "stock_intent": {"quadrant": "LEADING", "dx1": 1.2, "dy1": 1.1},
+                },
+            },
+            {
+                "symbol": "BTC",
+                "market": "Crypto",
+                "timeframe": "D1",
+                "rrg": {
+                    "benchmark": "$ONE",
+                    "sector": "Crypto",
+                    "latest": {"x": 101.3, "y": 99.8},
+                    "rrg_series": [
+                        {"x": 101.7, "y": 102.1, "end": "2026-06-01"},
+                        {"x": 102.0, "y": 100.2, "end": "2026-06-02"},
+                        {"x": 101.3, "y": 99.8, "end": "2026-06-03"},
+                    ],
+                    "stock_intent": {"quadrant": "WEAKENING", "dx1": -0.7, "dy1": -0.4},
+                },
+            },
+        ]
+    }
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    all_chart_start = html.index('data-rrg-market="all"')
+    crypto_chart_start = html.index('data-rrg-market="Crypto"')
+    all_chart_html = html[all_chart_start:crypto_chart_start]
+    assert "SPY" in all_chart_html
+    assert "BTC" in all_chart_html
+    assert "BTCUSDT" not in all_chart_html
+    assert 'data-rrg-market="Crypto"' in html
+    assert 'id="rrgChartMode"' in html
+    assert "function updateRrgOverview" in html
+    assert "updateRrgOverview(market);" in html
+    assert "marker-end=" in html
+    assert html.index('<circle class="rrg-dot"') < html.index('class="rrg-tail rrg-arrow-segment"')
+
+
 def test_report_uses_full_width_chart_layout_without_right_side_panel(tmp_path: Path) -> None:
     cfg = make_config()
     candles = make_series([20, 12, 6], current_close=96, late_volume=80_000)
