@@ -5936,14 +5936,21 @@ def _score(
     prior_uptrend_pct: float | None,
     cfg: VCPConfig,
 ) -> float:
-    if not qualified:
-        return 0.0
     contraction_bonus = min(len(contractions), cfg.max_contractions) * 10
-    proximity_bonus = max(0.0, (cfg.near_pivot_pct - distance_to_pivot_pct) / cfg.near_pivot_pct) * 25
+    if qualified:
+        proximity_bonus = max(0.0, (cfg.near_pivot_pct - distance_to_pivot_pct) / cfg.near_pivot_pct) * 25
+    else:
+        proximity_bonus = (
+            max(0.0, (cfg.near_pivot_pct - distance_to_pivot_pct) / cfg.near_pivot_pct) * 25
+            if 0 <= distance_to_pivot_pct <= cfg.near_pivot_pct
+            else 0.0
+        )
     volume_bonus = 20 if volume_ratio is not None else 0
     if volume_ratio is not None:
         volume_bonus = max(0.0, (cfg.volume_dry_up_ratio - volume_ratio) / cfg.volume_dry_up_ratio) * 20
     uptrend_bonus = min((prior_uptrend_pct or 0) / cfg.min_prior_uptrend_pct, 2.0) * 10
+    if not qualified:
+        return min(79.0, contraction_bonus + proximity_bonus + volume_bonus + uptrend_bonus)
     return min(100.0, 35 + contraction_bonus + proximity_bonus + volume_bonus + uptrend_bonus)
 
 

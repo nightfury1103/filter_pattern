@@ -723,6 +723,104 @@ def test_report_renders_rrg_reference_on_lifecycle_review_card(tmp_path: Path) -
     assert "atomusdt-rrg-proof.jpg" in html
 
 
+def test_payload_includes_near_pivot_vcp_rejects_as_review_setups() -> None:
+    review_row = _candidate("EA", "original-vcp", 20, "rejected")
+    review_row.update(
+        {
+            "technique": "minervini-vcp",
+            "setup": "original-vcp",
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "score": 20,
+            "pivot": 204.22,
+            "current_close": 203.27,
+            "distance_to_pivot_pct": 0.47,
+            "reasons": [
+                "Current close is 0.47% below pivot, inside entry watch zone",
+                "Base depth is controlled at 3.8%",
+            ],
+            "failures": [
+                "Prior uptrend is -1.7%, below 20.0%",
+                "Found 0 valid contractions, need at least 2",
+                "Volume dry-up cannot be confirmed",
+            ],
+        }
+    )
+
+    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "minervini-vcp"})
+
+    assert any(item["symbol"] == "EA" and item["setup"] == "original-vcp" for item in payload["review_setups"])
+
+
+def test_payload_includes_low_score_non_vcp_rejects_as_review_setups() -> None:
+    review_row = _candidate("IBM", "sb", 22, "rejected")
+    review_row.update(
+        {
+            "technique": "nhathoai",
+            "setup": "sb",
+        }
+    )
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "score": 22,
+            "pivot": 202.5,
+            "current_close": 203.2,
+            "distance_to_pivot_pct": 0.35,
+            "reasons": [
+                "Pattern: SB",
+                "Direction: Long",
+                "First break trigger: waiting 0.35% from 202.5",
+            ],
+            "failures": [
+                "Status is REJECT, not an active SB entry candidate",
+                "Score 22 is below required SB threshold 80",
+            ],
+        }
+    )
+
+    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+
+    assert any(item["symbol"] == "IBM" and item["setup"] == "sb" for item in payload["review_setups"])
+
+
+def test_payload_keeps_large_recall_first_review_queue() -> None:
+    filler_rows = []
+    for index in range(900):
+        filler = _candidate(f"FILL{index}", "irb", 79, "rejected")
+        filler["evidence"].update(
+            {
+                "qualified": False,
+                "pivot": 100,
+                "current_close": 99,
+                "distance_to_pivot_pct": 1,
+                "reasons": ["Pattern: IRB", "Trigger level: 100", "Stop-loss area: 96"],
+                "failures": ["Strict setup failed"],
+            }
+        )
+        filler_rows.append(filler)
+
+    review_row = _candidate("EA", "original-vcp", 22, "rejected")
+    review_row.update({"technique": "minervini-vcp", "setup": "original-vcp"})
+    review_row["evidence"].update(
+        {
+            "qualified": False,
+            "pivot": 204.22,
+            "current_close": 203.27,
+            "distance_to_pivot_pct": 0.47,
+            "reasons": ["Current close is 0.47% below pivot, inside entry watch zone"],
+            "failures": ["Strict VCP setup failed"],
+        }
+    )
+
+    payload = result_payload([], filler_rows + [review_row], {"timeframe": "D1", "technique": "all-patterns"})
+
+    assert any(item["symbol"] == "EA" and item["setup"] == "original-vcp" for item in payload["review_setups"])
+
+
 def test_watchlist_change_tracking_marks_new_unchanged_and_dropped(tmp_path: Path) -> None:
     previous_candidate = _candidate("AAPL", "dd", 84, "WAITING")
     previous_payload = result_payload([previous_candidate], [], {"timeframe": "D1"})

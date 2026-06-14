@@ -65,6 +65,17 @@ def test_rejects_missing_prior_uptrend() -> None:
     assert any("Prior uptrend" in failure for failure in evidence.failures)
 
 
+def test_rejected_vcp_keeps_partial_score_for_reviewable_near_pivot_base() -> None:
+    candles = make_series([20, 12, 6], current_close=96, late_volume=80_000, prior_start=79, prior_end=80)
+
+    evidence = detect_vcp(candles, make_config())
+
+    assert not evidence.qualified
+    assert 0 < evidence.score < 80
+    assert evidence.distance_to_pivot_pct is not None
+    assert 0 < evidence.distance_to_pivot_pct <= 5
+
+
 def test_rejects_missing_volume_dry_up() -> None:
     candles = make_series([20, 12, 6], current_close=96, late_volume=220_000)
 

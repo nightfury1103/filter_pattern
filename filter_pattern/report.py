@@ -13,7 +13,7 @@ from .exness import is_exness_supported_symbol
 
 
 TRIGGER_WARNING_DISTANCE_PCT = 5.0
-REVIEW_SETUP_LIMIT = 750
+REVIEW_SETUP_LIMIT = 5000
 
 
 def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:
@@ -2076,7 +2076,7 @@ def _is_reviewable_setup(item: dict) -> bool:
     distance = _numeric(evidence.get("distance_to_pivot_pct"))
     has_trigger_context = evidence.get("pivot") is not None and evidence.get("current_close") is not None
     near_enough = distance is not None and abs(distance) <= 10.0
-    return has_trigger_context and score >= 50 and near_enough
+    return has_trigger_context and score >= 20 and near_enough
 
 
 def _has_structural_chart_evidence(evidence: dict) -> bool:

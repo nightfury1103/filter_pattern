@@ -613,6 +613,26 @@ def test_review_setup_chart_rows_prioritize_near_trigger_rows() -> None:
     assert [item["symbol"] for item in selected] == ["ATOMUSDT", "FILL0"]
 
 
+def test_review_setup_chart_rows_prioritize_low_score_near_trigger_rows() -> None:
+    far_rows = [
+        {
+            "symbol": f"FILL{index}",
+            "review_score": 900 - index,
+            "evidence": {"score": 95, "distance_to_pivot_pct": 18, "status": "rejected"},
+        }
+        for index in range(4)
+    ]
+    near_row = {
+        "symbol": "EA",
+        "review_score": 75,
+        "evidence": {"score": 22, "distance_to_pivot_pct": 0.47, "status": "rejected"},
+    }
+
+    selected = _review_setup_chart_rows(far_rows + [near_row], limit=2)
+
+    assert [item["symbol"] for item in selected] == ["EA", "FILL0"]
+
+
 def test_scan_market_applies_exness_broker_filter(tmp_path: Path, monkeypatch) -> None:
     seen_symbols: list[str] = []
 

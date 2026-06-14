@@ -18,7 +18,7 @@ from .universe import UniverseSymbol, expand_crypto_universe, get_universe
 
 
 NEAR_MATCH_CHART_LIMIT = 20
-REVIEW_SETUP_CHART_LIMIT = 350
+REVIEW_SETUP_CHART_LIMIT = 1000
 COMMODITY_PROXY_ENV = "COMMODITY_PROXY_MAP"
 DEFAULT_COMMODITY_PROXY_SYMBOLS = {
     "XAUUSD": ("PAXGUSDT", "XAUTUSDT"),
@@ -1169,7 +1169,7 @@ def _review_setup_chart_priority(item: dict, index: int) -> tuple[int, float, fl
     status = str(evidence.get("status") or "").upper()
     active_status = status in {"WAITING", "NEAR_PIVOT", "READY_NEAR_PIVOT", "FORMING", "TRIGGERED"}
     near_trigger = distance is not None and abs(distance) <= 5.0
-    priority = 1 if near_trigger and (detector_score >= 60.0 or active_status) else 0
+    priority = 1 if near_trigger and (detector_score > 0.0 or active_status) else 0
     return (priority, _numeric(item.get("review_score")) or 0.0, detector_score, -index)
 
 
