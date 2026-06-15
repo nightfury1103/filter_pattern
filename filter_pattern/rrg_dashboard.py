@@ -76,7 +76,7 @@ RRG_REFERENCE_MARKETS = {"US stock", "Vietnam stock", "Crypto", "Forex", "Commod
 RRG_MARKET_REPRESENTATIVES = {
     "US stock": ["SPY"],
     "Vietnam stock": ["VNINDEX"],
-    "Crypto": ["BTCUSDT"],
+    "Crypto": ["BTCUSDT", "ETHUSDT"],
     "Forex": ["DXY"],
     "Commodity": ["XAUUSD"],
     "Commodity ETF": ["DBC"],
@@ -311,7 +311,6 @@ def _market_representative_rrg_rows(
                     "rrg": _rrg_json(selected),
                 }
             )
-            break
     return rows
 
 

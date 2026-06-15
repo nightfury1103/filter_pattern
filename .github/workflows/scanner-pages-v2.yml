@@ -29,7 +29,7 @@ env:
   VNSTOCK_REQUEST_TIMEOUT_SECONDS: "8"
   D1_PERIOD: 180d
   H4_PERIOD: 60d
-  D1_UNIVERSE: default
+  D1_UNIVERSE: broad
   H4_UNIVERSE: default
   H4_MARKETS: "Commodity,Forex,Crypto"
   NEAR_MATCH_CHART_LIMIT: "5"

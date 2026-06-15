@@ -222,6 +222,22 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
                     "stock_intent": {"quadrant": "WEAKENING", "dx1": -0.7, "dy1": -0.4},
                 },
             },
+            {
+                "symbol": "ETH",
+                "market": "Crypto",
+                "timeframe": "D1",
+                "rrg": {
+                    "benchmark": "$ONE",
+                    "sector": "Crypto",
+                    "latest": {"x": 100.8, "y": 100.5},
+                    "rrg_series": [
+                        {"x": 99.4, "y": 99.7, "end": "2026-06-01"},
+                        {"x": 100.0, "y": 100.1, "end": "2026-06-02"},
+                        {"x": 100.8, "y": 100.5, "end": "2026-06-03"},
+                    ],
+                    "stock_intent": {"quadrant": "LEADING", "dx1": 0.8, "dy1": 0.4},
+                },
+            },
         ]
     }
     results_path = tmp_path / "results.json"
@@ -235,6 +251,7 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
     all_chart_html = html[all_chart_start:crypto_chart_start]
     assert "SPY" in all_chart_html
     assert "BTC" in all_chart_html
+    assert "ETH" in all_chart_html
     assert "BTCUSDT" not in all_chart_html
     assert 'data-rrg-market="Crypto"' in html
     assert 'id="rrgChartMode"' in html

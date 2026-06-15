@@ -225,6 +225,57 @@ def test_rrg_reference_adds_daily_market_representatives(tmp_path, monkeypatch) 
     assert representatives[0]["rrg"]["stock_intent"]["quadrant"] == "LEADING"
 
 
+def test_rrg_reference_adds_btc_and_eth_crypto_market_representatives(tmp_path, monkeypatch) -> None:
+    candidate = {
+        "symbol": "SOLUSDT",
+        "market": "Crypto",
+        "timeframe": "H4",
+        "setup": "vcp",
+        "evidence": {"score": 82, "status": "WAITING"},
+    }
+    btc_selection = RRGSelection(
+        symbol="BTCUSDT",
+        sector="Crypto",
+        benchmark="$ONE",
+        latest={"x": 101.4, "y": 101.2},
+        intent={"quadrant": "LEADING", "dx1": 1.2, "dy1": 1.1},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[{"x": 99.0, "y": 98.6}, {"x": 101.4, "y": 101.2}],
+    )
+    eth_selection = RRGSelection(
+        symbol="ETHUSDT",
+        sector="Crypto",
+        benchmark="$ONE",
+        latest={"x": 100.8, "y": 100.5},
+        intent={"quadrant": "LEADING", "dx1": 0.8, "dy1": 0.6},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[{"x": 99.4, "y": 99.7}, {"x": 100.8, "y": 100.5}],
+    )
+
+    calls: list[tuple[list[str], str]] = []
+
+    def fake_crypto_rrg_references(symbols: list[str], timeframe: str) -> dict[str, RRGSelection]:
+        calls.append((symbols, timeframe))
+        return {
+            selection.symbol: selection
+            for selection in (btc_selection, eth_selection)
+            if selection.symbol in symbols
+        }
+
+    monkeypatch.setattr(rrg_dashboard, "_crypto_rrg_references", fake_crypto_rrg_references)
+
+    payload = rrg_dashboard.attach_rrg_references({"candidates": [candidate]}, tmp_path, "H4")
+
+    assert (["SOLUSDT"], "H4") in calls
+    assert (["BTCUSDT", "ETHUSDT"], "D1") in calls
+    representatives = payload["rrg_reference"]["market_representatives"]
+    crypto_representatives = [row for row in representatives if row["market"] == "Crypto"]
+    assert [row["symbol"] for row in crypto_representatives] == ["BTC", "ETH"]
+    assert all(row["timeframe"] == "D1" for row in crypto_representatives)
+
+
 def test_vn_symbol_sector_map_uses_top_level_icb() -> None:
     icb_tree = [
         {
