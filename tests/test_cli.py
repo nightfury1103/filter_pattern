@@ -126,6 +126,7 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
         markets: str,
         near_match_chart_limit: int,
         previous_results: str,
+        chart_workers: int,
     ) -> Path:
         seen.update(
             {
@@ -144,6 +145,7 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
                 "markets": markets,
                 "near_match_chart_limit": near_match_chart_limit,
                 "previous_results": previous_results,
+                "chart_workers": chart_workers,
             }
         )
         return tmp_path / "results.json"
@@ -171,6 +173,8 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
             "US stock,Forex",
             "--near-match-chart-limit",
             "3",
+            "--chart-workers",
+            "4",
             "--previous-results",
             "reports/previous.json",
             "--technique",
@@ -196,9 +200,99 @@ def test_scan_market_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, m
     assert seen["markets"] == "US stock,Forex"
     assert seen["near_match_chart_limit"] == 3
     assert seen["previous_results"] == "reports/previous.json"
+    assert seen["chart_workers"] == 4
     assert seen["limit"] == 5
     assert seen["shard_index"] == 1
     assert seen["shard_count"] == 3
+    assert "Wrote" in captured.out
+
+
+def test_scan_all_market_cli_passes_chart_workers_to_scanner(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_scan_all_market(
+        out: str,
+        timeframe: str,
+        config: str,
+        period: str,
+        limit: int,
+        shard_index: int,
+        shard_count: int,
+        universe: str,
+        broker: str,
+        data_provider: str,
+        markets: str,
+        near_match_chart_limit: int,
+        previous_results: str,
+        chart_workers: int,
+    ) -> Path:
+        seen.update(
+            {
+                "out": out,
+                "timeframe": timeframe,
+                "config": config,
+                "period": period,
+                "limit": limit,
+                "shard_index": shard_index,
+                "shard_count": shard_count,
+                "universe": universe,
+                "broker": broker,
+                "data_provider": data_provider,
+                "markets": markets,
+                "near_match_chart_limit": near_match_chart_limit,
+                "previous_results": previous_results,
+                "chart_workers": chart_workers,
+            }
+        )
+        return tmp_path / "results.json"
+
+    monkeypatch.setattr("filter_pattern.cli.scan_all_market", fake_scan_all_market)
+
+    exit_code = main(
+        [
+            "scan-all-market",
+            "--config",
+            "config.yml",
+            "--timeframe",
+            "D1",
+            "--out",
+            str(tmp_path / "reports/all-market"),
+            "--period",
+            "180d",
+            "--universe",
+            "broad",
+            "--broker",
+            "exness",
+            "--data-provider",
+            "mixed",
+            "--markets",
+            "US stock",
+            "--near-match-chart-limit",
+            "5",
+            "--chart-workers",
+            "4",
+            "--previous-results",
+            "reports/previous.json",
+            "--limit",
+            "10",
+            "--shard-index",
+            "0",
+            "--shard-count",
+            "2",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["universe"] == "broad"
+    assert seen["broker"] == "exness"
+    assert seen["data_provider"] == "mixed"
+    assert seen["markets"] == "US stock"
+    assert seen["near_match_chart_limit"] == 5
+    assert seen["chart_workers"] == 4
+    assert seen["previous_results"] == "reports/previous.json"
+    assert seen["limit"] == 10
+    assert seen["shard_count"] == 2
     assert "Wrote" in captured.out
 
 

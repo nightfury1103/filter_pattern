@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -10,6 +11,14 @@ from .report import write_combined_html_report, write_combined_outputs, write_ht
 from .rrg_dashboard import build_crypto_rrg_demo, build_crypto_rrg_overview, build_usstock_rrg_demo, build_vnstock_rrg_demo
 from .scanner import scan_all_csv, scan_all_market, scan_csv, scan_market
 from .techniques import NHATHOAI_SETUP_CHOICES, TECHNIQUE_CHOICES
+
+
+def _default_chart_workers() -> int:
+    raw = os.environ.get("CHART_RENDER_WORKERS", "1")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,6 +85,12 @@ def main(argv: list[str] | None = None) -> int:
         help="maximum number of rejected near-match proof charts to render",
     )
     market_parser.add_argument(
+        "--chart-workers",
+        type=int,
+        default=_default_chart_workers(),
+        help="parallel workers for near-match/review chart rendering",
+    )
+    market_parser.add_argument(
         "--previous-results",
         help="previous results.json to compare against for watchlist change tracking",
     )
@@ -131,6 +146,12 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=20,
         help="maximum number of rejected near-match proof charts to render",
+    )
+    all_market_parser.add_argument(
+        "--chart-workers",
+        type=int,
+        default=_default_chart_workers(),
+        help="parallel workers for near-match/review chart rendering",
     )
     all_market_parser.add_argument(
         "--previous-results",
@@ -298,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.markets,
                 args.near_match_chart_limit,
                 args.previous_results,
+                args.chart_workers,
             )
             print(f"Wrote {results_path}")
             print(f"Wrote {Path(args.out) / 'index.html'}")
@@ -317,6 +339,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.markets,
                 args.near_match_chart_limit,
                 args.previous_results,
+                args.chart_workers,
             )
             print(f"Wrote {results_path}")
             print(f"Wrote {Path(args.out) / 'index.html'}")

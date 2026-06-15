@@ -315,8 +315,6 @@ def _market_representative_rrg_rows(
 
 
 def _market_representative_display_symbol(market: str, symbol: str) -> str:
-    if market == "Crypto" and symbol.endswith("USDT"):
-        return symbol.removesuffix("USDT")
     return symbol
 
 

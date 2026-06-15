@@ -4,8 +4,17 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from filter_pattern.models import Candle, VCPEvidence
-from filter_pattern.scanner import _review_setup_chart_rows, _shard_universe, scan, scan_all_csv, scan_all_market, scan_market
+import filter_pattern.scanner as scanner
+from filter_pattern.models import Candle, ScanResult, SymbolSpec, VCPConfig, VCPEvidence
+from filter_pattern.scanner import (
+    _render_review_charts,
+    _review_setup_chart_rows,
+    _shard_universe,
+    scan,
+    scan_all_csv,
+    scan_all_market,
+    scan_market,
+)
 from filter_pattern.universe import UniverseSymbol
 from tests.test_detector import make_flat_series, make_series
 
@@ -591,6 +600,59 @@ def test_scan_market_writes_near_match_chart_and_scanned_coverage(tmp_path: Path
     assert "AAPL" in html
     assert "near-match VCP chart" in html
     assert "Continue Watching" in html
+
+
+def test_review_chart_rendering_can_use_process_workers(tmp_path: Path, monkeypatch) -> None:
+    seen: dict[str, object] = {}
+
+    class FakeFuture:
+        def __init__(self, result):
+            self._result = result
+
+        def result(self):
+            return self._result
+
+    class FakeExecutor:
+        def __init__(self, max_workers: int):
+            seen["max_workers"] = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb):
+            return False
+
+        def submit(self, fn, *args):
+            seen["submit_count"] = int(seen.get("submit_count", 0)) + 1
+            return FakeFuture(fn(*args))
+
+    monkeypatch.setattr(scanner, "ProcessPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(scanner, "as_completed", lambda futures: list(futures))
+
+    candles = make_series([20, 12, 6], current_close=96, late_volume=80_000, prior_start=79, prior_end=80)
+    evidence = VCPEvidence(
+        qualified=False,
+        status="rejected",
+        score=25,
+        pivot=100,
+        current_close=96,
+        distance_to_pivot_pct=4,
+        contractions=[],
+        reasons=["Pattern: SB"],
+        failures=["Manual review"],
+    )
+    tasks = []
+    for symbol_name in ("EA", "IBM"):
+        symbol = SymbolSpec(symbol_name, "US stock", symbol_name, Path(f"{symbol_name}.csv"))
+        result = ScanResult(symbol=symbol, timeframe="D1", evidence=evidence, technique="nhathoai", setup="sb")
+        tasks.append((f"US stock::{symbol_name}::{symbol_name}::D1::nhathoai::sb", result, candles))
+
+    rendered = _render_review_charts(tasks, tmp_path / "charts", VCPConfig(), chart_workers=2)
+
+    assert set(rendered) == {task[0] for task in tasks}
+    assert all(Path(path).exists() for path in rendered.values())
+    assert seen["max_workers"] == 2
+    assert seen["submit_count"] == 2
 
 
 def test_review_setup_chart_rows_prioritize_near_trigger_rows() -> None:

@@ -173,6 +173,20 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
         "stock_intent": {"quadrant": "LEADING", "dx1": 0.8, "dy1": 1.0},
         "confidence": {"label": "RRG Supportive Reference"},
     }
+    crypto_alt = _candidate("SOLUSDT", "vcp", 79, "WAITING")
+    crypto_alt.update({"market": "Crypto", "timeframe": "D1"})
+    crypto_alt["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "latest": {"x": 99.2, "y": 101.4},
+        "rrg_series": [
+            {"x": 98.7, "y": 100.7, "end": "2026-06-01"},
+            {"x": 98.9, "y": 101.0, "end": "2026-06-02"},
+            {"x": 99.2, "y": 101.4, "end": "2026-06-03"},
+        ],
+        "stock_intent": {"quadrant": "IMPROVING", "dx1": 0.3, "dy1": 0.4},
+        "confidence": {"label": "RRG Early Reference"},
+    }
     commodity = _candidate("XAUUSD", "compression", 78, "WAITING")
     commodity.update({"market": "Commodity", "timeframe": "D1"})
     commodity["rrg"] = {
@@ -187,7 +201,7 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
         "stock_intent": {"quadrant": "LAGGING", "dx1": -0.5, "dy1": -0.4},
         "confidence": {"label": "RRG Warning Reference"},
     }
-    payload = result_payload([crypto, commodity], [], {"timeframe": "D1"})
+    payload = result_payload([crypto, crypto_alt, commodity], [], {"timeframe": "D1"})
     payload["rrg_reference"] = {
         "market_representatives": [
             {
@@ -207,7 +221,7 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
                 },
             },
             {
-                "symbol": "BTC",
+                "symbol": "BTCUSDT",
                 "market": "Crypto",
                 "timeframe": "D1",
                 "rrg": {
@@ -223,7 +237,7 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
                 },
             },
             {
-                "symbol": "ETH",
+                "symbol": "ETHUSDT",
                 "market": "Crypto",
                 "timeframe": "D1",
                 "rrg": {
@@ -250,10 +264,15 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
     crypto_chart_start = html.index('data-rrg-market="Crypto"')
     all_chart_html = html[all_chart_start:crypto_chart_start]
     assert "SPY" in all_chart_html
-    assert "BTC" in all_chart_html
-    assert "ETH" in all_chart_html
-    assert "BTCUSDT" not in all_chart_html
+    assert "BTCUSDT" in all_chart_html
+    assert "ETHUSDT" in all_chart_html
     assert 'data-rrg-market="Crypto"' in html
+    crypto_chart_start = html.index('data-rrg-market="Crypto"')
+    crypto_chart_end = html.index("</svg>", crypto_chart_start)
+    crypto_chart_html = html[crypto_chart_start:crypto_chart_end]
+    assert "BTCUSDT" in crypto_chart_html
+    assert "ETHUSDT" in crypto_chart_html
+    assert "SOLUSDT" not in crypto_chart_html
     assert 'id="rrgChartMode"' in html
     assert "function updateRrgOverview" in html
     assert "updateRrgOverview(market);" in html
@@ -694,6 +713,22 @@ def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
     assert "IntersectionObserver" in html
     assert "ATOMUSDT" in html
     assert "ATOMUSDT.P_nhathoai_irb.png" in html
+
+
+def test_direction_filter_keeps_directionless_review_rows_visible(tmp_path: Path) -> None:
+    review_row = _candidate("IBM", "sb", 22, "rejected")
+    review_row["evidence"]["qualified"] = False
+    review_row["evidence"]["reasons"] = ["Pattern: SB"]
+    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert 'data-status="review"' in html
+    assert 'data-direction=""' in html
+    assert "direction !== 'all' && nodeDirection && nodeDirection !== direction" in html
 
 
 def test_report_renders_rrg_reference_on_lifecycle_review_card(tmp_path: Path) -> None:

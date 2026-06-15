@@ -26,6 +26,7 @@ env:
   CRYPTO_MARKET_TYPE: perp
   CRYPTO_MAX_SYMBOLS: ""
   CCXT_MAX_WORKERS: "16"
+  CHART_RENDER_WORKERS: "4"
   VNSTOCK_REQUEST_TIMEOUT_SECONDS: "8"
   D1_PERIOD: 180d
   H4_PERIOD: 60d
@@ -116,6 +117,7 @@ jobs:
             --shard-index "${{ matrix.shard.shard_index }}" \
             --shard-count "${{ matrix.shard.shard_count }}" \
             --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
+            --chart-workers "$CHART_RENDER_WORKERS" \
             --previous-results "public/d1-shards/d1-shard-${{ matrix.shard.id }}/results.json"
 
       - name: Upload D1 shard report artifact
@@ -196,6 +198,7 @@ jobs:
             --shard-index "${{ matrix.shard.shard_index }}" \
             --shard-count "${{ matrix.shard.shard_count }}" \
             --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
+            --chart-workers "$CHART_RENDER_WORKERS" \
             --previous-results "public/h4-shards/h4-shard-${{ matrix.shard.id }}/results.json"
 
       - name: Upload H4 shard report artifact

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
 
@@ -243,6 +244,7 @@ def scan_market(
     markets: str | None = None,
     near_match_chart_limit: int = NEAR_MATCH_CHART_LIMIT,
     previous_results_path: str | Path | None = None,
+    chart_workers: int = 1,
 ) -> Path:
     active_timeframe = _normalize_timeframe(timeframe)
 
@@ -390,11 +392,13 @@ def scan_market(
             "setup": active_setup,
             "vcp": vcp_config.__dict__,
             "universe_count": len(universe),
+            "chart_workers": chart_workers,
         },
         rejected_candles,
         chart_dir,
         vcp_config,
         near_match_chart_limit,
+        chart_workers=chart_workers,
     )
     _attach_rrg_references_if_available(payload, output_dir, active_timeframe)
     apply_watchlist_changes(payload, previous_results_path)
@@ -418,6 +422,7 @@ def scan_all_market(
     markets: str | None = None,
     near_match_chart_limit: int = NEAR_MATCH_CHART_LIMIT,
     previous_results_path: str | Path | None = None,
+    chart_workers: int = 1,
 ) -> Path:
     active_timeframe = _normalize_timeframe(timeframe)
 
@@ -542,11 +547,13 @@ def scan_all_market(
             "universe_count": len(universe),
             "pattern_count": len(pattern_runs),
             "patterns": [{"technique": technique, "setup": setup} for technique, setup in pattern_runs],
+            "chart_workers": chart_workers,
         },
         rejected_candles,
         chart_dir,
         vcp_config,
         near_match_chart_limit,
+        chart_workers=chart_workers,
     )
     _attach_rrg_references_if_available(payload, output_dir, active_timeframe)
     apply_watchlist_changes(payload, previous_results_path)
@@ -1069,6 +1076,7 @@ def _payload_with_near_match_charts(
     vcp_config: VCPConfig,
     near_match_chart_limit: int = NEAR_MATCH_CHART_LIMIT,
     review_setup_chart_limit: int = REVIEW_SETUP_CHART_LIMIT,
+    chart_workers: int = 1,
 ) -> dict:
     payload = result_payload(candidates, rejected, config)
     chart_rows = (
@@ -1076,6 +1084,7 @@ def _payload_with_near_match_charts(
         + _review_setup_chart_rows(payload.get("review_setups", []), review_setup_chart_limit)
     )
     rendered_keys = set()
+    render_tasks: list[tuple[str, ScanResult, list]] = []
     for chart_row in chart_rows:
         key = _result_key(chart_row)
         if key in rendered_keys:
@@ -1085,22 +1094,69 @@ def _payload_with_near_match_charts(
         if stored is None:
             continue
         scan_result, candles = stored
-        chart_path = render_chart(scan_result, candles, chart_dir, vcp_config)
-        chart_row["chart_path"] = str(chart_path)
-        for review_item in payload.get("review_setups", []):
-            if _result_key(review_item) == key:
-                review_item["chart_path"] = str(chart_path)
-                break
-        for near_match in payload.get("near_matches", []):
-            if _result_key(near_match) == key:
-                near_match["chart_path"] = str(chart_path)
-                break
-        for rejected_item in rejected:
-            if _result_key(rejected_item) == key:
-                rejected_item["chart_path"] = str(chart_path)
-                break
+        render_tasks.append((key, scan_result, candles))
+    for key, chart_path in _render_review_charts(render_tasks, chart_dir, vcp_config, chart_workers).items():
+        _attach_chart_path(payload, rejected, key, chart_path)
     refresh_trigger_warnings(payload)
     return payload
+
+
+def _render_review_charts(
+    render_tasks: list[tuple[str, ScanResult, list]],
+    chart_dir: Path,
+    vcp_config: VCPConfig,
+    chart_workers: int = 1,
+) -> dict[str, str]:
+    if not render_tasks:
+        return {}
+    workers = max(1, int(chart_workers or 1))
+    if workers == 1 or len(render_tasks) == 1:
+        return {
+            key: str(render_chart(scan_result, candles, chart_dir, vcp_config))
+            for key, scan_result, candles in render_tasks
+        }
+
+    rendered: dict[str, str] = {}
+    try:
+        with ProcessPoolExecutor(max_workers=min(workers, len(render_tasks))) as executor:
+            futures = {
+                executor.submit(_render_review_chart_worker, key, scan_result, candles, chart_dir, vcp_config): key
+                for key, scan_result, candles in render_tasks
+            }
+            for future in as_completed(futures):
+                key, chart_path = future.result()
+                rendered[key] = chart_path
+    except (NotImplementedError, OSError):
+        return {
+            key: str(render_chart(scan_result, candles, chart_dir, vcp_config))
+            for key, scan_result, candles in render_tasks
+        }
+    return rendered
+
+
+def _render_review_chart_worker(
+    key: str,
+    scan_result: ScanResult,
+    candles: list,
+    chart_dir: Path,
+    vcp_config: VCPConfig,
+) -> tuple[str, str]:
+    return key, str(render_chart(scan_result, candles, chart_dir, vcp_config))
+
+
+def _attach_chart_path(payload: dict, rejected: list[dict], key: str, chart_path: str) -> None:
+    for review_item in payload.get("review_setups", []):
+        if _result_key(review_item) == key:
+            review_item["chart_path"] = chart_path
+            break
+    for near_match in payload.get("near_matches", []):
+        if _result_key(near_match) == key:
+            near_match["chart_path"] = chart_path
+            break
+    for rejected_item in rejected:
+        if _result_key(rejected_item) == key:
+            rejected_item["chart_path"] = chart_path
+            break
 
 
 def _attach_rrg_references_if_available(payload: dict, output_dir: Path, timeframe: str) -> dict:

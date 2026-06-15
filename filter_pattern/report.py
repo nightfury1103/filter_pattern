@@ -1100,7 +1100,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         const matchesStatus = status === 'all' || nodeStatus === status;
         const matchesTechnique = technique === 'all' || nodeStatus === 'coverage' || nodeTechnique === technique;
         const matchesSetup = setup === 'all' || nodeStatus === 'coverage' || nodeSetup === setup;
-        const matchesDirection = direction === 'all' || nodeStatus === 'coverage' || nodeDirection === direction;
+        const directionBlocked = direction !== 'all' && nodeDirection && nodeDirection !== direction;
+        const matchesDirection = nodeStatus === 'coverage' || !directionBlocked;
         const matchesChange = change === 'all' || nodeStatus === 'coverage' || nodeChange === change;
         const matchesScore = nodeStatus === 'coverage' || nodeScore >= minimumScore;
         const matchesText = !text || haystack.includes(text);
@@ -2244,8 +2245,11 @@ def _rrg_market_overview_section(payload: dict, rows: list[dict]) -> str:
     risk = len(by_quadrant["WEAKENING"]) + len(by_quadrant["LAGGING"])
     ratio = f"{supportive}:{risk}" if risk else f"{supportive}:0"
     representative_items = _rrg_market_representative_items(payload, items)
+    representative_items_by_market = _rrg_items_by_market(representative_items)
     charts = [_rrg_overview_chart_svg(representative_items, "all", "Market Representative RRG", "Representative trail per market")]
     for market, market_items in sorted(_rrg_items_by_market(items).items()):
+        if market == "Crypto" and representative_items_by_market.get(market):
+            market_items = representative_items_by_market[market]
         charts.append(
             _rrg_overview_chart_svg(
                 market_items,

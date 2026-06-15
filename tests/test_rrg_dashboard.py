@@ -272,7 +272,7 @@ def test_rrg_reference_adds_btc_and_eth_crypto_market_representatives(tmp_path, 
     assert (["BTCUSDT", "ETHUSDT"], "D1") in calls
     representatives = payload["rrg_reference"]["market_representatives"]
     crypto_representatives = [row for row in representatives if row["market"] == "Crypto"]
-    assert [row["symbol"] for row in crypto_representatives] == ["BTC", "ETH"]
+    assert [row["symbol"] for row in crypto_representatives] == ["BTCUSDT", "ETHUSDT"]
     assert all(row["timeframe"] == "D1" for row in crypto_representatives)
 
 
