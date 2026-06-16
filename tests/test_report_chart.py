@@ -397,6 +397,29 @@ def test_combined_report_merges_multiple_results_and_adds_filters(tmp_path: Path
     assert html.count('data-status="qualified"') == 2
 
 
+def test_report_adds_symbol_dedup_filter_mode(tmp_path: Path) -> None:
+    first = _candidate("AAPL", "bb", 81, "WAITING")
+    second = _candidate("AAPL", "sb", 88, "WAITING")
+    third = _candidate("MSFT", "bb", 82, "WAITING")
+    for row in (first, second, third):
+        row["evidence"]["distance_to_pivot_pct"] = 15
+    payload = result_payload([first, second, third], [], {"timeframe": "D1", "technique": "nhathoai"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert 'id="dedupFilter"' in html
+    assert '<option value="off">All pattern matches</option>' in html
+    assert '<option value="symbol">One chart per symbol</option>' in html
+    assert html.count('data-symbol="AAPL"') == 2
+    assert html.count('data-symbol="MSFT"') == 1
+    assert "function dedupRank(node)" in html
+    assert "const selectedDedupCards = new Set();" in html
+    assert "dedupFilter.addEventListener('change', applyFilters);" in html
+
+
 def test_combined_results_preserve_review_rrg_references(tmp_path: Path) -> None:
     review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
     review_row.update(

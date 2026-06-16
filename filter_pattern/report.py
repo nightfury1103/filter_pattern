@@ -983,6 +983,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <select id="directionFilter"><option value="all">Long + Short</option><option value="long">Long</option><option value="short">Short</option></select>
         <select id="changeFilter"><option value="all">All changes</option>{change_options}</select>
         <select id="scoreFilter"><option value="0">Score 0+</option><option value="80">Score 80+</option><option value="85">Score 85+</option><option value="90">Score 90+</option><option value="95">Score 95+</option></select>
+        <select id="dedupFilter"><option value="off">All pattern matches</option><option value="symbol">One chart per symbol</option></select>
       </div>
       <div id="filterCount" class="filter-count"></div>
       <div class="layout">
@@ -1010,6 +1011,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     const directionFilter = document.getElementById('directionFilter');
     const changeFilter = document.getElementById('changeFilter');
     const scoreFilter = document.getElementById('scoreFilter');
+    const dedupFilter = document.getElementById('dedupFilter');
     const filterCount = document.getElementById('filterCount');
     const coverageSection = document.getElementById('coverageSection');
     const filterable = Array.from(document.querySelectorAll('[data-filterable="true"]'));
@@ -1069,6 +1071,33 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       }}
     }}
 
+    function dedupRank(node) {{
+      const statusPriority = {{
+        qualified: 6,
+        warning: 5,
+        review: 4,
+        near: 3,
+        dropped: 2,
+        not_configured: 1
+      }};
+      return {{
+        status: statusPriority[node.dataset.status || ''] || 0,
+        score: Number(node.dataset.score || '0')
+      }};
+    }}
+
+    function isBetterDedupCard(candidate, current) {{
+      if (!current) {{
+        return true;
+      }}
+      const candidateRank = dedupRank(candidate);
+      const currentRank = dedupRank(current);
+      if (candidateRank.status !== currentRank.status) {{
+        return candidateRank.status > currentRank.status;
+      }}
+      return candidateRank.score > currentRank.score;
+    }}
+
     function applyFilters() {{
       const text = search.value.trim().toLowerCase();
       const timeframe = timeframeFilter.value;
@@ -1081,8 +1110,12 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       const direction = directionFilter.value;
       const change = changeFilter.value;
       const minimumScore = Number(scoreFilter.value || '0');
-      const filtersActive = Boolean(text) || timeframe !== 'all' || market !== 'all' || broker !== 'all' || status !== 'all' || technique !== 'all' || setup !== 'all' || direction !== 'all' || change !== 'all' || minimumScore > 0;
+      const dedupMode = dedupFilter.value;
+      const filtersActive = Boolean(text) || timeframe !== 'all' || market !== 'all' || broker !== 'all' || status !== 'all' || technique !== 'all' || setup !== 'all' || direction !== 'all' || change !== 'all' || minimumScore > 0 || dedupMode !== 'off';
       let visibleResults = 0;
+      const baseVisibility = new Map();
+      const bestBySymbol = new Map();
+      const selectedDedupCards = new Set();
       for (const node of filterable) {{
         const nodeTimeframe = node.dataset.timeframe || '';
         const nodeMarket = node.dataset.market || '';
@@ -1106,6 +1139,22 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         const matchesScore = nodeStatus === 'coverage' || nodeScore >= minimumScore;
         const matchesText = !text || haystack.includes(text);
         const visible = matchesTimeframe && matchesMarket && matchesBroker && matchesStatus && matchesTechnique && matchesSetup && matchesDirection && matchesChange && matchesScore && matchesText;
+        baseVisibility.set(node, visible);
+        if (visible && dedupMode === 'symbol' && node.classList.contains('result-card')) {{
+          const symbolKey = (node.dataset.symbol || '').trim();
+          if (symbolKey && isBetterDedupCard(node, bestBySymbol.get(symbolKey))) {{
+            bestBySymbol.set(symbolKey, node);
+          }}
+        }}
+      }}
+      for (const bestNode of bestBySymbol.values()) {{
+        selectedDedupCards.add(bestNode);
+      }}
+      for (const node of filterable) {{
+        let visible = Boolean(baseVisibility.get(node));
+        if (visible && dedupMode === 'symbol' && node.classList.contains('result-card')) {{
+          visible = selectedDedupCards.has(node);
+        }}
         node.style.display = visible ? '' : 'none';
         if (visible && node.classList.contains('result-card')) {{
           visibleResults += 1;
@@ -1127,6 +1176,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     directionFilter.addEventListener('change', applyFilters);
     changeFilter.addEventListener('change', applyFilters);
     scoreFilter.addEventListener('change', applyFilters);
+    dedupFilter.addEventListener('change', applyFilters);
     applyFilters();
   </script>
 </body>
@@ -1644,7 +1694,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
 
     exness_supported = _is_row_exness_supported(candidate)
 
-    return f"""<article class="result-card" data-filterable="true" data-status="qualified" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="result-card" data-filterable="true" data-status="qualified" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge">{escape(display_setup)}</span>{direction_badge}<span class="badge {status_class}">{escape(status)}</span>{change_badge}{_exness_badge(exness_supported)}</div>
@@ -1771,7 +1821,7 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
 
     exness_supported = _is_row_exness_supported(candidate)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="near" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="near" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Near</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
@@ -1822,7 +1872,7 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     rrg_reference = _rrg_reference_panel(candidate)
     exness_supported = _is_row_exness_supported(candidate)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="review" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="review" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Review</span><span class="badge">{escape(display_setup)}</span><span class="badge">{escape(status)}</span>{_exness_badge(exness_supported)}</div>
@@ -1880,7 +1930,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
         failure_html = f"""
     <div class="reasons failures">Strict warning:</div>
     <ul class="failures">{failures}</ul>"""
-    return f"""<article class="near result-card" data-filterable="true" data-status="warning" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(str(item.get("watchlist_change", "")))}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " warning near break triggered " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="warning" data-symbol="{escape(item["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(str(item.get("watchlist_change", "")))}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " warning near break triggered " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(item["symbol"])} <span class="badge warning-badge">{escape(warning_label)}</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
@@ -1919,7 +1969,7 @@ def _not_configured_card(item: dict) -> str:
 
     exness_supported = _is_row_exness_supported(item)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="not_configured" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="" data-score="0" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="not_configured" data-symbol="{escape(item["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="" data-score="0" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(item["symbol"])} <span class="badge near-badge">Not Configured</span></div>
@@ -1985,7 +2035,7 @@ def _dropped_card(item: dict) -> str:
     score = _fmt(item.get("previous_score"))
     status = str(item.get("previous_status") or "n/a")
     change = str(item.get("watchlist_change", "DROPPED"))
-    return f"""<article class="near result-card" data-filterable="true" data-status="dropped" data-timeframe="{escape(timeframe)}" data-market="{escape(market)}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(item.get("previous_score") or 0))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(symbol + " " + tv_symbol + " " + market + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " DROPPED " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="dropped" data-symbol="{escape(symbol)}" data-timeframe="{escape(timeframe)}" data-market="{escape(market)}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(item.get("previous_score") or 0))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(symbol + " " + tv_symbol + " " + market + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " DROPPED " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(symbol)} <span class="badge">{escape(display_setup)}</span>{_change_badge(change)}{_exness_badge(exness_supported)}</div>
