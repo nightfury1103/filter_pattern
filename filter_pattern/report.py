@@ -261,28 +261,35 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
   <style>
     :root {{
       color-scheme: light;
-      --text: #e7ecf3;
-      --muted: #8d98aa;
-      --line: #2a3242;
-      --line-strong: #3d4658;
+      --text: #0f1729;
+      --muted: #64748b;
+      --faint: #94a3b8;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --soft: #f1f5f9;
       --panel: #ffffff;
-      --dark-panel: #111722;
-      --dark-panel-2: #0c111a;
-      --chrome: #151922;
-      --bg: #0f1218;
-      --accent: #2563eb;
+      --dark-panel: #ffffff;
+      --dark-panel-2: #f8fafc;
+      --chrome: #ffffff;
+      --bg: #f5f7fa;
+      --accent: #1d4ed8;
       --good: #15803d;
       --warn: #b45309;
       --bad: #b91c1c;
-      --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      --radius: 12px;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+      --shadow: 0 6px 24px rgba(15,23,42,.08);
+      --shadow-lg: 0 18px 48px rgba(15,23,42,.14);
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
       letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
     }}
     .app {{
       min-height: 100vh;
@@ -353,91 +360,117 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .page {{
       min-width: 0;
-      padding: 0 14px 18px;
-      max-width: none;
+      padding: 0 24px 40px;
+      max-width: 1760px;
       margin: 0 auto;
     }}
     header {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 18px;
-      align-items: start;
-      margin: 0 -14px 0;
-      padding: 10px 14px;
-      background: var(--chrome);
+      align-items: center;
+      margin: 0 -24px 18px;
+      padding: 14px 24px;
+      background: rgba(255,255,255,.86);
+      backdrop-filter: saturate(160%) blur(10px);
       border-bottom: 1px solid var(--line);
       position: sticky;
       top: 0;
       z-index: 30;
     }}
-    h1 {{ margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }}
-    .summary {{ color: var(--muted); font-size: 13px; }}
+    h1 {{ margin: 0 0 4px; font-size: 18px; font-weight: 750; letter-spacing: -.2px; }}
+    .summary {{ color: var(--muted); font-size: 12.5px; }}
     .run-meta {{
       display: flex;
       flex-wrap: wrap;
       justify-content: flex-end;
       gap: 8px;
-      max-width: 520px;
+      max-width: 560px;
     }}
     .tag {{
+      display: inline-flex;
+      align-items: center;
+      height: 30px;
       border: 1px solid var(--line);
-      background: #0f141e;
-      color: #cbd5e1;
+      background: var(--soft);
+      color: #334155;
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 0 11px;
       font-size: 12px;
+      font-weight: 600;
       white-space: nowrap;
     }}
     .stats {{
       display: grid;
       grid-template-columns: repeat(10, minmax(104px, 1fr));
-      gap: 10px;
-      margin: 12px 0 10px;
+      gap: 12px;
+      margin: 4px 0 18px;
     }}
     .stat {{
+      position: relative;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      background: #0f141e;
+      border-radius: var(--radius);
+      padding: 13px 14px;
+      background: var(--panel);
+      box-shadow: var(--shadow-sm);
       min-height: 76px;
+      overflow: hidden;
     }}
-    .stat strong {{ display: block; color: #ffffff; font-size: 24px; line-height: 1; margin-bottom: 8px; }}
-    .stat span {{ color: var(--muted); font-size: 13px; }}
+    .stat::before {{
+      content: "";
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--line-strong);
+    }}
+    .stat:nth-child(2)::before {{ background: var(--good); }}
+    .stat:nth-child(4)::before {{ background: var(--good); }}
+    .stat:nth-child(3)::before {{ background: var(--warn); }}
+    .stat:nth-child(5)::before {{ background: var(--warn); }}
+    .stat:nth-child(1)::before {{ background: var(--accent); }}
+    .stat strong {{ display: block; color: var(--text); font-size: 24px; font-weight: 800; line-height: 1.05; margin-bottom: 6px; letter-spacing: -.5px; }}
+    .stat span {{ color: var(--muted); font-size: 12px; font-weight: 600; }}
     .toolbar {{
       display: grid;
       grid-template-columns: minmax(280px, 2fr) repeat(4, minmax(132px, 1fr));
       gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
       position: sticky;
-      top: 58px;
+      top: 64px;
       z-index: 20;
-      background: rgba(15, 18, 24, 0.98);
-      padding: 14px 0 12px;
+      background: rgba(245, 247, 250, 0.92);
+      padding: 14px 0 14px;
       backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
     }}
     input, select {{
       width: 100%;
-      height: 38px;
+      height: 40px;
       border: 1px solid var(--line-strong);
-      border-radius: 7px;
-      padding: 0 10px;
-      background: #0f141e;
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--panel);
       color: var(--text);
       font: inherit;
       font-size: 13px;
+      font-weight: 600;
     }}
+    input::placeholder {{ color: var(--faint); font-weight: 500; }}
+    select {{ cursor: pointer; }}
+    input:focus, select:focus {{ outline: 2px solid rgba(29,78,216,.35); outline-offset: 0; border-color: var(--accent); }}
     .filter-count {{
-      margin: 0 0 14px;
+      margin: 0 0 16px;
       color: var(--muted);
       font-size: 13px;
+      font-weight: 600;
     }}
     .rrg-overview {{
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #101723;
-      margin: 12px 0 14px;
-      padding: 14px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow-sm);
+      margin: 12px 0 16px;
+      padding: 16px;
     }}
     .overview-head {{
       display: flex;
@@ -449,7 +482,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .overview-head h2 {{
       margin: 0 0 4px;
       font-size: 18px;
-      color: #f8fafc;
+      color: var(--text);
     }}
     .overview-head p {{
       margin: 0;
@@ -464,14 +497,15 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .overview-score div {{
       border: 1px solid var(--line);
-      border-radius: 7px;
-      padding: 8px;
-      background: #0f141e;
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: var(--soft);
     }}
     .overview-score strong {{
       display: block;
-      color: #ffffff;
+      color: var(--text);
       font-size: 20px;
+      font-weight: 800;
       line-height: 1;
       margin-bottom: 5px;
     }}
@@ -484,7 +518,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .rrg-chart-shell {{
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0f141e;
+      background: var(--soft);
       padding: 10px;
       margin-bottom: 12px;
     }}
@@ -493,7 +527,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      color: #cbd5e1;
+      color: #334155;
       font-size: 12px;
       font-weight: 800;
       margin: 0 0 8px;
@@ -507,16 +541,17 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       height: auto;
       display: block;
       border-radius: 6px;
-      background: #0b1220;
+      background: #ffffff;
+      border: 1px solid var(--line);
     }}
-    .rrg-axis {{ stroke: #e5e7eb; stroke-width: 1.4; opacity: .86; }}
-    .rrg-gridline {{ stroke: #334155; stroke-width: .8; opacity: .55; }}
-    .rrg-tail {{ fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .92; }}
+    .rrg-axis {{ stroke: #94a3b8; stroke-width: 1.4; opacity: .9; }}
+    .rrg-gridline {{ stroke: #e2e8f0; stroke-width: 1; opacity: 1; }}
+    .rrg-tail {{ fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .95; }}
     .rrg-arrow-segment {{ opacity: 1; }}
-    .rrg-dot {{ stroke: #f8fafc; stroke-width: 1.8; }}
-    .rrg-label {{ fill: #f8fafc; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: #0b1220; stroke-width: 3px; stroke-linejoin: round; }}
-    .rrg-small-label {{ fill: #cbd5e1; font-size: 11px; font-weight: 700; }}
-    .rrg-legend {{ fill: #cbd5e1; font-size: 11px; font-weight: 700; }}
+    .rrg-dot {{ stroke: #ffffff; stroke-width: 1.8; }}
+    .rrg-label {{ fill: #0f1729; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }}
+    .rrg-small-label {{ fill: #64748b; font-size: 11px; font-weight: 700; }}
+    .rrg-legend {{ fill: #64748b; font-size: 11px; font-weight: 700; }}
     .rrg-arrow-head {{ fill: currentColor; }}
     .quadrant-grid {{
       display: grid;
@@ -526,14 +561,14 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .quadrant-card {{
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0f141e;
+      background: var(--panel);
       overflow: hidden;
       min-height: 178px;
     }}
-    .quadrant-card.leading {{ border-top: 4px solid #22c55e; }}
-    .quadrant-card.improving {{ border-top: 4px solid #38bdf8; }}
-    .quadrant-card.weakening {{ border-top: 4px solid #f97316; }}
-    .quadrant-card.lagging {{ border-top: 4px solid #ef4444; }}
+    .quadrant-card.leading {{ border-top: 4px solid #16a34a; }}
+    .quadrant-card.improving {{ border-top: 4px solid #2563eb; }}
+    .quadrant-card.weakening {{ border-top: 4px solid #ea580c; }}
+    .quadrant-card.lagging {{ border-top: 4px solid #dc2626; }}
     .quadrant-head {{
       display: flex;
       justify-content: space-between;
@@ -541,7 +576,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       padding: 10px;
       border-bottom: 1px solid var(--line);
     }}
-    .quadrant-head strong {{ color: #ffffff; }}
+    .quadrant-head strong {{ color: var(--text); }}
     .quadrant-head span {{ color: var(--muted); font-size: 12px; }}
     .quadrant-count {{
       min-width: 32px;
@@ -549,8 +584,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       display: grid;
       place-items: center;
       border-radius: 7px;
-      background: #172033;
-      color: #ffffff;
+      background: var(--soft);
+      color: var(--text);
       font-weight: 800;
     }}
     .quadrant-list {{
@@ -563,15 +598,15 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
-      border: 1px solid rgba(148, 163, 184, 0.18);
+      border: 1px solid var(--line);
       border-radius: 7px;
       padding: 7px;
-      background: #111a29;
+      background: var(--soft);
       font-size: 12px;
     }}
-    .overview-symbol b {{ color: #f8fafc; overflow-wrap: anywhere; }}
-    .overview-symbol span {{ color: #9ca3af; display: block; margin-top: 2px; }}
-    .overview-symbol em {{ color: #cbd5e1; font-style: normal; font-variant-numeric: tabular-nums; }}
+    .overview-symbol b {{ color: var(--text); overflow-wrap: anywhere; }}
+    .overview-symbol span {{ color: var(--muted); display: block; margin-top: 2px; }}
+    .overview-symbol em {{ color: #334155; font-style: normal; font-variant-numeric: tabular-nums; }}
     .market-rrg-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -581,11 +616,11 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .market-rrg {{
       border: 1px solid var(--line);
       border-radius: 7px;
-      background: #0f141e;
+      background: var(--soft);
       padding: 9px;
       font-size: 12px;
     }}
-    .market-rrg strong {{ color: #f8fafc; display: block; margin-bottom: 7px; }}
+    .market-rrg strong {{ color: var(--text); display: block; margin-bottom: 7px; }}
     .market-bars {{
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -640,70 +675,84 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .bar span {{ display: block; height: 100%; background: var(--accent); border-radius: inherit; }}
     article {{
-      background: var(--dark-panel);
-      border: 1px solid var(--line-strong);
-      border-radius: 8px;
-      margin-bottom: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-bottom: 18px;
       overflow: hidden;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow .18s, border-color .18s, transform .18s;
     }}
+    article:hover {{ box-shadow: var(--shadow-lg); border-color: var(--line-strong); transform: translateY(-2px); }}
     .card-head {{
       display: flex;
       justify-content: space-between;
       gap: 16px;
-      padding: 11px 14px;
+      align-items: flex-start;
+      padding: 14px 16px 12px;
       border-bottom: 1px solid var(--line);
-      background: #111722;
+      background: var(--panel);
     }}
-    .symbol {{ font-size: 19px; font-weight: 800; }}
-    .meta, .reasons, .metrics {{ color: var(--muted); font-size: 13px; }}
+    .symbol {{ font-size: 18px; font-weight: 800; letter-spacing: -.3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }}
+    .meta {{ color: var(--muted); font-size: 12px; margin-top: 6px; }}
+    .reasons, .metrics {{ color: var(--muted); font-size: 13px; }}
     .score {{
-      min-width: 70px;
-      height: 54px;
-      border-radius: 8px;
+      min-width: 56px;
+      height: 56px;
+      border-radius: 12px;
       display: grid;
       place-items: center;
-      background: #eff6ff;
-      color: #1d4ed8;
-      border: 1px solid #bfdbfe;
-      font-size: 18px;
+      background: var(--soft);
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-size: 20px;
       font-weight: 800;
+      letter-spacing: -.5px;
       text-align: center;
+      flex: 0 0 auto;
     }}
     .badge {{
       display: inline-flex;
       align-items: center;
+      height: 22px;
       border-radius: 999px;
-      padding: 3px 8px;
-      font-size: 12px;
-      font-weight: 700;
-      background: #eff6ff;
-      color: #1d4ed8;
-      margin-left: 8px;
+      padding: 0 9px;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .2px;
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid #e0e7ff;
     }}
-    .badge.near-badge {{ background: #fffbeb; color: var(--warn); }}
-    .badge.warning-badge {{ background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }}
-    .badge.triggered {{ background: #ecfdf5; color: var(--good); }}
-    .badge.waiting {{ background: #fffbeb; color: var(--warn); }}
-    .badge.short {{ background: #fef2f2; color: var(--bad); }}
-    .badge.long {{ background: #eff6ff; color: #1d4ed8; }}
-    .badge.change-new {{ background: #ecfdf5; color: var(--good); }}
-    .badge.change-triggered {{ background: #eff6ff; color: #1d4ed8; }}
-    .badge.change-improved {{ background: #f0fdf4; color: #166534; }}
-    .badge.change-weaker {{ background: #fff7ed; color: #c2410c; }}
-    .badge.change-dropped {{ background: #fef2f2; color: var(--bad); }}
-    .badge.change-unchanged, .badge.change-first_run {{ background: #f8fafc; color: #475569; }}
+    .symbol .badge {{ margin: 0; }}
+    .badge.near-badge {{ background: #fffbeb; color: var(--warn); border-color: #fde68a; }}
+    .badge.warning-badge {{ background: #fef3c7; color: #92400e; border-color: #fcd34d; }}
+    .badge.triggered {{ background: #dcfce7; color: var(--good); border-color: #bbf7d0; }}
+    .badge.waiting {{ background: #fef3c7; color: var(--warn); border-color: #fde68a; }}
+    .badge.short {{ background: #fee2e2; color: var(--bad); border-color: #fecaca; }}
+    .badge.long {{ background: #dcfce7; color: var(--good); border-color: #bbf7d0; }}
+    .badge.change-new {{ background: #ecfeff; color: #0e7490; border-color: #cffafe; }}
+    .badge.change-triggered {{ background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }}
+    .badge.change-improved {{ background: #dcfce7; color: #166534; border-color: #bbf7d0; }}
+    .badge.change-weaker {{ background: #fff7ed; color: #c2410c; border-color: #fed7aa; }}
+    .badge.change-dropped {{ background: #fee2e2; color: var(--bad); border-color: #fecaca; }}
+    .badge.change-unchanged, .badge.change-first_run {{ background: var(--soft); color: #475569; border-color: var(--line); }}
     .card-content {{
       display: block;
-      background: #ffffff;
+      background: var(--panel);
     }}
     .card-content.no-chart {{
       grid-template-columns: 1fr;
     }}
     .chart-frame {{
-      background: #ffffff;
-      border-bottom: 1px solid #cbd5e1;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
       min-width: 0;
+    }}
+    .chart-frame > .chart-tile {{
+      border: 0;
+      border-radius: 0;
+      border-bottom: 1px solid var(--line);
     }}
     .chart-frame img {{
       display: block;
@@ -717,66 +766,106 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .chart-pair {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 14px;
-      padding: 14px;
-      align-items: start;
+      grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+      gap: 0;
+      padding: 0;
+      align-items: stretch;
     }}
     .chart-tile {{
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
+      border: 0;
+      border-radius: 0;
       overflow: hidden;
       background: #ffffff;
+      min-width: 0;
+    }}
+    .chart-pair > .chart-tile + .chart-tile {{
+      border-left: 1px solid var(--line);
+      background: #fcfdfe;
     }}
     .chart-tile strong {{
       display: block;
-      padding: 8px 10px;
-      border-bottom: 1px solid #e5e7eb;
-      background: #f8fafc;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
       color: #334155;
-      font-size: 12px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .4px;
       text-transform: uppercase;
     }}
-    .chart-tile img {{
-      border: 0;
-    }}
+    .chart-tile img {{ border: 0; }}
     .rrg-reference {{
       border: 1px solid #dbeafe;
-      border-radius: 8px;
+      border-radius: var(--radius);
       background: #f8fbff;
-      padding: 10px;
-      margin-bottom: 12px;
+      padding: 12px;
+      margin-bottom: 14px;
       color: #1f2937;
     }}
     .rrg-reference .reasons {{
-      color: #1f2937;
+      color: var(--text);
       font-weight: 800;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 13px;
       margin-bottom: 8px;
     }}
     .rrg-reference .meta {{
-      color: #64748b;
+      color: var(--muted);
       font-size: 12px;
     }}
+    .chart-frame > .rrg-reference {{
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      background: #fbfcfe;
+      padding: 11px 14px;
+      margin: 0;
+    }}
+    .chart-frame > .rrg-reference::before {{
+      content: "";
+      flex: 0 0 auto;
+      width: 9px;
+      height: 9px;
+      margin-top: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+    }}
     .body {{
-      padding: 14px;
+      padding: 16px;
       min-width: 0;
-      background: #ffffff;
-      color: #111827;
+      background: var(--panel);
+      color: var(--text);
     }}
     .metrics {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }}
     .metric {{
-      border: 1px solid #e5e7eb;
-      border-radius: 7px;
-      padding: 8px;
-      background: #fbfdff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: var(--soft);
       min-height: 54px;
     }}
-    .metric strong {{ display: block; color: var(--text); margin-top: 4px; }}
+    .metric span {{ color: var(--muted); font-size: 11px; font-weight: 600; }}
+    .metric strong {{ display: block; color: var(--text); margin-top: 4px; font-size: 14px; font-weight: 750; letter-spacing: -.2px; }}
+    .reasons {{ font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--faint); margin-bottom: 6px; }}
+    .body ul {{ color: #334155; font-size: 13px; line-height: 1.55; }}
+    .body ul li::marker {{ color: var(--accent); }}
+    .direction-authority {{
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--soft);
+      padding: 12px;
+      margin-bottom: 14px;
+    }}
+    .direction-authority .metrics {{ margin-bottom: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }}
     details.lower-tf-review {{
       border: 1px solid #cbd5e1;
       border-radius: 8px;
@@ -831,9 +920,9 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       padding: 24px;
       color: var(--muted);
     }}
-    h2 {{ margin: 36px 0 8px; font-size: 22px; }}
-    .main-column h2 {{ color: #f8fafc; }}
-    .main-column > h2:first-child {{ margin-top: 0; }}
+    h2 {{ margin: 30px 0 14px; font-size: 18px; font-weight: 800; }}
+    .main-column h2 {{ color: var(--text); }}
+    .main-column > h2:first-child {{ margin-top: 8px; }}
     .section-note {{ margin: 0 0 16px; color: var(--muted); }}
     .near {{
       overflow: hidden;
@@ -873,12 +962,12 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .symbol-chip {{
       display: inline-block;
-      border: 1px solid #e5e7eb;
+      border: 1px solid var(--line);
       border-radius: 6px;
       padding: 2px 6px;
       margin: 2px;
-      background: #0f141e;
-      color: #cbd5e1;
+      background: var(--soft);
+      color: #475569;
     }}
     .data-errors {{
       margin-top: 12px;

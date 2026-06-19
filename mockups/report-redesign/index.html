@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Filter Pattern · Report Redesign Mock</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --ink: #0f1729;
+      --muted: #64748b;
+      --faint: #94a3b8;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --soft: #f1f5f9;
+      --brand: #1d4ed8;
+      --brand-ink: #1e3a8a;
+      --good: #15803d;
+      --good-soft: #dcfce7;
+      --warn: #b45309;
+      --warn-soft: #fef3c7;
+      --bad: #b91c1c;
+      --bad-soft: #fee2e2;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+      --shadow: 0 6px 24px rgba(15,23,42,.08);
+      --shadow-lg: 0 18px 48px rgba(15,23,42,.14);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,.86);
+      backdrop-filter: saturate(160%) blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar-inner {
+      max-width: 1760px; margin: 0 auto;
+      display: flex; align-items: center; gap: 18px;
+      padding: 12px 24px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand .mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+      color: #fff; font-weight: 800; font-size: 15px;
+      display: grid; place-items: center; letter-spacing: .5px;
+      box-shadow: 0 6px 16px rgba(29,78,216,.35);
+    }
+    .brand h1 { margin: 0; font-size: 16px; font-weight: 750; line-height: 1.1; }
+    .brand .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .topbar-meta { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 30px; padding: 0 11px; border-radius: 999px;
+      background: var(--soft); border: 1px solid var(--line);
+      color: #334155; font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .tag b { color: var(--ink); font-weight: 750; }
+    .tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+
+    /* ---------- Layout ---------- */
+    .wrap { max-width: 1760px; margin: 0 auto; padding: 20px 24px 64px; }
+
+    /* ---------- KPI strip ---------- */
+    .kpis {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      gap: 12px; margin-bottom: 18px;
+    }
+    .kpi {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+      position: relative; overflow: hidden;
+    }
+    .kpi::before {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--line-strong);
+    }
+    .kpi.is-good::before { background: var(--good); }
+    .kpi.is-warn::before { background: var(--warn); }
+    .kpi.is-brand::before { background: var(--brand); }
+    .kpi .label { color: var(--muted); font-size: 12px; font-weight: 600; }
+    .kpi .value { font-size: 26px; font-weight: 800; line-height: 1.1; margin-top: 8px; letter-spacing: -.5px; }
+    .kpi .delta { font-size: 12px; font-weight: 650; margin-top: 4px; color: var(--faint); }
+    .kpi .delta.up { color: var(--good); }
+    .kpi .delta.down { color: var(--bad); }
+
+    /* ---------- Toolbar ---------- */
+    .toolbar {
+      position: sticky; top: 63px; z-index: 40;
+      background: rgba(245,247,250,.92);
+      backdrop-filter: blur(8px);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      padding: 12px 0 14px; margin-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .search {
+      position: relative; flex: 1 1 280px; min-width: 220px;
+    }
+    .search input {
+      width: 100%; height: 40px; border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm); padding: 0 12px 0 38px; font: inherit; font-size: 13px;
+      background: var(--panel); color: var(--ink);
+    }
+    .search svg { position: absolute; left: 12px; top: 11px; color: var(--faint); }
+    select {
+      height: 40px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+      background: var(--panel); color: var(--ink); padding: 0 32px 0 12px; font: inherit; font-size: 13px;
+      font-weight: 600; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 11px center;
+    }
+    .seg {
+      display: inline-flex; background: var(--soft); border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm); padding: 3px; gap: 2px; margin-left: auto;
+    }
+    .seg button {
+      height: 32px; border: 0; background: transparent; color: var(--muted);
+      padding: 0 14px; font: inherit; font-size: 13px; font-weight: 700; border-radius: 6px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+    .seg button.active { background: var(--panel); color: var(--ink); box-shadow: var(--shadow-sm); }
+    .result-count { color: var(--muted); font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+    .result-count b { color: var(--ink); }
+
+    /* ---------- Badges ---------- */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+      border-radius: 999px; font-size: 11px; font-weight: 750; letter-spacing: .2px;
+      background: var(--soft); color: #475569; border: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    .badge.setup { background: #eef2ff; color: #4338ca; border-color: #e0e7ff; }
+    .badge.long { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+    .badge.short { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
+    .badge.triggered { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+    .badge.waiting { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
+    .badge.new { background: #ecfeff; color: #0e7490; border-color: #cffafe; }
+    .badge.improved { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+    .badge.exness { background: #f5f3ff; color: #6d28d9; border-color: #ede9fe; }
+    .badge.near { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
+
+    /* ---------- Score ---------- */
+    .score {
+      display: grid; place-items: center; min-width: 52px; height: 52px;
+      border-radius: 12px; font-weight: 800; font-size: 20px; letter-spacing: -.5px;
+      background: var(--soft); color: var(--ink); border: 1px solid var(--line);
+    }
+    .score.high { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; border-color: #bbf7d0; }
+    .score.mid { background: linear-gradient(135deg, #fef9c3, #fef3c7); color: #92400e; border-color: #fde68a; }
+    .score .s-sub { font-size: 9px; font-weight: 700; color: var(--muted); margin-top: -2px; }
+
+    /* ---------- Card ---------- */
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow-sm); overflow: hidden; transition: box-shadow .18s, border-color .18s, transform .18s;
+      display: flex; flex-direction: column;
+    }
+    .card:hover { box-shadow: var(--shadow-lg); border-color: var(--line-strong); transform: translateY(-2px); }
+    .card-head {
+      display: flex; align-items: flex-start; gap: 12px; justify-content: space-between;
+      padding: 14px 16px 12px;
+    }
+    .sym-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .sym { font-size: 18px; font-weight: 800; letter-spacing: -.3px; }
+    .sym-meta { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sym-meta .sep { color: var(--line-strong); }
+
+    /* chart */
+    .chart-wrap { position: relative; background: #fff; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .chart-wrap svg { display: block; width: 100%; height: auto; }
+    .chart-actions {
+      position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity .15s;
+    }
+    .card:hover .chart-actions, .chart-wrap:hover .chart-actions { opacity: 1; }
+    .icon-btn {
+      width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+      background: rgba(255,255,255,.92); display: grid; place-items: center; cursor: pointer; color: #475569;
+      box-shadow: var(--shadow-sm);
+    }
+    .icon-btn:hover { background: #fff; color: var(--ink); }
+    .chart-tag {
+      position: absolute; top: 10px; left: 12px;
+      background: rgba(15,23,42,.82); color: #fff; font-size: 11px; font-weight: 700;
+      padding: 4px 9px; border-radius: 6px; letter-spacing: .3px;
+    }
+
+    /* chart pair: candle + RRG */
+    .charts-row { display: grid; grid-template-columns: 1.55fr 1fr; border-top: 1px solid var(--line); }
+    .chart-col { position: relative; background: #fff; min-width: 0; }
+    .chart-col + .chart-col { border-left: 1px solid var(--line); }
+    .chart-col.is-rrg { background: #fcfdfe; }
+    .chart-wrap { position: relative; background: #fff; border: 0; }
+    .chart-wrap svg, .chart-col svg { display: block; width: 100%; height: auto; }
+    .chart-caption {
+      display: flex; align-items: center; gap: 7px; justify-content: space-between;
+      padding: 8px 12px; border-bottom: 1px solid var(--line); background: #fbfcfe;
+    }
+    .chart-caption .c-name { font-size: 11.5px; font-weight: 800; letter-spacing: .3px; color: #334155; text-transform: uppercase; }
+    .chart-caption .c-tag { font-size: 11px; font-weight: 700; color: var(--muted); }
+
+    /* RRG confidence strip */
+    .rrg-conf {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; border-top: 1px solid var(--line); background: #fbfcfe;
+      font-size: 12px; color: var(--muted); line-height: 1.45;
+    }
+    .rrg-conf .conf-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex: 0 0 auto; }
+    .rrg-conf .conf-label { font-weight: 800; color: var(--ink); }
+    .conf-supportive .conf-dot { background: #16a34a; } .conf-supportive .conf-label { color: #166534; }
+    .conf-early .conf-dot { background: #2563eb; } .conf-early .conf-label { color: #1e40af; }
+    .conf-warning .conf-dot { background: #ea580c; } .conf-warning .conf-label { color: #9a3412; }
+    .conf-neutral .conf-dot { background: #94a3b8; } .conf-neutral .conf-label { color: #475569; }
+
+    /* metrics */
+    .card-body { padding: 14px 16px 16px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .metric {
+      background: var(--soft); border: 1px solid var(--line); border-radius: var(--radius-sm);
+      padding: 9px 10px;
+    }
+    .metric .m-label { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .metric .m-value { font-size: 14px; font-weight: 750; margin-top: 4px; letter-spacing: -.2px; }
+    .metric .m-value.good { color: var(--good); }
+    .metric .m-value.warn { color: var(--warn); }
+
+    .evidence { margin-top: 14px; }
+    .evidence .e-title {
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
+      color: var(--faint); margin-bottom: 8px;
+    }
+    .evidence ul { margin: 0; padding-left: 18px; color: #334155; font-size: 13px; line-height: 1.55; }
+    .evidence li::marker { color: var(--brand); }
+
+    .lower-tf {
+      margin-top: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden;
+    }
+    .lower-tf summary {
+      list-style: none; cursor: pointer; padding: 10px 12px; font-size: 12.5px; font-weight: 700;
+      background: var(--soft); color: #334155; display: flex; align-items: center; gap: 8px;
+    }
+    .lower-tf summary::-webkit-details-marker { display: none; }
+    .lower-tf summary .chev { margin-left: auto; transition: transform .15s; color: var(--faint); }
+    .lower-tf[open] summary .chev { transform: rotate(180deg); }
+    .lower-tf .lower-body { padding: 12px; font-size: 12.5px; color: var(--muted); }
+
+    /* ---------- Gallery ---------- */
+    .gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    @media (max-width: 1240px) { .gallery { grid-template-columns: 1fr; } }
+
+    /* ---------- Focus (review queue) ---------- */
+    .focus { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
+    .queue { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); position: sticky; top: 132px; max-height: calc(100vh - 156px); overflow-y: auto; }
+    .queue-row {
+      display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+      border-bottom: 1px solid var(--line); cursor: pointer; border-left: 3px solid transparent;
+    }
+    .queue-row:hover { background: var(--soft); }
+    .queue-row.active { background: #eff6ff; border-left-color: var(--brand); }
+    .queue-row:last-child { border-bottom: 0; }
+    .queue-row .q-sym { font-weight: 800; font-size: 14px; }
+    .queue-row .q-meta { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+    .queue-row .q-score { margin-left: auto; font-weight: 800; font-size: 14px; }
+    .focus-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .focus-chart { position: relative; }
+    .focus-grid { display: grid; grid-template-columns: minmax(0,1fr) 320px; }
+    .focus-side { border-left: 1px solid var(--line); padding: 16px; }
+    .focus-side .metrics { grid-template-columns: 1fr 1fr; }
+
+    /* ---------- Table ---------- */
+    .table-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      position: sticky; top: 132px; background: var(--soft); text-align: left; z-index: 5;
+      font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+      font-weight: 800; padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap;
+    }
+    tbody td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: middle; }
+    tbody tr:hover { background: var(--soft); }
+    tbody tr:last-child td { border-bottom: 0; }
+    .t-sym { font-weight: 800; }
+    .t-spark { width: 120px; height: 40px; }
+
+    .section-title { font-size: 15px; font-weight: 800; margin: 8px 0 14px; display: flex; align-items: center; gap: 8px; }
+    .section-title .pill { font-size: 12px; font-weight: 700; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1100px) {
+      .kpis { grid-template-columns: repeat(3, 1fr); }
+      .focus { grid-template-columns: 1fr; }
+      .queue { position: static; max-height: none; }
+      .focus-grid { grid-template-columns: 1fr; }
+      .focus-side { border-left: 0; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 720px) {
+      .charts-row { grid-template-columns: 1fr; }
+      .chart-col + .chart-col { border-left: 0; border-top: 1px solid var(--line); }
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .gallery { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .topbar-meta { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="mark">FP</div>
+        <div>
+          <h1>Filter Pattern Scanner</h1>
+          <div class="sub">D1 multi-setup proof report</div>
+        </div>
+      </div>
+      <div class="topbar-meta">
+        <span class="tag"><span class="dot"></span> Generated <b>Jun 19, 09:42</b></span>
+        <span class="tag">Universe <b>broad</b></span>
+        <span class="tag">Broker <b>Exness</b></span>
+        <span class="tag">Source <b>mixed</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="kpis">
+      <div class="kpi is-brand"><div class="label">Scanned</div><div class="value">1,284</div><div class="delta">across 5 markets</div></div>
+      <div class="kpi is-good"><div class="label">Qualified</div><div class="value">46</div><div class="delta up">+12 new</div></div>
+      <div class="kpi is-good"><div class="label">Triggered</div><div class="value">18</div><div class="delta">ready to act</div></div>
+      <div class="kpi is-warn"><div class="label">Waiting / near pivot</div><div class="value">28</div><div class="delta">watch closely</div></div>
+      <div class="kpi"><div class="label">Avg score</div><div class="value">86.3</div><div class="delta up">+1.4 vs last run</div></div>
+      <div class="kpi"><div class="label">Dropped</div><div class="value">9</div><div class="delta down">since last run</div></div>
+    </section>
+
+    <div class="toolbar">
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" placeholder="Search symbol, setup, market, TradingView id…">
+      </div>
+      <select><option>All markets</option><option>Crypto</option><option>US stock</option><option>Forex</option><option>Commodity</option><option>VN stock</option></select>
+      <select><option>All setups</option><option>VCP</option><option>BB</option><option>ARB</option><option>SB</option></select>
+      <select><option>All statuses</option><option>Triggered</option><option>Waiting</option><option>Near match</option></select>
+      <select><option>Long + Short</option><option>Long</option><option>Short</option></select>
+      <select><option>Score 0+</option><option>Score 80+</option><option>Score 90+</option></select>
+      <div class="seg" id="viewSeg">
+        <button class="active" data-view="gallery">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Gallery
+        </button>
+        <button data-view="focus">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="10" height="16" rx="1"/></svg>
+          Focus
+        </button>
+        <button data-view="table">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          Table
+        </button>
+      </div>
+    </div>
+
+    <div class="result-count">Showing <b>5</b> of <b>46</b> qualified candidates</div>
+
+    <div id="view-gallery">
+      <div class="section-title">Candidates <span class="pill">chart-first</span></div>
+      <div class="gallery" id="galleryGrid"></div>
+    </div>
+
+    <div id="view-focus" class="hidden">
+      <div class="focus">
+        <div class="queue" id="queueList"></div>
+        <div class="focus-panel" id="focusPanel"></div>
+      </div>
+    </div>
+
+    <div id="view-table" class="hidden">
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr><th>Symbol</th><th>Setup</th><th>Market</th><th>TF</th><th>Status</th><th>Trigger</th><th>Distance</th><th>RRG</th><th>Trend</th><th>Score</th></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Mock candidates (mirrors real report fields) ----------
+    const CANDIDATES = [
+      {
+        symbol: "BTCUSDT", tv: "BINANCE:BTCUSDT", market: "Crypto", tf: "H4", technique: "nhathoai", setup: "BB",
+        direction: "long", status: "TRIGGERED", change: "New", exness: false, score: 91,
+        trigger: "104,820", current: "105,210", distance: "+0.4%", distGood: true, volume: "0.62", trend: 78, seed: 7,
+        evidence: ["Clean prior uptrend into the base.", "Block stays tight against EMA21.", "Break candle is close to trigger, not extended.", "Lower timeframe volume confirmed on H1."],
+        annotate: "block", pivotY: 0.30, lowerTf: "H1 volume confirmed on the trigger candle.",
+        rrg: { benchmark: "$ONE", sector: "Layer 1", quadrant: "LEADING", tone: "supportive",
+          label: "RRG Supportive Reference", note: "Relative strength and momentum are rising. Confirmation only.", dx: "+0.6", dy: "+0.9" }
+      },
+      {
+        symbol: "XAUUSD", tv: "OANDA:XAUUSD", market: "Commodity", tf: "H4", technique: "nhathoai", setup: "ARB",
+        direction: "long", status: "WAITING", change: "Improved", exness: true, score: 87,
+        trigger: "2,417.8", current: "2,391.2", distance: "+1.1%", distGood: false, volume: "0.71", trend: 64, seed: 13,
+        evidence: ["First break of the old boundary already happened.", "Build-up forming just under prior resistance.", "Momentum cooling but structure intact."],
+        annotate: "boundary", pivotY: 0.36, lowerTf: "Waiting for H1 expansion off the build-up.",
+        rrg: { benchmark: "DBC", sector: "Precious Metals", quadrant: "IMPROVING", tone: "early",
+          label: "RRG Early Reference", note: "Improving from a slower position. Price setup remains primary.", dx: "+0.8", dy: "+0.4" }
+      },
+      {
+        symbol: "VNM", tv: "HOSE:VNM", market: "VN stock", tf: "D1", technique: "minervini-vcp", setup: "VCP 2C",
+        direction: "long", status: "WAITING", change: "Unchanged", exness: false, score: 84,
+        trigger: "72.40", current: "70.85", distance: "+2.2%", distGood: false, volume: "0.48", trend: 71, seed: 21,
+        evidence: ["Two contractions tighten clearly (18% → 8%).", "Volume dries up into the right side.", "Close sits in the near-pivot zone."],
+        annotate: "vcp", pivotY: 0.26, lowerTf: "Daily setup only — no lower timeframe review.",
+        rrg: { benchmark: "VNINDEX", sector: "Food & Beverage", quadrant: "LEADING", tone: "supportive",
+          label: "RRG Supportive Reference", note: "Leading the index with rising momentum.", dx: "+0.3", dy: "+0.5" }
+      },
+      {
+        symbol: "TSLA", tv: "NASDAQ:TSLA", market: "US stock", tf: "H4", technique: "experimental-ema21-compression", setup: "Compression",
+        direction: "long", status: "TRIGGERED", change: "New", exness: true, score: 88,
+        trigger: "248.30", current: "249.90", distance: "+0.6%", distGood: true, volume: "0.55", trend: 82, seed: 33,
+        evidence: ["EMA21 compression resolves to the upside.", "Expansion candle on rising volume.", "Pullbacks held the moving average."],
+        annotate: "block", pivotY: 0.32, lowerTf: "H1 expansion confirmed above the compression.",
+        rrg: { benchmark: "SPY", sector: "Consumer Discretionary", quadrant: "WEAKENING", tone: "warning",
+          label: "RRG Warning Reference", note: "Momentum is falling. Review the price chart carefully.", dx: "-0.4", dy: "-0.7" }
+      },
+      {
+        symbol: "EURUSD", tv: "OANDA:EURUSD", market: "Forex", tf: "H4", technique: "nhathoai", setup: "SB",
+        direction: "short", status: "WAITING", change: "Status changed", exness: true, score: 82,
+        trigger: "1.0742", current: "1.0768", distance: "-0.2%", distGood: false, volume: "0.66", trend: 41, seed: 41,
+        evidence: ["Lower-high sequence under EMA21.", "Sell-side build-up near broken support.", "Reject if price reclaims the trigger."],
+        annotate: "boundary", pivotY: 0.42, lowerTf: "Awaiting H1 break below the build-up.",
+        rrg: { benchmark: "$USD", sector: "Major FX", quadrant: "LAGGING", tone: "neutral",
+          label: "RRG Neutral Reference", note: "Mixed and flat. Keep the decision on the price setup.", dx: "-0.2", dy: "+0.1" }
+      }
+    ];
+
+    // ---------- Deterministic pseudo-random ----------
+    function rng(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+
+    // ---------- Chart renderer: candles + EMA + pivot + volume + annotation ----------
+    function buildChart(c, opts = {}) {
+      const W = opts.w || 720, H = opts.h || 380;
+      const padL = 8, padR = 56, padT = 14;
+      const priceH = H * 0.72, volTop = priceH + 18, volH = H - volTop - 6;
+      const n = 56;
+      const r = rng(c.seed);
+      // generate a base that trends up into a tightening range
+      let price = 40 + r() * 8;
+      const candles = [];
+      let vol = [];
+      for (let i = 0; i < n; i++) {
+        const trendUp = c.direction === "short" ? -1 : 1;
+        const phase = i / n;
+        const drift = trendUp * (0.45 - phase * 0.30) ;
+        const vola = (1 - phase) * 2.2 + 0.5; // tightening
+        const open = price;
+        const close = open + drift + (r() - 0.5) * vola * 2;
+        const high = Math.max(open, close) + r() * vola;
+        const low = Math.min(open, close) - r() * vola;
+        candles.push({ open, close, high, low });
+        vol.push(0.4 + r() * (1 - phase * 0.55));
+        price = close;
+      }
+      const highs = candles.map(d => d.high), lows = candles.map(d => d.low);
+      const maxP = Math.max(...highs), minP = Math.min(...lows);
+      const spanP = (maxP - minP) || 1;
+      const sx = (W - padL - padR) / n;
+      const py = v => padT + (priceH - padT) * (1 - (v - minP) / spanP);
+      // EMA21
+      const ema = []; const k = 2 / (21 + 1); let prev = candles[0].close;
+      candles.forEach((d, i) => { prev = i === 0 ? d.close : d.close * k + prev * (1 - k); ema.push(prev); });
+      const emaPath = ema.map((v, i) => `${i === 0 ? "M" : "L"}${(padL + i * sx + sx / 2).toFixed(1)} ${py(v).toFixed(1)}`).join(" ");
+
+      const maxV = Math.max(...vol);
+      const vy = v => volTop + volH * (1 - v / maxV);
+
+      let candleSvg = "";
+      candles.forEach((d, i) => {
+        const x = padL + i * sx + sx / 2;
+        const up = d.close >= d.open;
+        const fill = up ? "#ffffff" : "#0f1729";
+        const stroke = "#0f1729";
+        const bw = Math.max(2.5, sx * 0.62);
+        const yo = py(d.open), yc = py(d.close);
+        const top = Math.min(yo, yc), h = Math.max(1.6, Math.abs(yc - yo));
+        candleSvg += `<line x1="${x.toFixed(1)}" y1="${py(d.high).toFixed(1)}" x2="${x.toFixed(1)}" y2="${py(d.low).toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`;
+        candleSvg += `<rect x="${(x - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="1.1"/>`;
+        const vfill = up ? "#cbd5e1" : "#94a3b8";
+        candleSvg += `<rect x="${(x - bw / 2).toFixed(1)}" y="${vy(vol[i]).toFixed(1)}" width="${bw.toFixed(1)}" height="${(volTop + volH - vy(vol[i])).toFixed(1)}" fill="${vfill}"/>`;
+      });
+
+      // gridlines + price axis labels
+      let grid = "";
+      for (let g = 0; g <= 4; g++) {
+        const gy = padT + (priceH - padT) * g / 4;
+        const val = (maxP - spanP * g / 4);
+        grid += `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W - padR}" y2="${gy.toFixed(1)}" stroke="#eef2f7" stroke-width="1"/>`;
+        grid += `<text x="${W - padR + 5}" y="${(gy + 3).toFixed(1)}" font-size="10" fill="#94a3b8" font-weight="600">${val.toFixed(1)}</text>`;
+      }
+
+      // pivot / trigger line
+      const pivotPrice = minP + spanP * (1 - c.pivotY);
+      const pvy = py(pivotPrice);
+      const pivot = `<line x1="${padL}" y1="${pvy.toFixed(1)}" x2="${W - padR}" y2="${pvy.toFixed(1)}" stroke="#1d4ed8" stroke-width="1.6" stroke-dasharray="6 5"/>
+        <rect x="${W - padR}" y="${(pvy - 9).toFixed(1)}" width="${padR}" height="18" fill="#1d4ed8"/>
+        <text x="${(W - padR / 2).toFixed(1)}" y="${(pvy + 3).toFixed(1)}" font-size="9.5" fill="#fff" font-weight="800" text-anchor="middle">${c.trigger}</text>`;
+
+      // annotation box
+      let ann = "";
+      const boxX = padL + n * sx * 0.66, boxW = n * sx * 0.30;
+      if (c.annotate === "block" || c.annotate === "boundary") {
+        const boxTop = padT + (priceH - padT) * 0.18, boxH = (priceH - padT) * 0.30;
+        ann = `<rect x="${boxX.toFixed(1)}" y="${boxTop.toFixed(1)}" width="${boxW.toFixed(1)}" height="${boxH.toFixed(1)}" fill="rgba(29,78,216,.06)" stroke="#1d4ed8" stroke-width="1.4" stroke-dasharray="5 4" rx="3"/>
+          <text x="${(boxX + 4).toFixed(1)}" y="${(boxTop - 6).toFixed(1)}" font-size="10.5" fill="#1d4ed8" font-weight="800">${c.annotate === "block" ? "tight block · EMA21" : "build-up"}</text>`;
+      } else if (c.annotate === "vcp") {
+        ann = `<text x="${(padL + n * sx * 0.30).toFixed(1)}" y="${(padT + 30)}" font-size="11" fill="#1d4ed8" font-weight="800">C1</text>
+          <text x="${(padL + n * sx * 0.62).toFixed(1)}" y="${(padT + 46)}" font-size="11" fill="#1d4ed8" font-weight="800">C2</text>`;
+      }
+
+      const emaLabel = `<text x="${padL + 4}" y="${(py(ema[2]) - 6).toFixed(1)}" font-size="10" fill="#0ea5e9" font-weight="700">EMA21</text>`;
+      const volLabel = `<text x="${padL}" y="${(volTop - 4).toFixed(1)}" font-size="9.5" fill="#94a3b8" font-weight="700">VOLUME</text>`;
+
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.symbol} ${c.setup} chart" preserveAspectRatio="none">
+        <rect width="${W}" height="${H}" fill="#ffffff"/>
+        ${grid}
+        <line x1="${padL}" y1="${volTop - 8}" x2="${W - padR}" y2="${volTop - 8}" stroke="#e2e8f0" stroke-width="1"/>
+        ${pivot}
+        <path d="${emaPath}" fill="none" stroke="#0ea5e9" stroke-width="2.2"/>
+        ${candleSvg}
+        ${ann}
+        ${emaLabel}
+        ${volLabel}
+      </svg>`;
+    }
+
+    // ---------- RRG quadrant chart ----------
+    const QUAD = {
+      LEADING:   { color: "#16a34a", bg: "#dcfce7", corner: [1, 1] },
+      IMPROVING: { color: "#2563eb", bg: "#dbeafe", corner: [0, 1] },
+      WEAKENING: { color: "#ea580c", bg: "#ffedd5", corner: [1, 0] },
+      LAGGING:   { color: "#dc2626", bg: "#fee2e2", corner: [0, 0] },
+    };
+    function buildRRG(c, opts = {}) {
+      const W = opts.w || 460, H = opts.h || 380;
+      const m = 30; const x0 = m, y0 = H - m, plotW = W - m - 14, plotH = H - m - 14, plotT = 14;
+      const cx = x0 + plotW / 2, cy = plotT + plotH / 2;
+      const q = c.rrg.quadrant; const qc = QUAD[q];
+      // target head offset toward the quadrant corner, tail spiralling in
+      const r = rng(c.seed + 5);
+      const dirX = qc.corner[0] ? 1 : -1, dirY = qc.corner[1] ? 1 : -1;
+      const headX = dirX * (plotW * (0.20 + r() * 0.12));
+      const headY = dirY * (plotH * (0.20 + r() * 0.12));
+      const n = 10; const pts = [];
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1);
+        const wobble = (1 - t) * 14;
+        const px = cx + headX * t + Math.sin(i * 1.3 + c.seed) * wobble * 0.4;
+        const py = cy - headY * t + Math.cos(i * 1.1 + c.seed) * wobble * 0.4;
+        pts.push([px, py]);
+      }
+      // background quadrants
+      const bg = `
+        <rect x="${cx}" y="${plotT}" width="${x0 + plotW - cx}" height="${cy - plotT}" fill="${QUAD.LEADING.bg}" opacity=".55"/>
+        <rect x="${x0}" y="${plotT}" width="${cx - x0}" height="${cy - plotT}" fill="${QUAD.IMPROVING.bg}" opacity=".55"/>
+        <rect x="${cx}" y="${cy}" width="${x0 + plotW - cx}" height="${y0 - cy}" fill="${QUAD.WEAKENING.bg}" opacity=".55"/>
+        <rect x="${x0}" y="${cy}" width="${cx - x0}" height="${y0 - cy}" fill="${QUAD.LAGGING.bg}" opacity=".55"/>`;
+      const axes = `
+        <line x1="${cx}" y1="${plotT}" x2="${cx}" y2="${y0}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 4"/>
+        <line x1="${x0}" y1="${cy}" x2="${x0 + plotW}" y2="${cy}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 4"/>
+        <rect x="${x0}" y="${plotT}" width="${plotW}" height="${plotH}" fill="none" stroke="#cbd5e1" stroke-width="1"/>`;
+      const corners = `
+        <text x="${x0 + plotW - 6}" y="${plotT + 15}" text-anchor="end" font-size="10.5" font-weight="800" fill="${QUAD.LEADING.color}">LEADING</text>
+        <text x="${x0 + 6}" y="${plotT + 15}" font-size="10.5" font-weight="800" fill="${QUAD.IMPROVING.color}">IMPROVING</text>
+        <text x="${x0 + plotW - 6}" y="${y0 - 7}" text-anchor="end" font-size="10.5" font-weight="800" fill="${QUAD.WEAKENING.color}">WEAKENING</text>
+        <text x="${x0 + 6}" y="${y0 - 7}" font-size="10.5" font-weight="800" fill="${QUAD.LAGGING.color}">LAGGING</text>`;
+      // tail path + arrowheads
+      const tailPath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+      let dots = "";
+      for (let i = 0; i < n - 1; i++) {
+        dots += `<circle cx="${pts[i][0].toFixed(1)}" cy="${pts[i][1].toFixed(1)}" r="${(2 + i * 0.25).toFixed(1)}" fill="${qc.color}" opacity="${(0.25 + i * 0.06).toFixed(2)}"/>`;
+      }
+      const head = pts[n - 1];
+      const prev = pts[n - 2];
+      const ang = Math.atan2(head[1] - prev[1], head[0] - prev[0]);
+      const ax1 = head[0] - 9 * Math.cos(ang - 0.5), ay1 = head[1] - 9 * Math.sin(ang - 0.5);
+      const ax2 = head[0] - 9 * Math.cos(ang + 0.5), ay2 = head[1] - 9 * Math.sin(ang + 0.5);
+      const headMark = `
+        <polygon points="${head[0].toFixed(1)},${head[1].toFixed(1)} ${ax1.toFixed(1)},${ay1.toFixed(1)} ${ax2.toFixed(1)},${ay2.toFixed(1)}" fill="${qc.color}"/>
+        <circle cx="${head[0].toFixed(1)}" cy="${head[1].toFixed(1)}" r="6.5" fill="${qc.color}"/>
+        <circle cx="${head[0].toFixed(1)}" cy="${head[1].toFixed(1)}" r="11" fill="none" stroke="${qc.color}" stroke-width="2"/>
+        <text x="${(head[0] + 13).toFixed(1)}" y="${(head[1] - 9).toFixed(1)}" font-size="12" font-weight="800" fill="#0f1729" paint-order="stroke" stroke="#fff" stroke-width="3">${c.symbol}</text>`;
+      const axisLabels = `
+        <text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="9.5" fill="#94a3b8" font-weight="700">RS-Ratio vs ${c.rrg.benchmark} →</text>
+        <text x="11" y="${cy}" text-anchor="middle" font-size="9.5" fill="#94a3b8" font-weight="700" transform="rotate(-90 11 ${cy})">RS-Momentum →</text>`;
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.symbol} RRG vs ${c.rrg.benchmark}" preserveAspectRatio="none">
+        <rect width="${W}" height="${H}" fill="#ffffff"/>
+        ${bg}${axes}${corners}
+        <path d="${tailPath}" fill="none" stroke="${qc.color}" stroke-width="2.4"/>
+        ${dots}${headMark}${axisLabels}
+      </svg>`;
+    }
+
+    function chartsRowHtml(c, opts) {
+      return `<div class="charts-row">
+        <div class="chart-col">
+          <div class="chart-caption"><span class="c-name">Price · ${c.setup}</span><span class="c-tag">${c.tf} · EMA21 · vol</span></div>
+          <div class="chart-wrap">${chartActions}${buildChart(c, opts)}</div>
+        </div>
+        <div class="chart-col is-rrg">
+          <div class="chart-caption"><span class="c-name">RRG · ${c.rrg.quadrant.toLowerCase()}</span><span class="c-tag">vs ${c.rrg.benchmark}</span></div>
+          <div class="chart-wrap">${buildRRG(c, opts && opts.rrg)}</div>
+        </div>
+      </div>`;
+    }
+    function rrgConfHtml(c) {
+      return `<div class="rrg-conf conf-${c.rrg.tone}">
+        <span class="conf-dot"></span>
+        <div><span class="conf-label">${c.rrg.label}</span> — ${c.rrg.note}
+        <span style="color:var(--faint)"> · ${c.rrg.sector} vs ${c.rrg.benchmark} · head Δx ${c.rrg.dx} · Δy ${c.rrg.dy}</span></div>
+      </div>`;
+    }
+
+    function scoreClass(s) { return s >= 90 ? "high" : s >= 80 ? "mid" : ""; }
+    function statusBadge(c) { return `<span class="badge ${c.status === "TRIGGERED" ? "triggered" : "waiting"}">${c.status}</span>`; }
+    function changeBadge(c) {
+      const cls = c.change === "New" ? "new" : c.change === "Improved" ? "improved" : "";
+      return cls ? `<span class="badge ${cls}">${c.change}</span>` : `<span class="badge">${c.change}</span>`;
+    }
+    function dirBadge(c) { return `<span class="badge ${c.direction}">${c.direction === "long" ? "Long" : "Short"}</span>`; }
+    function exnessBadge(c) { return c.exness ? `<span class="badge exness">Exness</span>` : ""; }
+
+    const chartActions = `<div class="chart-actions">
+      <button class="icon-btn" title="Open full chart"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+      <button class="icon-btn" title="Open in TradingView"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></button>
+    </div>`;
+
+    function metricsHtml(c) {
+      return `<div class="metrics">
+        <div class="metric"><div class="m-label">Trigger / pivot</div><div class="m-value">${c.trigger}</div></div>
+        <div class="metric"><div class="m-label">Current</div><div class="m-value">${c.current}</div></div>
+        <div class="metric"><div class="m-label">Distance</div><div class="m-value ${c.distGood ? "good" : "warn"}">${c.distance}</div></div>
+        <div class="metric"><div class="m-label">Volume ratio</div><div class="m-value">${c.volume}</div></div>
+      </div>`;
+    }
+
+    function evidenceHtml(c) {
+      return `<div class="evidence"><div class="e-title">Candidate evidence</div><ul>${c.evidence.map(e => `<li>${e}</li>`).join("")}</ul></div>`;
+    }
+    function lowerTfHtml(c) {
+      return `<details class="lower-tf"><summary>Review lower timeframe
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary>
+        <div class="lower-body">${c.lowerTf}</div></details>`;
+    }
+
+    // ---------- Gallery ----------
+    function renderGallery() {
+      document.getElementById("galleryGrid").innerHTML = CANDIDATES.map(c => `
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <div class="sym-line"><span class="sym">${c.symbol}</span><span class="badge setup">${c.setup}</span>${dirBadge(c)}${statusBadge(c)}${changeBadge(c)}${exnessBadge(c)}</div>
+              <div class="sym-meta">${c.market}<span class="sep">·</span>${c.tf}<span class="sep">·</span>${c.technique}<span class="sep">·</span><a href="#">${c.tv}</a></div>
+            </div>
+            <div class="score ${scoreClass(c.score)}">${c.score}<span class="s-sub">score</span></div>
+          </div>
+          ${chartsRowHtml(c)}
+          ${rrgConfHtml(c)}
+          <div class="card-body">${metricsHtml(c)}${evidenceHtml(c)}${lowerTfHtml(c)}</div>
+        </article>`).join("");
+    }
+
+    // ---------- Focus ----------
+    let activeIndex = 0;
+    function renderFocus() {
+      document.getElementById("queueList").innerHTML = CANDIDATES.map((c, i) => `
+        <div class="queue-row ${i === activeIndex ? "active" : ""}" data-i="${i}">
+          <div>
+            <div class="q-sym">${c.symbol} <span class="badge setup">${c.setup}</span></div>
+            <div class="q-meta">${c.market} · ${c.tf} · ${c.status.toLowerCase()}</div>
+          </div>
+          <div class="q-score" style="color:${c.score >= 90 ? "var(--good)" : "var(--warn)"}">${c.score}</div>
+        </div>`).join("");
+      const c = CANDIDATES[activeIndex];
+      document.getElementById("focusPanel").innerHTML = `
+        <div class="card-head" style="padding:16px 18px 14px;">
+          <div>
+            <div class="sym-line"><span class="sym" style="font-size:20px;">${c.symbol}</span><span class="badge setup">${c.setup}</span>${dirBadge(c)}${statusBadge(c)}${exnessBadge(c)}</div>
+            <div class="sym-meta">${c.market}<span class="sep">·</span>${c.tf}<span class="sep">·</span>${c.technique}<span class="sep">·</span><a href="#">${c.tv}</a></div>
+          </div>
+          <div class="score ${scoreClass(c.score)}">${c.score}<span class="s-sub">score</span></div>
+        </div>
+        ${chartsRowHtml(c, { h: 440, rrg: { h: 440 } })}
+        ${rrgConfHtml(c)}
+        <div class="focus-grid" style="grid-template-columns:1fr;">
+          <aside class="focus-side" style="border-left:0;">${metricsHtml(c)}${evidenceHtml(c)}${lowerTfHtml(c)}</aside>
+        </div>`;
+      document.querySelectorAll(".queue-row").forEach(row => row.addEventListener("click", () => {
+        activeIndex = Number(row.dataset.i); renderFocus();
+      }));
+    }
+
+    // ---------- Table ----------
+    function sparkline(c) {
+      const r = rng(c.seed + 99); let p = 20; let pts = [];
+      for (let i = 0; i < 24; i++) { p += (c.direction === "short" ? -1 : 1) * (r() * 1.4 - 0.4); pts.push(p); }
+      const mn = Math.min(...pts), mx = Math.max(...pts), sp = (mx - mn) || 1;
+      const path = pts.map((v, i) => `${i === 0 ? "M" : "L"}${(i / 23 * 116 + 2).toFixed(1)} ${(36 - (v - mn) / sp * 32).toFixed(1)}`).join(" ");
+      return `<svg class="t-spark" viewBox="0 0 120 40"><path d="${path}" fill="none" stroke="${c.direction === "short" ? "#b91c1c" : "#15803d"}" stroke-width="2"/></svg>`;
+    }
+    function renderTable() {
+      document.getElementById("tableBody").innerHTML = CANDIDATES.map(c => `
+        <tr>
+          <td><div class="t-sym">${c.symbol}</div><div class="sym-meta" style="margin-top:2px;">${c.tv}</div></td>
+          <td><span class="badge setup">${c.setup}</span></td>
+          <td>${c.market}</td>
+          <td>${c.tf}</td>
+          <td>${statusBadge(c)}</td>
+          <td>${c.trigger}</td>
+          <td><span style="font-weight:700;color:${c.distGood ? "var(--good)" : "var(--warn)"}">${c.distance}</span></td>
+          <td><span class="badge" style="background:${QUAD[c.rrg.quadrant].bg};color:${QUAD[c.rrg.quadrant].color};border-color:${QUAD[c.rrg.quadrant].bg};">${c.rrg.quadrant.charAt(0) + c.rrg.quadrant.slice(1).toLowerCase()}</span></td>
+          <td>${sparkline(c)}</td>
+          <td><span class="score ${scoreClass(c.score)}" style="width:42px;height:32px;min-width:42px;font-size:15px;border-radius:8px;">${c.score}</span></td>
+        </tr>`).join("");
+    }
+
+    // ---------- View toggle ----------
+    const views = { gallery: "view-gallery", focus: "view-focus", table: "view-table" };
+    document.querySelectorAll("#viewSeg button").forEach(btn => btn.addEventListener("click", () => {
+      document.querySelectorAll("#viewSeg button").forEach(b => b.classList.toggle("active", b === btn));
+      Object.entries(views).forEach(([k, id]) => document.getElementById(id).classList.toggle("hidden", k !== btn.dataset.view));
+    }));
+
+    renderGallery();
+    renderFocus();
+    renderTable();
+  </script>
+</body>
+</html>
