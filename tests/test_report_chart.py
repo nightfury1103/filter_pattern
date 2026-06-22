@@ -738,20 +738,28 @@ def test_report_renders_lifecycle_review_setups(tmp_path: Path) -> None:
     assert "ATOMUSDT.P_nhathoai_irb.png" in html
 
 
-def test_direction_filter_keeps_directionless_review_rows_visible(tmp_path: Path) -> None:
-    review_row = _candidate("IBM", "sb", 22, "rejected")
-    review_row["evidence"]["qualified"] = False
-    review_row["evidence"]["reasons"] = ["Pattern: SB"]
-    payload = result_payload([], [review_row], {"timeframe": "D1", "technique": "nhathoai"})
+def test_direction_filter_requires_matching_ema21_side(tmp_path: Path) -> None:
+    long_row = _candidate("EA", "vcp", 83, "WAITING")
+    long_row["ema_filter"] = {"side": "above", "period": 21, "close": 165, "ema": 160}
+    short_row = _candidate("IBM", "sb", 62, "rejected")
+    short_row["evidence"]["qualified"] = False
+    short_row["evidence"]["reasons"] = ["Direction: Short", "Pattern: SB"]
+    short_row["ema_filter"] = {"side": "below", "period": 21, "close": 280, "ema": 286}
+    payload = result_payload([long_row], [short_row], {"timeframe": "D1", "technique": "nhathoai"})
     results_path = tmp_path / "results.json"
     results_path.write_text(json.dumps(payload))
 
     report_path = write_html_report(results_path, tmp_path / "index.html")
     html = report_path.read_text()
 
-    assert 'data-status="review"' in html
-    assert 'data-direction=""' in html
-    assert "direction !== 'all' && nodeDirection && nodeDirection !== direction" in html
+    assert 'data-symbol="EA"' in html
+    assert 'data-symbol="IBM"' in html
+    assert 'data-ema-side="above"' in html
+    assert 'data-ema-side="below"' in html
+    assert "const nodeEmaSide = node.dataset.emaSide || '';" in html
+    assert "direction === 'long' && nodeEmaSide === 'above'" in html
+    assert "direction === 'short' && nodeEmaSide === 'below'" in html
+    assert "matchesDirection && matchesEmaSide" in html
 
 
 def test_report_renders_rrg_reference_on_lifecycle_review_card(tmp_path: Path) -> None:

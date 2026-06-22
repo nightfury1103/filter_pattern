@@ -9,6 +9,7 @@ from filter_pattern.models import Candle, ScanResult, SymbolSpec, VCPConfig, VCP
 from filter_pattern.scanner import (
     _render_review_charts,
     _review_setup_chart_rows,
+    _result_json_with_direction,
     _shard_universe,
     scan,
     scan_all_csv,
@@ -56,6 +57,45 @@ def test_scan_market_uses_downloaded_data_and_writes_candidate(tmp_path: Path, m
     assert payload["candidates"][0]["direction_authority"]["setup_direction"] == "long"
     assert payload["candidates"][0]["direction_authority"]["decision"]
     assert (tmp_path / "reports/latest/index.html").exists()
+
+
+def test_result_json_records_latest_close_side_against_ema21() -> None:
+    candles = [
+        Candle(
+            datetime=datetime(2026, 1, 1) + timedelta(days=index),
+            open=100,
+            high=121 if index == 24 else 101,
+            low=99,
+            close=120 if index == 24 else 100,
+            volume=100_000,
+        )
+        for index in range(25)
+    ]
+    evidence = VCPEvidence(
+        qualified=True,
+        status="WAITING",
+        score=81,
+        pivot=125,
+        current_close=120,
+        distance_to_pivot_pct=4,
+        contractions=[],
+        reasons=["Direction: Long"],
+        failures=[],
+    )
+    scan_result = ScanResult(
+        symbol=SymbolSpec("AAPL", "US stock", "NASDAQ:AAPL", Path("aapl.csv")),
+        timeframe="D1",
+        evidence=evidence,
+        technique="nhathoai",
+        setup="bb",
+    )
+
+    row = _result_json_with_direction(scan_result, candles, vcp_config=VCPConfig(ema_period=21))
+
+    assert row["ema_filter"]["side"] == "above"
+    assert row["ema_filter"]["period"] == 21
+    assert row["ema_filter"]["close"] == 120
+    assert row["ema_filter"]["ema"] < 120
 
 
 def test_scan_market_attaches_rrg_reference_after_old_pattern_candidates_are_found(tmp_path: Path, monkeypatch) -> None:

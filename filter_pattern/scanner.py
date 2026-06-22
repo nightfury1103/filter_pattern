@@ -114,9 +114,9 @@ def scan_all_csv(
                     technique=technique_name,
                     setup=setup_name,
                 )
-                candidates.append(_result_json_with_direction(scan_result, candles))
+                candidates.append(_result_json_with_direction(scan_result, candles, vcp_config=config.vcp))
             else:
-                rejected_item = _result_json_with_direction(scan_result, candles)
+                rejected_item = _result_json_with_direction(scan_result, candles, vcp_config=config.vcp)
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -210,9 +210,9 @@ def _scan_csv(
                     technique=active_technique,
                     setup=setup_name,
                 )
-                candidates.append(_result_json_with_direction(scan_result, candles))
+                candidates.append(_result_json_with_direction(scan_result, candles, vcp_config=config.vcp))
             else:
-                rejected_item = _result_json_with_direction(scan_result, candles)
+                rejected_item = _result_json_with_direction(scan_result, candles, vcp_config=config.vcp)
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -367,9 +367,21 @@ def scan_market(
                     technique=active_technique,
                     setup=setup_name,
                 )
-                candidates.append(_result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol)))
+                candidates.append(
+                    _result_json_with_direction(
+                        scan_result,
+                        candles,
+                        direction_contexts.get(symbol.symbol),
+                        vcp_config=vcp_config,
+                    )
+                )
             else:
-                rejected_item = _result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol))
+                rejected_item = _result_json_with_direction(
+                    scan_result,
+                    candles,
+                    direction_contexts.get(symbol.symbol),
+                    vcp_config=vcp_config,
+                )
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -520,9 +532,21 @@ def scan_all_market(
                     technique=technique_name,
                     setup=setup_name,
                 )
-                candidates.append(_result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol)))
+                candidates.append(
+                    _result_json_with_direction(
+                        scan_result,
+                        candles,
+                        direction_contexts.get(symbol.symbol),
+                        vcp_config=vcp_config,
+                    )
+                )
             else:
-                rejected_item = _result_json_with_direction(scan_result, candles, direction_contexts.get(symbol.symbol))
+                rejected_item = _result_json_with_direction(
+                    scan_result,
+                    candles,
+                    direction_contexts.get(symbol.symbol),
+                    vcp_config=vcp_config,
+                )
                 rejected.append(rejected_item)
                 rejected_candles[_result_key(rejected_item)] = (scan_result, candles)
 
@@ -1035,6 +1059,26 @@ def _latest_ema(values: list[float], period: int) -> float | None:
     return ema
 
 
+def _latest_ema_filter(candles: list[Candle], config: VCPConfig) -> dict:
+    if not candles:
+        return {"side": "", "period": config.ema_period, "close": None, "ema": None}
+    closes = [float(candle.close) for candle in candles]
+    ema = _latest_ema(closes, config.ema_period)
+    current_close = closes[-1]
+    side = ""
+    if ema is not None:
+        if current_close >= ema:
+            side = "above"
+        elif current_close <= ema:
+            side = "below"
+    return {
+        "side": side,
+        "period": config.ema_period,
+        "close": current_close,
+        "ema": ema,
+    }
+
+
 def _data_source_label(data_provider: str) -> str:
     provider = data_provider.lower()
     if provider == "mixed":
@@ -1179,8 +1223,10 @@ def _result_json_with_direction(
     scan_result: ScanResult,
     candles: list[Candle],
     context: DirectionMarketContext | None = None,
+    vcp_config: VCPConfig | None = None,
 ) -> dict:
     row = annotate_result_with_direction_authority(scan_result.to_json(), candles, context)
+    row["ema_filter"] = _latest_ema_filter(candles, vcp_config or VCPConfig())
     proxy_data = _proxy_data(candles)
     if proxy_data:
         row["proxy_data"] = proxy_data

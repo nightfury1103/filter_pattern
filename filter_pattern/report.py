@@ -1213,6 +1213,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         const nodeTechnique = node.dataset.technique || '';
         const nodeSetup = node.dataset.setup || '';
         const nodeDirection = node.dataset.direction || '';
+        const nodeEmaSide = node.dataset.emaSide || '';
         const nodeChange = node.dataset.change || '';
         const nodeScore = Number(node.dataset.score || '0');
         const haystack = (node.dataset.symbols || node.textContent || '').toLowerCase();
@@ -1224,10 +1225,11 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         const matchesSetup = setup === 'all' || nodeStatus === 'coverage' || nodeSetup === setup;
         const directionBlocked = direction !== 'all' && nodeDirection && nodeDirection !== direction;
         const matchesDirection = nodeStatus === 'coverage' || !directionBlocked;
+        const matchesEmaSide = direction === 'all' || nodeStatus === 'coverage' || (direction === 'long' && nodeEmaSide === 'above') || (direction === 'short' && nodeEmaSide === 'below');
         const matchesChange = change === 'all' || nodeStatus === 'coverage' || nodeChange === change;
         const matchesScore = nodeStatus === 'coverage' || nodeScore >= minimumScore;
         const matchesText = !text || haystack.includes(text);
-        const visible = matchesTimeframe && matchesMarket && matchesBroker && matchesStatus && matchesTechnique && matchesSetup && matchesDirection && matchesChange && matchesScore && matchesText;
+        const visible = matchesTimeframe && matchesMarket && matchesBroker && matchesStatus && matchesTechnique && matchesSetup && matchesDirection && matchesEmaSide && matchesChange && matchesScore && matchesText;
         baseVisibility.set(node, visible);
         if (visible && dedupMode === 'symbol' && node.classList.contains('result-card')) {{
           const symbolKey = (node.dataset.symbol || '').trim();
@@ -1770,6 +1772,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
     timeframe = str(candidate.get("timeframe", "D1"))
     status = str(evidence.get("status", "qualified"))
     direction = _direction_from_evidence(evidence)
+    ema_side = _ema_side(candidate)
     direction_badge = f'<span class="badge {escape(direction)}">{escape(direction.title())}</span>' if direction else ""
     status_class = "triggered" if status.upper() == "TRIGGERED" else "waiting"
     display_setup = _display_setup(candidate)
@@ -1783,7 +1786,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
 
     exness_supported = _is_row_exness_supported(candidate)
 
-    return f"""<article class="result-card" data-filterable="true" data-status="qualified" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="result-card" data-filterable="true" data-status="qualified" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge">{escape(display_setup)}</span>{direction_badge}<span class="badge {status_class}">{escape(status)}</span>{change_badge}{_exness_badge(exness_supported)}</div>
@@ -1902,6 +1905,7 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
     setup = candidate.get("setup", "all")
     timeframe = str(candidate.get("timeframe", "D1"))
     direction = _direction_from_evidence(evidence)
+    ema_side = _ema_side(candidate)
     display_setup = _display_setup(candidate)
     change = str(candidate.get("watchlist_change", ""))
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
@@ -1910,7 +1914,7 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
 
     exness_supported = _is_row_exness_supported(candidate)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="near" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="near" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Near</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
@@ -1954,6 +1958,7 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     timeframe = str(candidate.get("timeframe", "D1"))
     status = str(evidence.get("status", "review"))
     direction = _direction_from_evidence(evidence)
+    ema_side = _ema_side(candidate)
     display_setup = _display_setup(candidate)
     change = str(candidate.get("watchlist_change", ""))
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
@@ -1961,7 +1966,7 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     rrg_reference = _rrg_reference_panel(candidate)
     exness_supported = _is_row_exness_supported(candidate)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="review" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="review" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Review</span><span class="badge">{escape(display_setup)}</span><span class="badge">{escape(status)}</span>{_exness_badge(exness_supported)}</div>
@@ -2001,6 +2006,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
     setup = item.get("setup", "all")
     timeframe = str(item.get("timeframe", "D1"))
     direction = _direction_from_evidence(evidence)
+    ema_side = _ema_side(item)
     display_setup = _display_setup(item)
     exness_supported = _is_row_exness_supported(item)
     score = _fmt(evidence.get("score"))
@@ -2019,7 +2025,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
         failure_html = f"""
     <div class="reasons failures">Strict warning:</div>
     <ul class="failures">{failures}</ul>"""
-    return f"""<article class="near result-card" data-filterable="true" data-status="warning" data-symbol="{escape(item["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(str(item.get("watchlist_change", "")))}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " warning near break triggered " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="warning" data-symbol="{escape(item["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" data-change="{escape(str(item.get("watchlist_change", "")))}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " warning near break triggered " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(item["symbol"])} <span class="badge warning-badge">{escape(warning_label)}</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
@@ -2054,11 +2060,12 @@ def _not_configured_card(item: dict) -> str:
     technique = item.get("technique", "unknown")
     setup = item.get("setup", "all")
     timeframe = str(item.get("timeframe", "D1"))
+    ema_side = _ema_side(item)
     failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:4])
 
     exness_supported = _is_row_exness_supported(item)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="not_configured" data-symbol="{escape(item["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="" data-score="0" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="not_configured" data-symbol="{escape(item["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(item["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="" data-ema-side="{escape(ema_side)}" data-score="0" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(item["symbol"] + " " + item["tradingview_symbol"] + " " + item["market"] + " " + timeframe + " " + technique + " " + setup + " " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(item["symbol"])} <span class="badge near-badge">Not Configured</span></div>
@@ -2080,6 +2087,14 @@ def _exness_badge(supported: bool) -> str:
     if not supported:
         return ""
     return '<span class="badge">Exness</span>'
+
+
+def _ema_side(row: dict) -> str:
+    ema_filter = row.get("ema_filter") or {}
+    side = str(ema_filter.get("side") or "").strip().lower()
+    if side in {"above", "below"}:
+        return side
+    return ""
 
 
 def _change_badge(change: str) -> str:
@@ -2118,13 +2133,14 @@ def _dropped_card(item: dict) -> str:
     timeframe = str(item.get("timeframe", ""))
     market = str(item.get("market", ""))
     direction = str(item.get("direction", ""))
+    ema_side = _ema_side(item)
     symbol = str(item.get("symbol", ""))
     exness_supported = _is_row_exness_supported(item)
     display_setup = _display_setup(item)
     score = _fmt(item.get("previous_score"))
     status = str(item.get("previous_status") or "n/a")
     change = str(item.get("watchlist_change", "DROPPED"))
-    return f"""<article class="near result-card" data-filterable="true" data-status="dropped" data-symbol="{escape(symbol)}" data-timeframe="{escape(timeframe)}" data-market="{escape(market)}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-change="{escape(change)}" data-score="{escape(str(item.get("previous_score") or 0))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(symbol + " " + tv_symbol + " " + market + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " DROPPED " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" data-filterable="true" data-status="dropped" data-symbol="{escape(symbol)}" data-timeframe="{escape(timeframe)}" data-market="{escape(market)}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" data-change="{escape(change)}" data-score="{escape(str(item.get("previous_score") or 0))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(symbol + " " + tv_symbol + " " + market + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " DROPPED " + ("exness" if exness_supported else ""))}">
   <div class="card-head">
     <div>
       <div class="symbol">{escape(symbol)} <span class="badge">{escape(display_setup)}</span>{_change_badge(change)}{_exness_badge(exness_supported)}</div>
