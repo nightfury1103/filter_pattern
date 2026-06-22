@@ -70,6 +70,8 @@ def test_chart_and_report_smoke(tmp_path: Path) -> None:
     assert 'id="coverageSection"' in html
     assert "applyFilters();" in html
     assert 'data-filterable="true"' in html
+    assert "color-scheme: light dark;" in html
+    assert "@media (prefers-color-scheme: dark)" in html
     assert "Block short: accumulation/recovery risk" in html
     assert "Accumulation / Recovery" in html
 

@@ -260,7 +260,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
   <title>{escape(timeframe)} Pattern Scanner Report</title>
   <style>
     :root {{
-      color-scheme: light;
+      color-scheme: light dark;
       --text: #0f1729;
       --muted: #64748b;
       --faint: #94a3b8;
@@ -973,6 +973,129 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       margin-top: 12px;
       color: #991b1b;
       font-size: 13px;
+    }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --faint: #64748b;
+        --line: #263244;
+        --line-strong: #3b4a60;
+        --soft: #111827;
+        --panel: #0f172a;
+        --dark-panel: #111827;
+        --dark-panel-2: #1f2937;
+        --chrome: #0b1120;
+        --bg: #080d17;
+        --accent: #60a5fa;
+        --good: #4ade80;
+        --warn: #fbbf24;
+        --bad: #f87171;
+        --shadow-sm: 0 1px 2px rgba(0,0,0,.28);
+        --shadow: 0 8px 26px rgba(0,0,0,.32);
+        --shadow-lg: 0 20px 52px rgba(0,0,0,.42);
+      }}
+      aside.nav {{
+        background: #080d17;
+        color: #e5e7eb;
+      }}
+      header {{
+        background: rgba(11, 17, 32, .9);
+      }}
+      .toolbar {{
+        background: rgba(8, 13, 23, .92);
+      }}
+      input, select {{
+        color-scheme: dark;
+      }}
+      .tag, .rrg-chart-title, .overview-symbol em, .symbol-chip, .body ul, .chart-tile strong {{
+        color: #cbd5e1;
+      }}
+      .bar {{
+        background: #334155;
+      }}
+      .rrg-svg, .chart-frame img, .chart-tile {{
+        background: #0b1120;
+      }}
+      .chart-pair > .chart-tile + .chart-tile, .chart-tile strong, .chart-frame > .rrg-reference {{
+        background: #101827;
+      }}
+      .rrg-axis {{
+        stroke: #94a3b8;
+      }}
+      .rrg-gridline {{
+        stroke: #243449;
+      }}
+      .rrg-dot {{
+        stroke: #0b1120;
+      }}
+      .rrg-label {{
+        fill: #e5e7eb;
+        stroke: #0b1120;
+      }}
+      .rrg-small-label, .rrg-legend {{
+        fill: #94a3b8;
+      }}
+      .rrg-reference {{
+        border-color: #1e3a5f;
+        background: #0d1b2d;
+        color: #dbeafe;
+      }}
+      details.lower-tf-review, .lower-tf-card {{
+        border-color: var(--line);
+        background: var(--soft);
+      }}
+      details.lower-tf-review summary {{
+        color: var(--text);
+        background: var(--panel);
+        border-bottom-color: var(--line);
+      }}
+      .lower-tf-head, .lower-tf-note {{
+        border-bottom-color: var(--line);
+      }}
+      .badge {{
+        background: #1e293b;
+        color: #c7d2fe;
+        border-color: #334155;
+      }}
+      .badge.near-badge, .badge.warning-badge, .badge.waiting {{
+        background: #3b2f16;
+        color: #fbbf24;
+        border-color: #854d0e;
+      }}
+      .badge.triggered, .badge.long, .badge.change-improved {{
+        background: #12351f;
+        color: #4ade80;
+        border-color: #166534;
+      }}
+      .badge.short, .badge.change-dropped {{
+        background: #3f1518;
+        color: #f87171;
+        border-color: #7f1d1d;
+      }}
+      .badge.change-new {{
+        background: #0f3340;
+        color: #67e8f9;
+        border-color: #155e75;
+      }}
+      .badge.change-triggered {{
+        background: #122a55;
+        color: #93c5fd;
+        border-color: #1d4ed8;
+      }}
+      .badge.change-weaker {{
+        background: #3b2412;
+        color: #fdba74;
+        border-color: #9a3412;
+      }}
+      .badge.change-unchanged, .badge.change-first_run {{
+        background: var(--soft);
+        color: #cbd5e1;
+        border-color: var(--line);
+      }}
+      .near .failures, .data-errors {{
+        color: #fca5a5;
+      }}
     }}
     @media (max-width: 1180px) {{
       .app {{ grid-template-columns: 1fr; }}
