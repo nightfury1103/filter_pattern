@@ -7,7 +7,12 @@ import sys
 from pathlib import Path
 
 from .direction_backtest import run_direction_backtest
-from .report import write_combined_html_report, write_combined_outputs, write_html_report
+from .report import (
+    write_combined_html_report,
+    write_combined_outputs,
+    write_html_report,
+    write_watchlist_state,
+)
 from .rrg_dashboard import build_crypto_rrg_demo, build_crypto_rrg_overview, build_usstock_rrg_demo, build_vnstock_rrg_demo
 from .scanner import scan_all_csv, scan_all_market, scan_csv, scan_market
 from .techniques import NHATHOAI_SETUP_CHOICES, TECHNIQUE_CHOICES
@@ -285,6 +290,13 @@ def main(argv: list[str] | None = None) -> int:
     combine_parser.add_argument("--results-out", help="optional combined results.json output path")
     combine_parser.add_argument("--copy-assets", action="store_true", help="copy referenced chart assets next to the combined report")
 
+    state_parser = subparsers.add_parser(
+        "watchlist-state",
+        help="extract compact previous-run state from a results.json file",
+    )
+    state_parser.add_argument("--input", required=True, help="results.json path")
+    state_parser.add_argument("--out", required=True, help="compact state output path")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "init-config":
@@ -414,6 +426,10 @@ def main(argv: list[str] | None = None) -> int:
             output_path, results_path = write_combined_outputs(args.inputs, args.out, args.results_out, args.copy_assets)
             if results_path is not None:
                 print(f"Wrote {results_path}")
+            print(f"Wrote {output_path}")
+            return 0
+        if args.command == "watchlist-state":
+            output_path = write_watchlist_state(args.input, args.out)
             print(f"Wrote {output_path}")
             return 0
     except (FileNotFoundError, ValueError) as exc:

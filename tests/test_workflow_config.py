@@ -27,3 +27,26 @@ def test_pages_workflow_splits_d1_crypto_into_parallel_shards() -> None:
     assert "label: Crypto 3/3" in workflow
     assert workflow.count('markets: "Crypto"') >= 6
     assert workflow.count("shard_count: 3") >= 6
+
+
+def test_pages_workflow_uses_compact_per_shard_state_instead_of_restoring_full_site() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert "STATE_BRANCH: scanner-state" in workflow
+    assert "Restore previous D1 shard state" in workflow
+    assert "Restore previous H4 shard state" in workflow
+    assert "watchlist-state" in workflow
+    assert "git archive origin/gh-pages" not in workflow
+    assert 'public/previous/d1-shard-${{ matrix.shard.id }}.json' in workflow
+    assert 'public/previous/h4-shard-${{ matrix.shard.id }}.json' in workflow
+
+
+def test_pages_workflow_deploys_public_directly_without_pushing_generated_site() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert "Save compact scanner state" in workflow
+    assert "Save generated site branch" not in workflow
+    assert "git branch -M gh-pages" not in workflow
+    assert 'if ! git push --force origin "HEAD:${STATE_BRANCH}"' in workflow
+    assert "path: public" in workflow
+    assert "pages-public" not in workflow

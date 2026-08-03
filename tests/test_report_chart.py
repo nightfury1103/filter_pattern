@@ -14,6 +14,7 @@ from filter_pattern.report import (
     write_combined_html_report,
     write_combined_results_json,
     write_html_report,
+    write_watchlist_state,
 )
 from tests.test_detector import make_config, make_series
 
@@ -929,6 +930,31 @@ def test_watchlist_change_tracking_marks_new_unchanged_and_dropped(tmp_path: Pat
 
     assert next_payload["watchlist_dropped"][0]["symbol"] == "AAPL"
     assert next_payload["watchlist_dropped"][0]["watchlist_change"] == "DROPPED"
+
+
+def test_compact_watchlist_state_preserves_change_tracking_fields(tmp_path: Path) -> None:
+    previous_candidate = _candidate("AAPL", "dd", 84, "WAITING")
+    previous_candidate["large_unused_field"] = "x" * 10_000
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(result_payload([previous_candidate], [], {"timeframe": "D1"})))
+    state_path = tmp_path / "state" / "previous.json"
+
+    write_watchlist_state(results_path, state_path)
+
+    state = json.loads(state_path.read_text())
+    assert state["schema_version"] == 1
+    assert state["candidates"][0]["symbol"] == "AAPL"
+    assert state["candidates"][0]["evidence"] == {
+        "status": "WAITING",
+        "score": 84,
+        "reasons": ["Direction: Long"],
+        "failures": [],
+    }
+    assert "large_unused_field" not in state_path.read_text()
+
+    current_payload = result_payload([_candidate("AAPL", "dd", 84, "WAITING")], [], {"timeframe": "D1"})
+    apply_watchlist_changes(current_payload, state_path)
+    assert current_payload["candidates"][0]["watchlist_change"] == "UNCHANGED"
 
 
 def _candidate(symbol: str, setup: str, score: int, status: str) -> dict:

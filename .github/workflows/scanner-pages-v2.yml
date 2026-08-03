@@ -34,6 +34,7 @@ env:
   H4_UNIVERSE: default
   H4_MARKETS: "Commodity,Forex,Crypto"
   NEAR_MATCH_CHART_LIMIT: "5"
+  STATE_BRANCH: scanner-state
 
 jobs:
   scan_d1_shard:
@@ -97,14 +98,18 @@ jobs:
       - name: Install scanner
         run: python -m pip install -e .
 
-      - name: Restore current published site
+      - name: Restore previous D1 shard state
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p public
-          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
-            git fetch --depth=1 origin gh-pages
-            git archive origin/gh-pages | tar -x -C public
+          mkdir -p public/previous
+          STATE_FILE="public/previous/d1-shard-${{ matrix.shard.id }}.json"
+          STATE_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${STATE_BRANCH}/d1/d1-shard-${{ matrix.shard.id }}.json"
+          if ! curl --fail --silent --show-error --location \
+            --retry 2 --retry-max-time 30 --connect-timeout 5 --max-time 30 \
+            --output "$STATE_FILE" "$STATE_URL"; then
+            echo "No previous D1 state is available for ${{ matrix.shard.id }}; treating this as its first run."
+            rm -f "$STATE_FILE"
           fi
 
       - name: Scan D1 shard
@@ -128,7 +133,7 @@ jobs:
             --shard-count "${{ matrix.shard.shard_count }}" \
             --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
             --chart-workers "$CHART_RENDER_WORKERS" \
-            --previous-results "public/d1-shards/d1-shard-${{ matrix.shard.id }}/results.json"
+            --previous-results "public/previous/d1-shard-${{ matrix.shard.id }}.json"
 
       - name: Upload D1 shard report artifact
         uses: actions/upload-artifact@v4
@@ -178,14 +183,18 @@ jobs:
       - name: Install scanner
         run: python -m pip install -e .
 
-      - name: Restore current published site
+      - name: Restore previous H4 shard state
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p public
-          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
-            git fetch --depth=1 origin gh-pages
-            git archive origin/gh-pages | tar -x -C public
+          mkdir -p public/previous
+          STATE_FILE="public/previous/h4-shard-${{ matrix.shard.id }}.json"
+          STATE_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${STATE_BRANCH}/h4/h4-shard-${{ matrix.shard.id }}.json"
+          if ! curl --fail --silent --show-error --location \
+            --retry 2 --retry-max-time 30 --connect-timeout 5 --max-time 30 \
+            --output "$STATE_FILE" "$STATE_URL"; then
+            echo "No previous H4 state is available for ${{ matrix.shard.id }}; treating this as its first run."
+            rm -f "$STATE_FILE"
           fi
 
       - name: Scan H4 shard
@@ -209,7 +218,7 @@ jobs:
             --shard-count "${{ matrix.shard.shard_count }}" \
             --near-match-chart-limit "$NEAR_MATCH_CHART_LIMIT" \
             --chart-workers "$CHART_RENDER_WORKERS" \
-            --previous-results "public/h4-shards/h4-shard-${{ matrix.shard.id }}/results.json"
+            --previous-results "public/previous/h4-shard-${{ matrix.shard.id }}.json"
 
       - name: Upload H4 shard report artifact
         uses: actions/upload-artifact@v4
@@ -269,6 +278,13 @@ jobs:
             echo "No D1 shard results were downloaded." >&2
             exit 1
           fi
+          mkdir -p scanner-state/d1
+          for input in "${D1_INPUTS[@]}"; do
+            shard_name="$(basename "$(dirname "$input")")"
+            python -m filter_pattern.cli watchlist-state \
+              --input "$input" \
+              --out "scanner-state/d1/${shard_name}.json"
+          done
           python -m filter_pattern.cli combine-report \
             --inputs "${D1_INPUTS[@]}" \
             --out public/d1/index.html \
@@ -303,6 +319,13 @@ jobs:
             echo "No H4 shard results were downloaded." >&2
             exit 1
           fi
+          mkdir -p scanner-state/h4
+          for input in "${H4_INPUTS[@]}"; do
+            shard_name="$(basename "$(dirname "$input")")"
+            python -m filter_pattern.cli watchlist-state \
+              --input "$input" \
+              --out "scanner-state/h4/${shard_name}.json"
+          done
           python -m filter_pattern.cli combine-report \
             --inputs "${H4_INPUTS[@]}" \
             --out public/h4/index.html \
@@ -340,52 +363,31 @@ jobs:
               > public/index.html
           fi
 
-      - name: Save generated site branch
+      - name: Save compact scanner state
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cd public
+          cd scanner-state
           git init
           git add .
-          if git diff --cached --quiet; then
-            echo "No generated site changes to save."
-          else
-            git commit -m "Update scanner report"
-            git branch -M gh-pages
-            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            git push --force origin gh-pages
-          fi
-          cd "$GITHUB_WORKSPACE"
-          if [[ -d public/.git ]]; then
-            chmod -R u+w public/.git || true
-            for attempt in 1 2 3; do
-              rm -rf public/.git && break
-              sleep 1
-            done
-            if [[ -d public/.git ]]; then
-              echo "::warning::Could not remove public/.git after publishing; continuing because gh-pages was already pushed."
-            fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update scanner state"
+          git branch -M "$STATE_BRANCH"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! git push --force origin "HEAD:${STATE_BRANCH}"; then
+            echo "::warning::Could not update compact scanner state; Pages deployment will continue."
           fi
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Stage Pages artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf pages-public
-          mkdir -p pages-public
-          rsync -a --delete --exclude='.git' public/ pages-public/
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: pages-public
+          path: public
 
       - name: Deploy to GitHub Pages
         id: deployment

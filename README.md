@@ -168,21 +168,20 @@ python -m pytest
 
 ## Deploy To GitHub Pages
 
-This repo includes `.github/workflows/scanner-pages.yml` for scheduled website deployment.
+This repo includes `.github/workflows/scanner-pages-v2.yml` for scheduled website deployment.
 
 Recommended first run:
 
 1. Push the repo to GitHub.
 2. In GitHub, open **Settings -> Pages** and choose **GitHub Actions** as the source.
 3. Open **Actions -> Scanner Pages -> Run workflow**.
-4. Choose `timeframe = all` for the first deployment.
+4. Run the workflow.
 
 After that, the workflow refreshes:
 
-- H4 every 4 hours.
-- D1 once per weekday after the US daily candle is normally available.
+- D1 and H4 every 2 hours.
 
-The published site keeps the previous D1 or H4 report between runs by saving generated output to the `gh-pages` branch, then deploying the static `public/` folder to GitHub Pages.
+The workflow deploys the static `public/` folder directly with GitHub Pages. A separate `scanner-state` branch stores compact per-shard watchlist state so change tracking does not need to download or push the full generated website.
 
 Each scan compares the new qualified watchlist with the previous `results.json` for the same timeframe. The report marks candidates as:
 

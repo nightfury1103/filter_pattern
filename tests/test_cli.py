@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from filter_pattern.cli import main
@@ -37,6 +38,19 @@ def test_init_config_does_not_overwrite_without_force(tmp_path: Path, capsys) ->
     assert exit_code == 2
     assert config_path.read_text() == "custom: true\n"
     assert "Use --force" in captured.err
+
+
+def test_watchlist_state_cli_writes_compact_state(tmp_path: Path, capsys) -> None:
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps({"candidates": []}))
+    state_path = tmp_path / "state.json"
+
+    exit_code = main(["watchlist-state", "--input", str(results_path), "--out", str(state_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert json.loads(state_path.read_text()) == {"schema_version": 1, "candidates": []}
+    assert "Wrote" in captured.out
 
 
 def test_scan_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, monkeypatch, capsys) -> None:

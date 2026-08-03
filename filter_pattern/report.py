@@ -118,6 +118,38 @@ def write_combined_outputs(
     return write_html_payload(payload, html_output), results_output
 
 
+def write_watchlist_state(results_path: str | Path, output_path: str | Path) -> Path:
+    """Write the minimal previous-run payload needed by apply_watchlist_changes."""
+    results_file = Path(results_path)
+    output_file = Path(output_path)
+    payload = json.loads(results_file.read_text())
+    candidates = []
+    for item in payload.get("candidates", []):
+        evidence = item.get("evidence", {})
+        direction = _direction_from_evidence(evidence)
+        candidates.append(
+            {
+                "symbol": item.get("symbol", ""),
+                "market": item.get("market", ""),
+                "tradingview_symbol": item.get("tradingview_symbol", ""),
+                "timeframe": item.get("timeframe", ""),
+                "technique": item.get("technique", ""),
+                "setup": item.get("setup", ""),
+                "evidence": {
+                    "status": evidence.get("status", ""),
+                    "score": evidence.get("score"),
+                    "reasons": [f"Direction: {direction.title()}"] if direction else [],
+                    "failures": [],
+                },
+            }
+        )
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    state = {"schema_version": 1, "candidates": candidates}
+    output_file.write_text(json.dumps(state, separators=(",", ":")))
+    return output_file
+
+
 def combined_result_payload(results_paths: list[str | Path]) -> dict:
     payloads = []
     for results_path in results_paths:
