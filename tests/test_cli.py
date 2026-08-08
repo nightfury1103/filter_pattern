@@ -53,6 +53,34 @@ def test_watchlist_state_cli_writes_compact_state(tmp_path: Path, capsys) -> Non
     assert "Wrote" in captured.out
 
 
+def test_site_index_cli_passes_timeframe_results_to_writer(tmp_path: Path, monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_write_site_index(inputs: list[str], out: str) -> Path:
+        seen["inputs"] = inputs
+        seen["out"] = out
+        return tmp_path / "index.html"
+
+    monkeypatch.setattr("filter_pattern.cli.write_site_index", fake_write_site_index)
+
+    exit_code = main(
+        [
+            "site-index",
+            "--inputs",
+            "public/d1/results.json",
+            "public/h4/results.json",
+            "--out",
+            "public/index.html",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen["inputs"] == ["public/d1/results.json", "public/h4/results.json"]
+    assert seen["out"] == "public/index.html"
+    assert "Wrote" in captured.out
+
+
 def test_scan_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, monkeypatch, capsys) -> None:
     seen: dict[str, object] = {}
 

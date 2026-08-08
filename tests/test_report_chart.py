@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -9,11 +10,13 @@ from filter_pattern.chart import _minimum_body_height, _price_label, _date_forma
 from filter_pattern.detector import detect_vcp
 from filter_pattern.models import Candle, ScanResult, SymbolSpec
 from filter_pattern.report import (
+    REVIEW_RENDER_LIMIT,
     apply_watchlist_changes,
     result_payload,
     write_combined_html_report,
     write_combined_results_json,
     write_html_report,
+    write_site_index,
     write_watchlist_state,
 )
 from tests.test_detector import make_config, make_series
@@ -492,15 +495,99 @@ def test_combined_results_can_materialize_shard_assets(tmp_path: Path) -> None:
         asset_root=tmp_path / "public" / "d1",
     )
     combined_payload = json.loads(combined_results.read_text())
-    copied_chart = tmp_path / "public" / "d1" / "assets" / "d1-shard-crypto" / "charts" / "atomusdt.jpg"
-    copied_preview = copied_chart.parent / "preview" / "atomusdt.jpg"
-    copied_rrg = tmp_path / "public" / "d1" / "assets" / "d1-shard-crypto" / "rrg-reference" / "atomusdt-rrg-proof.jpg"
+    chart_hash = hashlib.sha256(b"full chart").hexdigest()[:12]
+    rrg_hash = hashlib.sha256(b"rrg chart").hexdigest()[:12]
+    copied_chart = (
+        tmp_path / "public" / "d1" / "assets" / "d1-shard-crypto" / "charts" / f"atomusdt.{chart_hash}.jpg"
+    )
+    copied_preview = copied_chart.parent / "preview" / copied_chart.name
+    copied_rrg = (
+        tmp_path
+        / "public"
+        / "d1"
+        / "assets"
+        / "d1-shard-crypto"
+        / "rrg-reference"
+        / f"atomusdt-rrg-proof.{rrg_hash}.jpg"
+    )
 
     assert copied_chart.exists()
     assert copied_preview.exists()
     assert copied_rrg.exists()
     assert combined_payload["candidates"][0]["chart_path"] == str(copied_chart)
     assert combined_payload["candidates"][0]["rrg"]["rrg_chart_path"] == str(copied_rrg)
+
+
+def test_materialized_asset_url_changes_when_chart_content_changes(tmp_path: Path) -> None:
+    shard_dir = tmp_path / "public" / "d1-shards" / "d1-shard-us-stock"
+    chart_path = shard_dir / "charts" / "AAPL.jpg"
+    preview_path = shard_dir / "charts" / "preview" / "AAPL.jpg"
+    chart_path.parent.mkdir(parents=True)
+    preview_path.parent.mkdir(parents=True)
+    chart_path.write_bytes(b"old chart")
+    preview_path.write_bytes(b"old preview")
+    row = _candidate("AAPL", "dd", 84, "WAITING")
+    row["chart_path"] = str(chart_path)
+    source_path = shard_dir / "results.json"
+    source_path.write_text(json.dumps(result_payload([row], [], {"timeframe": "D1"})))
+
+    first_path = write_combined_results_json(
+        [source_path], tmp_path / "first" / "results.json", copy_assets=True, asset_root=tmp_path / "first"
+    )
+    first_url = json.loads(first_path.read_text())["candidates"][0]["chart_path"]
+
+    chart_path.write_bytes(b"new chart")
+    preview_path.write_bytes(b"new preview")
+    second_path = write_combined_results_json(
+        [source_path], tmp_path / "second" / "results.json", copy_assets=True, asset_root=tmp_path / "second"
+    )
+    second_url = json.loads(second_path.read_text())["candidates"][0]["chart_path"]
+
+    assert first_url != second_url
+    assert "?" not in first_url
+    assert Path(first_url).exists()
+    assert Path(second_url).exists()
+
+
+def test_report_limits_initial_review_cards_and_keeps_full_results_link(tmp_path: Path) -> None:
+    reviews = []
+    for index in range(REVIEW_RENDER_LIMIT + 25):
+        row = _candidate(f"SYM{index}", "dd", 60, "FAILED")
+        row["review_score"] = 60 - (index / 1000)
+        reviews.append(row)
+    payload = result_payload([], [], {"timeframe": "D1"})
+    payload["review_setups"] = reviews
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    report_path = write_html_report(results_path, tmp_path / "index.html")
+    html = report_path.read_text()
+
+    assert html.count('data-status="review"') == REVIEW_RENDER_LIMIT
+    assert f"Showing the top {REVIEW_RENDER_LIMIT:,} of {len(reviews):,} reviews" in html
+    assert 'href="results.json"' in html
+    assert "content-visibility: auto" in html
+
+
+def test_site_index_is_lightweight_and_links_timeframe_reports(tmp_path: Path) -> None:
+    inputs = []
+    for timeframe in ("D1", "H4"):
+        candidate = _candidate("AAPL", "dd", 84, "WAITING")
+        candidate["timeframe"] = timeframe
+        candidate["data_as_of"] = "2026-08-07T00:00:00+00:00"
+        payload = result_payload([candidate], [], {"timeframe": timeframe})
+        path = tmp_path / timeframe.lower() / "results.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(payload))
+        inputs.append(path)
+
+    output_path = write_site_index(inputs, tmp_path / "index.html")
+    html = output_path.read_text()
+
+    assert 'href="d1/"' in html
+    assert 'href="h4/"' in html
+    assert "Data as of 2026-08-07T00:00:00+00:00" in html
+    assert len(html.encode()) < 20_000
 
 
 def test_combined_report_links_h4_volume_confirmation_to_d1_near_trigger(tmp_path: Path) -> None:

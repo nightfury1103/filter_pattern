@@ -183,6 +183,8 @@ After that, the workflow refreshes:
 
 The workflow deploys the static `public/` folder directly with GitHub Pages. A separate `scanner-state` branch stores compact per-shard watchlist state so change tracking does not need to download or push the full generated website.
 
+The site root is a lightweight D1/H4 selector. Detailed reports render the highest-ranked 300 lifecycle-review cards initially while keeping complete evaluations in each timeframe's `results.json`. Published chart filenames include a content hash, so a newly generated image cannot be confused with an older GitHub Pages cache entry. Reports also show the latest candle timestamp as `Data as of`.
+
 Each scan compares the new qualified watchlist with the previous `results.json` for the same timeframe. The report marks candidates as:
 
 - `New`

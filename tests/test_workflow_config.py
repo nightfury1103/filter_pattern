@@ -50,3 +50,10 @@ def test_pages_workflow_deploys_public_directly_without_pushing_generated_site()
     assert 'if ! git push --force origin "HEAD:${STATE_BRANCH}"' in workflow
     assert "path: public" in workflow
     assert "pages-public" not in workflow
+
+
+def test_pages_workflow_builds_lightweight_site_index() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert "Build site entry report" in workflow
+    assert "python -m filter_pattern.cli site-index" in workflow

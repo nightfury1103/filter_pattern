@@ -96,6 +96,7 @@ def test_result_json_records_latest_close_side_against_ema21() -> None:
     assert row["ema_filter"]["period"] == 21
     assert row["ema_filter"]["close"] == 120
     assert row["ema_filter"]["ema"] < 120
+    assert row["data_as_of"] == candles[-1].datetime.isoformat()
 
 
 def test_scan_market_attaches_rrg_reference_after_old_pattern_candidates_are_found(tmp_path: Path, monkeypatch) -> None:

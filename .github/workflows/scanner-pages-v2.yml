@@ -346,7 +346,7 @@ jobs:
             ROOT_INPUTS+=(public/h4/results.json)
           fi
           if [[ "${#ROOT_INPUTS[@]}" -gt 0 ]]; then
-            python -m filter_pattern.cli combine-report \
+            python -m filter_pattern.cli site-index \
               --inputs "${ROOT_INPUTS[@]}" \
               --out public/index.html
           elif [[ -f public/d1/index.html ]]; then

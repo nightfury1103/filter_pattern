@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from collections import defaultdict
@@ -14,6 +15,8 @@ from .exness import is_exness_supported_symbol
 
 TRIGGER_WARNING_DISTANCE_PCT = 5.0
 REVIEW_SETUP_LIMIT = 5000
+REVIEW_RENDER_LIMIT = 300
+ASSET_HASH_LENGTH = 12
 
 
 def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:
@@ -118,6 +121,80 @@ def write_combined_outputs(
     return write_html_payload(payload, html_output), results_output
 
 
+def write_site_index(results_paths: list[str | Path], output_path: str | Path) -> Path:
+    """Write a small Pages landing page without embedding every report card."""
+    reports = []
+    for results_path in results_paths:
+        results_file = Path(results_path)
+        if not results_file.exists():
+            raise FileNotFoundError(f"Results file not found: {results_file}")
+        payload = json.loads(results_file.read_text())
+        timeframe = str(payload.get("timeframe") or payload.get("config", {}).get("timeframe") or "Report")
+        reports.append(
+            {
+                "timeframe": timeframe,
+                "href": f"{timeframe.lower()}/",
+                "generated_at": str(payload.get("generated_at") or "unknown"),
+                "data_as_of": str(payload.get("data_as_of") or "unknown"),
+                "scanned": int(payload.get("scanned_symbols") or 0),
+                "qualified": len(payload.get("candidates", [])),
+                "warnings": len(payload.get("trigger_warnings", [])),
+            }
+        )
+    if not reports:
+        raise ValueError("at least one results.json input is required")
+
+    cards = "\n".join(
+        f"""<a class="report" href="{escape(report['href'])}">
+      <span class="timeframe">{escape(report['timeframe'])}</span>
+      <strong>{report['qualified']} qualified · {report['warnings']} warnings</strong>
+      <span>{report['scanned']} symbols scanned</span>
+      <span>Data as of {escape(report['data_as_of'])}</span>
+      <small>Report generated {escape(report['generated_at'])}</small>
+    </a>"""
+        for report in sorted(reports, key=lambda item: item["timeframe"])
+    )
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(
+        f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Filter Pattern Reports</title>
+  <style>
+    :root {{ color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }}
+    body {{ margin: 0; background: #f5f7fa; color: #0f172a; }}
+    main {{ max-width: 920px; margin: 0 auto; padding: 64px 24px; }}
+    h1 {{ margin: 0 0 8px; font-size: clamp(32px, 6vw, 56px); }}
+    p {{ color: #64748b; margin: 0 0 32px; }}
+    .reports {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }}
+    .report {{ display: grid; gap: 9px; padding: 24px; border: 1px solid #dbe3ee; border-radius: 16px; background: #fff; color: inherit; text-decoration: none; box-shadow: 0 8px 28px rgba(15, 23, 42, .08); }}
+    .report:hover {{ border-color: #2563eb; transform: translateY(-2px); }}
+    .timeframe {{ color: #2563eb; font-size: 13px; font-weight: 800; letter-spacing: .12em; }}
+    .report strong {{ font-size: 20px; }}
+    .report span, .report small {{ color: #64748b; }}
+    @media (prefers-color-scheme: dark) {{
+      body {{ background: #0f172a; color: #e2e8f0; }}
+      .report {{ background: #172033; border-color: #334155; }}
+      p, .report span, .report small {{ color: #94a3b8; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Filter Pattern</h1>
+    <p>Choose a timeframe. Each report shows its exact market-data timestamp so freshness is visible.</p>
+    <section class="reports">{cards}</section>
+  </main>
+</body>
+</html>
+"""
+    )
+    return output_file
+
+
 def write_watchlist_state(results_path: str | Path, output_path: str | Path) -> Path:
     """Write the minimal previous-run payload needed by apply_watchlist_changes."""
     results_file = Path(results_path)
@@ -164,11 +241,18 @@ def combined_result_payload(results_paths: list[str | Path]) -> dict:
 
 def materialize_combined_assets(payload: dict, output_dir: str | Path) -> dict:
     base_dir = Path(output_dir)
+    copied: dict[Path, Path] = {}
     for container, key, path_value in _payload_asset_paths(payload):
         source = Path(str(path_value))
         if not source.exists():
             continue
+        source_key = source.resolve()
+        if source_key in copied:
+            container[key] = str(copied[source_key])
+            continue
         destination = _combined_asset_destination(source, base_dir)
+        if source.resolve() != destination.resolve():
+            destination = _content_hashed_path(destination, source)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if source.resolve() != destination.resolve():
             shutil.copy2(source, destination)
@@ -178,16 +262,24 @@ def materialize_combined_assets(payload: dict, output_dir: str | Path) -> dict:
             preview_destination.parent.mkdir(parents=True, exist_ok=True)
             if preview.resolve() != preview_destination.resolve():
                 shutil.copy2(preview, preview_destination)
+        copied[source_key] = destination
         container[key] = str(destination)
     return payload
+
+
+def _content_hashed_path(destination: Path, source: Path) -> Path:
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()[:ASSET_HASH_LENGTH]
+    return destination.with_name(f"{destination.stem}.{digest}{destination.suffix.lower()}")
 
 
 def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     output_file = Path(output_path)
     candidates = payload.get("candidates", [])
     near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
-    review_setups = payload.get("review_setups") or _review_setups(payload.get("rejected", []))
-    trigger_warnings = _trigger_warnings(candidates + near_matches + review_setups)
+    all_review_setups = payload.get("review_setups") or _review_setups(payload.get("rejected", []))
+    review_setups = all_review_setups[:REVIEW_RENDER_LIMIT]
+    omitted_review_count = max(0, len(all_review_setups) - len(review_setups))
+    trigger_warnings = _trigger_warnings(candidates + near_matches + all_review_setups)
     not_configured = _not_configured_rows(payload.get("rejected", []))
     dropped = payload.get("watchlist_dropped", [])
     watchlist_changes = payload.get("watchlist_changes", {})
@@ -201,19 +293,19 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     technique_options = "\n".join(
         f'<option value="{escape(technique_name)}">{escape(technique_name)}</option>'
         for technique_name in _techniques_in_rows(
-            candidates + near_matches + review_setups + trigger_warnings + not_configured + payload.get("rejected", [])
+            candidates + near_matches + all_review_setups + trigger_warnings + not_configured + payload.get("rejected", [])
         )
     )
     setup_options = "\n".join(
         f'<option value="{escape(setup_name)}">{escape(setup_name.upper())}</option>'
         for setup_name in _setups_in_rows(
-            candidates + near_matches + review_setups + trigger_warnings + not_configured + payload.get("rejected", [])
+            candidates + near_matches + all_review_setups + trigger_warnings + not_configured + payload.get("rejected", [])
         )
     )
     timeframe_options = "\n".join(
         f'<option value="{escape(timeframe)}">{escape(timeframe)}</option>'
         for timeframe in _timeframes_in_rows(
-            candidates + near_matches + review_setups + trigger_warnings + not_configured + payload.get("rejected", []), payload
+            candidates + near_matches + all_review_setups + trigger_warnings + not_configured + payload.get("rejected", []), payload
         )
     )
     change_options = "\n".join(
@@ -238,9 +330,15 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
 """
     review_rows = "\n".join(_review_setup_card(candidate, output_file.parent) for candidate in review_setups)
     if review_rows:
+        omitted_note = ""
+        if omitted_review_count:
+            omitted_note = (
+                f" Showing the top {len(review_setups):,} of {len(all_review_setups):,} reviews for fast rendering; "
+                'the complete evaluation data remains available in <a href="results.json">results.json</a>.'
+            )
         review_rows = f"""
     <h2>Continue Watching</h2>
-    <p class="section-note">These rejected, failed, late, or already-triggered structures still have recognizable pattern context. Keep them visible for manual lifecycle review because a setup can rebuild and trigger again.</p>
+    <p class="section-note">These rejected, failed, late, or already-triggered structures still have recognizable pattern context. Keep them visible for manual lifecycle review because a setup can rebuild and trigger again.{omitted_note}</p>
     {review_rows}
 """
     warning_rows = "\n".join(_trigger_warning_card(item, output_file.parent) for item in trigger_warnings)
@@ -716,6 +814,10 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       transition: box-shadow .18s, border-color .18s, transform .18s;
     }}
     article:hover {{ box-shadow: var(--shadow-lg); border-color: var(--line-strong); transform: translateY(-2px); }}
+    article.result-card {{
+      content-visibility: auto;
+      contain-intrinsic-size: auto 720px;
+    }}
     .card-head {{
       display: flex;
       justify-content: space-between;
@@ -1165,7 +1267,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <div class="nav-pill"><span>Triggered</span><span class="count">{triggered}</span></div>
         <div class="nav-pill"><span>Waiting</span><span class="count">{waiting}</span></div>
       <div class="nav-pill"><span>Warnings</span><span class="count">{len(trigger_warnings)}</span></div>
-      <div class="nav-pill"><span>Continue Watching</span><span class="count">{len(review_setups)}</span></div>
+      <div class="nav-pill"><span>Continue Watching</span><span class="count">{len(all_review_setups)}</span></div>
       <div class="nav-pill"><span>Near Match</span><span class="count">{len(near_matches)}</span></div>
       <div class="nav-pill"><span>Exness Supported</span><span class="count">{exness_count}</span></div>
       </div>
@@ -1192,6 +1294,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           <span class="tag">Timeframe: {escape(timeframe)}</span>
           <span class="tag">Broker: {escape(broker_filter)}</span>
           <span class="tag">Source: {escape(str(payload.get("config", {}).get("data_source", "CSV")))}</span>
+          <span class="tag">Data as of: {escape(str(payload.get("data_as_of") or "unknown"))}</span>
         </div>
       </header>
       <section class="stats">
@@ -1439,8 +1542,10 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
     scanned = candidates + rejected
     scanned_by_market = _scanned_symbols_by_market(scanned)
     trigger_warnings = _trigger_warnings(candidates + near_matches + review_setups)
+    data_timestamps = [str(item["data_as_of"]) for item in scanned if item.get("data_as_of")]
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "data_as_of": max(data_timestamps) if data_timestamps else None,
         "timeframe": config.get("timeframe", "D1"),
         "scanned_symbols": sum(len(symbols) for symbols in scanned_by_market.values()),
         "evaluation_count": len(scanned),
@@ -1909,6 +2014,11 @@ def _rrg_reference_meta(rrg: dict) -> str:
     return f"{relation} · {quadrant} · head dx {dx} · head dy {dy}. {note}"
 
 
+def _data_as_of_text(item: dict) -> str:
+    value = str(item.get("data_as_of") or "").strip()
+    return f" · Data as of {escape(value)}" if value else ""
+
+
 def _candidate_card(candidate: dict, report_dir: Path) -> str:
     evidence = candidate["evidence"]
     tv_symbol = candidate["tradingview_symbol"]
@@ -1945,7 +2055,7 @@ def _candidate_card(candidate: dict, report_dir: Path) -> str:
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge">{escape(display_setup)}</span>{direction_badge}<span class="badge {status_class}">{escape(status)}</span>{change_badge}{_exness_badge(exness_supported)}</div>
-      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{previous_text} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{_data_as_of_text(candidate)}{previous_text} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
     </div>
     <div class="score">{escape(str(evidence.get("score", 0)))}</div>
   </div>
@@ -2073,7 +2183,7 @@ def _near_match_card(candidate: dict, report_dir: Path) -> str:
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Near</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
-      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{_data_as_of_text(candidate)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
     </div>
     <div class="score">{score}</div>
   </div>
@@ -2125,7 +2235,7 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Review</span><span class="badge">{escape(display_setup)}</span><span class="badge">{escape(status)}</span>{_exness_badge(exness_supported)}</div>
-      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+      <div class="meta">{escape(candidate["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{_data_as_of_text(candidate)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
     </div>
     <div class="score">{score}</div>
   </div>
@@ -2184,7 +2294,7 @@ def _trigger_warning_card(item: dict, report_dir: Path) -> str:
   <div class="card-head">
     <div>
       <div class="symbol">{escape(item["symbol"])} <span class="badge warning-badge">{escape(warning_label)}</span><span class="badge">{escape(display_setup)}</span>{_exness_badge(exness_supported)}</div>
-      <div class="meta">{escape(item["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
+      <div class="meta">{escape(item["market"])} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{_data_as_of_text(item)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tv_symbol)}</a></div>
     </div>
     <div class="score">{score}</div>
   </div>

@@ -1226,6 +1226,8 @@ def _result_json_with_direction(
     vcp_config: VCPConfig | None = None,
 ) -> dict:
     row = annotate_result_with_direction_authority(scan_result.to_json(), candles, context)
+    if candles:
+        row["data_as_of"] = candles[-1].datetime.isoformat()
     row["ema_filter"] = _latest_ema_filter(candles, vcp_config or VCPConfig())
     proxy_data = _proxy_data(candles)
     if proxy_data:

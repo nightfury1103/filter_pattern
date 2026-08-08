@@ -11,6 +11,7 @@ from .report import (
     write_combined_html_report,
     write_combined_outputs,
     write_html_report,
+    write_site_index,
     write_watchlist_state,
 )
 from .rrg_dashboard import build_crypto_rrg_demo, build_crypto_rrg_overview, build_usstock_rrg_demo, build_vnstock_rrg_demo
@@ -297,6 +298,13 @@ def main(argv: list[str] | None = None) -> int:
     state_parser.add_argument("--input", required=True, help="results.json path")
     state_parser.add_argument("--out", required=True, help="compact state output path")
 
+    site_index_parser = subparsers.add_parser(
+        "site-index",
+        help="build a lightweight landing page linking timeframe reports",
+    )
+    site_index_parser.add_argument("--inputs", nargs="+", required=True, help="timeframe results.json files")
+    site_index_parser.add_argument("--out", required=True, help="landing page output path")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "init-config":
@@ -430,6 +438,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "watchlist-state":
             output_path = write_watchlist_state(args.input, args.out)
+            print(f"Wrote {output_path}")
+            return 0
+        if args.command == "site-index":
+            output_path = write_site_index(args.inputs, args.out)
             print(f"Wrote {output_path}")
             return 0
     except (FileNotFoundError, ValueError) as exc:
