@@ -966,16 +966,24 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .compact-review-links {{ display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: 8px; }}
     .compact-review-links a {{ color: var(--accent); font-size: 12px; font-weight: 700; text-decoration: none; }}
     .compact-review-links a:hover {{ text-decoration: underline; }}
-    .compact-review-chart {{
-      display: block;
-      max-width: 880px;
-      margin: 0 auto 14px;
+    .compact-review-charts {{
+      max-width: 1180px;
+      margin: 0 auto 10px;
       border: 1px solid var(--line);
       border-radius: 10px;
       overflow: hidden;
       background: #ffffff;
     }}
-    .compact-review-chart img {{ display: block; width: 100%; height: auto; border: 0; background: #ffffff; }}
+    .compact-review-charts .chart-frame {{ border-bottom: 0; }}
+    details.compact-review-details {{ border-top: 1px solid var(--line); background: var(--panel); }}
+    details.compact-review-details > summary {{
+      cursor: pointer;
+      padding: 11px 16px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    details.compact-review-details[open] > summary {{ border-bottom: 1px solid var(--line); }}
     .card-head {{
       display: flex;
       justify-content: space-between;
@@ -1520,7 +1528,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     const filterCount = document.getElementById('filterCount');
     const coverageSection = document.getElementById('coverageSection');
     const filterable = Array.from(document.querySelectorAll('[data-filterable="true"]'));
-    const deferredImages = Array.from(document.querySelectorAll('img[data-src]'));
+    let imageObserver = null;
 
     function loadDeferredImage(image) {{
       const src = image.dataset.src;
@@ -1532,7 +1540,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
 
     if ('IntersectionObserver' in window) {{
-      const imageObserver = new IntersectionObserver((entries, observer) => {{
+      imageObserver = new IntersectionObserver((entries, observer) => {{
         for (const entry of entries) {{
           if (entry.isIntersecting) {{
             loadDeferredImage(entry.target);
@@ -1540,14 +1548,34 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           }}
         }}
       }}, {{ rootMargin: '800px 0px' }});
-      for (const image of deferredImages) {{
-        imageObserver.observe(image);
-      }}
-    }} else {{
-      for (const image of deferredImages) {{
-        loadDeferredImage(image);
+    }}
+
+    function observeDeferredImages(root) {{
+      for (const image of root.querySelectorAll('img[data-src]')) {{
+        if (imageObserver) {{
+          imageObserver.observe(image);
+        }} else {{
+          loadDeferredImage(image);
+        }}
       }}
     }}
+
+    observeDeferredImages(document);
+
+    document.addEventListener('toggle', (event) => {{
+      const details = event.target;
+      if (!details.matches?.('details[data-lazy-details]') || !details.open || details.dataset.hydrated === 'true') {{
+        return;
+      }}
+      const template = details.querySelector('template');
+      const content = details.querySelector('.lazy-details-content');
+      if (template && content) {{
+        content.append(template.content.cloneNode(true));
+        template.remove();
+        details.dataset.hydrated = 'true';
+        observeDeferredImages(content);
+      }}
+    }}, true);
 
     function updateRrgOverview(market) {{
       const shells = Array.from(document.querySelectorAll('[data-rrg-market]'));
@@ -2126,17 +2154,27 @@ def _chart_img(src: str, alt: str) -> str:
 
 def _chart_frame_html(item: dict, report_dir: Path, alt: str, label: str) -> str:
     chart_path = item.get("chart_path") or ""
-    if not chart_path:
-        return ""
-    chart_src, chart_preview_src = _chart_sources(str(chart_path), report_dir)
     rrg = item.get("rrg") or {}
     rrg_chart = rrg.get("rrg_chart_path")
+    if not chart_path and not rrg_chart:
+        return ""
+    chart_src = chart_preview_src = ""
+    if chart_path:
+        chart_src, chart_preview_src = _chart_sources(str(chart_path), report_dir)
     if not rrg_chart:
         return f'<div class="chart-frame"><a class="chart-tile" href="{chart_src}">{_chart_img(chart_preview_src, alt)}</a></div>'
 
     rrg_src, rrg_preview_src = _chart_sources(str(rrg_chart), report_dir)
     confidence = rrg.get("confidence") or {}
     confidence_label = str(confidence.get("label") or "RRG Reference")
+    if not chart_path:
+        return f"""<div class="chart-frame">
+      <a class="chart-tile" href="{rrg_src}"><strong>RRG Confidence</strong>{_chart_img(rrg_preview_src, f'{item.get("symbol", "")} RRG confidence chart')}</a>
+      <div class="rrg-reference" style="margin:0 10px 10px;">
+        <div class="reasons">{escape(confidence_label)}</div>
+        <div class="meta">{escape(_rrg_reference_meta(rrg))}</div>
+      </div>
+    </div>"""
     return f"""<div class="chart-frame">
       <div class="chart-pair">
         <a class="chart-tile" href="{chart_src}"><strong>{escape(label)}</strong>{_chart_img(chart_preview_src, alt)}</a>
@@ -2476,8 +2514,9 @@ def _compact_review_setup_card(candidate: dict, report_dir: Path) -> str:
     tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tradingview_symbol)}"
     failures = evidence.get("failures", [])
     failure_summary = f" · {escape(str(failures[0]))}" if failures else ""
-    chart_preview = _compact_review_chart_preview(candidate, report_dir)
+    chart_preview = _compact_review_charts(candidate, report_dir)
     chart_links = _compact_review_chart_links(candidate, report_dir)
+    review_details = _compact_review_details(candidate, report_dir)
     filter_attributes = _review_setup_filter_attributes(candidate)
 
     return f"""<article class="near result-card compact-review" {filter_attributes}>
@@ -2490,20 +2529,59 @@ def _compact_review_setup_card(candidate: dict, report_dir: Path) -> str:
   </div>
   <div class="compact-review-summary">Pivot {escape(_fmt(evidence.get("pivot")))} · Current {escape(_fmt(evidence.get("current_close")))} · Distance {escape(_fmt(evidence.get("distance_to_pivot_pct"), suffix="%"))}{failure_summary}{chart_links}</div>
   {chart_preview}
+  {review_details}
 </article>"""
 
 
-def _compact_review_chart_preview(item: dict, report_dir: Path) -> str:
-    chart_path = str(item.get("chart_path") or "")
-    if not chart_path:
+def _compact_review_charts(item: dict, report_dir: Path) -> str:
+    chart_html = _chart_frame_html(
+        item,
+        report_dir,
+        f'{item.get("symbol", "")} lifecycle review chart',
+        "Lifecycle Pattern",
+    )
+    if not chart_html:
         return ""
-    full_src, preview_src = _chart_sources(chart_path, report_dir)
-    alt = f'{item.get("symbol", "")} lifecycle review chart'
-    return f'<a class="compact-review-chart" href="{full_src}" target="_blank" rel="noreferrer">{_chart_img(preview_src, alt)}</a>'
+    return f'<div class="compact-review-charts">{chart_html}</div>'
+
+
+def _compact_review_details(item: dict, report_dir: Path) -> str:
+    evidence = item.get("evidence") or {}
+    reasons = "".join(
+        f"<li>{escape(reason)}</li>" for reason in _clean_evidence_lines(evidence.get("reasons", []))[:8]
+    )
+    failures = "".join(f"<li>{escape(failure)}</li>" for failure in evidence.get("failures", [])[:5])
+    rrg_reference = _rrg_reference_panel(item)
+    direction_authority = _direction_authority_html(item)
+    lower_timeframe_confirmation = _lower_timeframe_confirmation_html(item, report_dir)
+    status = str(evidence.get("status", "review"))
+    return f"""<details class="compact-review-details" data-lazy-details="true">
+    <summary>Full review details</summary>
+    <template>
+      <div class="body">
+        <div class="metrics">
+          <div class="metric"><span>Trigger / pivot</span><strong>{escape(_fmt(evidence.get("pivot")))}</strong></div>
+          <div class="metric"><span>Current</span><strong>{escape(_fmt(evidence.get("current_close")))}</strong></div>
+          <div class="metric"><span>Distance</span><strong>{escape(_fmt(evidence.get("distance_to_pivot_pct"), suffix="%"))}</strong></div>
+          <div class="metric"><span>Status</span><strong>{escape(status)}</strong></div>
+        </div>
+        {rrg_reference}
+        {direction_authority}
+        <div class="reasons">Detected structure:</div>
+        <ul>{reasons}</ul>
+        <div class="reasons failures">Why it is not qualified:</div>
+        <ul class="failures">{failures}</ul>
+        {lower_timeframe_confirmation}
+      </div>
+    </template>
+    <div class="lazy-details-content"></div>
+  </details>"""
 
 
 def _compact_review_chart_links(item: dict, report_dir: Path) -> str:
     chart_paths: list[tuple[str, str]] = []
+    if item.get("chart_path"):
+        chart_paths.append(("Open pattern chart", str(item["chart_path"])))
     rrg_path = (item.get("rrg") or {}).get("rrg_chart_path")
     if rrg_path:
         chart_paths.append(("Open RRG chart", str(rrg_path)))

@@ -667,6 +667,9 @@ def test_combined_output_publishes_a_loadable_compact_review_preview(tmp_path: P
     )
     chart_path.write_bytes(image_bytes)
     preview_path.write_bytes(image_bytes)
+    rrg_path = shard_dir / "rrg-reference" / "compact-rrg.png"
+    rrg_path.parent.mkdir(parents=True)
+    rrg_path.write_bytes(image_bytes)
 
     reviews = []
     for index in range(REVIEW_FULL_CARD_LIMIT + 1):
@@ -674,6 +677,13 @@ def test_combined_output_publishes_a_loadable_compact_review_preview(tmp_path: P
         review["review_score"] = REVIEW_FULL_CARD_LIMIT - index
         reviews.append(review)
     reviews[-1]["chart_path"] = str(chart_path)
+    reviews[-1]["rrg"] = {
+        "benchmark": "$ONE",
+        "sector": "Crypto",
+        "rrg_chart_path": str(rrg_path),
+        "stock_intent": {"quadrant": "IMPROVING", "dx1": 0.4, "dy1": 0.6},
+        "confidence": {"label": "RRG Early Reference", "note": "Reference only."},
+    }
     payload = result_payload([], [], {"timeframe": "D1"})
     payload["review_setups"] = reviews
     shard_results = shard_dir / "results.json"
@@ -691,15 +701,29 @@ def test_combined_output_publishes_a_loadable_compact_review_preview(tmp_path: P
     chart_hash = hashlib.sha256(image_bytes).hexdigest()[:12]
     published_preview = report_dir / "assets" / "d1-shard-0" / "charts" / "preview" / f"compact.{chart_hash}.png"
     published_full = published_preview.parent.parent / published_preview.name
+    published_rrg = (
+        report_dir / "assets" / "d1-shard-0" / "rrg-reference" / f"compact-rrg.{chart_hash}.png"
+    )
     html = html_path.read_text()
     published_payload = json.loads(results_path.read_text())
 
     assert published_preview.read_bytes() == image_bytes
     assert not published_full.exists()
+    assert published_rrg.read_bytes() == image_bytes
     assert f'data-src="assets/d1-shard-0/charts/preview/{published_preview.name}"' in html
-    assert 'class="compact-review-chart"' in html
+    assert f'data-src="assets/d1-shard-0/rrg-reference/{published_rrg.name}"' in html
+    assert 'class="compact-review-charts"' in html
+    assert "Lifecycle Pattern" in html
+    assert "RRG Confidence" in html
+    assert "RRG Early Reference" in html
+    assert "Open pattern chart" in html
+    assert "Open RRG chart" in html
+    assert 'data-lazy-details="true"' in html
+    assert "Detected structure:" in html
+    assert "Why it is not qualified:" in html
     assert Path(published_payload["review_setups"][-1]["chart_path"]) == published_preview
-    assert validate_published_site(site_root)["checked_assets"] == 1
+    assert Path(published_payload["review_setups"][-1]["rrg"]["rrg_chart_path"]) == published_rrg
+    assert validate_published_site(site_root)["checked_assets"] == 2
 
 
 def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tmp_path: Path) -> None:
@@ -715,6 +739,40 @@ def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tm
     chart_path.write_bytes(b"full chart")
     preview_path.write_bytes(b"preview chart")
     reviews[-1]["chart_path"] = str(chart_path)
+    rrg_path = tmp_path / "assets" / "rrg-reference" / "SYM324-rrg.hash.jpg"
+    rrg_path.parent.mkdir(parents=True)
+    rrg_path.write_bytes(b"rrg chart")
+    reviews[-1]["rrg"] = {
+        "benchmark": "SPY",
+        "sector": "Technology",
+        "rrg_chart_path": str(rrg_path),
+        "stock_intent": {"quadrant": "LEADING", "dx1": 0.7, "dy1": 0.3},
+        "confidence": {"label": "RRG Confirmed Reference", "note": "Reference only."},
+    }
+    reviews[-1]["direction_authority"] = {
+        "decision_label": "Watch long only",
+        "bias": "WATCH LONG",
+        "phase": "Accumulation",
+        "confidence": 75,
+        "trend_score": 45,
+        "momentum_score": 55,
+        "trade_filter": "Block shorts",
+        "reasons": ["Trend is improving"],
+    }
+    reviews[-1]["lower_timeframe_reviews"] = [
+        {
+            "timeframe": "H4",
+            "technique": "nhathoai",
+            "setup": "dd",
+            "status": "WATCH",
+            "score": 70,
+            "trigger_level": 101,
+            "current_price": 99,
+            "distance_to_pivot_pct": 2,
+            "volume_label": "Volume contracted",
+            "volume_detail": "Lower-timeframe volume remains constructive.",
+        }
+    ]
     payload = result_payload([], [], {"timeframe": "D1"})
     payload["review_setups"] = reviews
     results_path = tmp_path / "results.json"
@@ -736,10 +794,46 @@ def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tm
         'data-technique="nhathoai" data-setup="dd" data-direction="long"'
     ) in html
     assert 'href="assets/charts/SYM324.hash.jpg"' in html
-    assert 'class="compact-review-chart"' in html
+    assert 'class="compact-review-charts"' in html
     assert 'data-src="assets/charts/preview/SYM324.hash.jpg"' in html
+    assert 'data-src="assets/rrg-reference/SYM324-rrg.hash.jpg"' in html
+    assert "Lifecycle Pattern" in html
+    assert "RRG Confidence" in html
+    assert "RRG Confirmed Reference" in html
+    assert "Open pattern chart" in html
+    assert "Open RRG chart" in html
+    assert "Full review details" in html
+    assert "Detected structure:" in html
+    assert "Why it is not qualified:" in html
+    assert "Direction authority:" in html
+    assert "Watch long only" in html
+    assert "Review lower timeframe" in html
+    assert "Volume contracted" in html
     assert 'loading="lazy" decoding="async"' in html
     assert "content-visibility: auto" in html
+
+
+def test_compact_review_renders_rrg_chart_even_without_pattern_chart(tmp_path: Path) -> None:
+    reviews = [_candidate(f"SYM{index}", "dd", 60, "FAILED") for index in range(REVIEW_FULL_CARD_LIMIT + 1)]
+    rrg_path = tmp_path / "assets" / "rrg-only.jpg"
+    rrg_path.parent.mkdir()
+    rrg_path.write_bytes(b"rrg chart")
+    reviews[-1]["rrg"] = {
+        "rrg_chart_path": str(rrg_path),
+        "confidence": {"label": "RRG Only Reference"},
+    }
+    payload = result_payload([], [], {"timeframe": "D1"})
+    payload["review_setups"] = reviews
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+
+    html = write_html_report(results_path, tmp_path / "index.html").read_text()
+    card_html = html.split('data-symbol="SYM300"', 1)[1].split("</article>", 1)[0]
+
+    assert "RRG Confidence" in card_html
+    assert "RRG Only Reference" in card_html
+    assert 'data-src="assets/rrg-only.jpg"' in card_html
+    assert "Open RRG chart" in card_html
 
 
 def test_site_index_is_lightweight_and_links_timeframe_reports(tmp_path: Path) -> None:
