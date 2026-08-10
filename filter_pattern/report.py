@@ -15,7 +15,7 @@ from .exness import is_exness_supported_symbol
 
 TRIGGER_WARNING_DISTANCE_PCT = 5.0
 REVIEW_SETUP_LIMIT = 5000
-REVIEW_RENDER_LIMIT = 300
+REVIEW_FULL_CARD_LIMIT = 300
 ASSET_HASH_LENGTH = 12
 
 
@@ -277,8 +277,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     candidates = payload.get("candidates", [])
     near_matches = payload.get("near_matches") or _near_matches(payload.get("rejected", []))
     all_review_setups = payload.get("review_setups") or _review_setups(payload.get("rejected", []))
-    review_setups = all_review_setups[:REVIEW_RENDER_LIMIT]
-    omitted_review_count = max(0, len(all_review_setups) - len(review_setups))
+    full_review_setups = all_review_setups[:REVIEW_FULL_CARD_LIMIT]
+    compact_review_setups = all_review_setups[REVIEW_FULL_CARD_LIMIT:]
     trigger_warnings = _trigger_warnings(candidates + near_matches + all_review_setups)
     not_configured = _not_configured_rows(payload.get("rejected", []))
     dropped = payload.get("watchlist_dropped", [])
@@ -328,17 +328,24 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     <p class="section-note">These are not qualified entry setups. They passed many checks but failed at least one strict setup rule.</p>
     {near_rows}
 """
-    review_rows = "\n".join(_review_setup_card(candidate, output_file.parent) for candidate in review_setups)
+    full_review_rows = "\n".join(
+        _review_setup_card(candidate, output_file.parent) for candidate in full_review_setups
+    )
+    compact_review_rows = "\n".join(
+        _compact_review_setup_card(candidate, output_file.parent) for candidate in compact_review_setups
+    )
+    review_rows = "\n".join(part for part in (full_review_rows, compact_review_rows) if part)
     if review_rows:
-        omitted_note = ""
-        if omitted_review_count:
-            omitted_note = (
-                f" Showing the top {len(review_setups):,} of {len(all_review_setups):,} reviews for fast rendering; "
-                'the complete evaluation data remains available in <a href="results.json">results.json</a>.'
+        compact_note = ""
+        if compact_review_setups:
+            compact_note = (
+                f" The first {len(full_review_setups):,} reviews include full inline charts; the remaining "
+                f"{len(compact_review_setups):,} use lightweight cards with on-demand chart links. "
+                'Every review remains searchable and filterable, with complete evaluation details in <a href="results.json">results.json</a>.'
             )
         review_rows = f"""
     <h2>Continue Watching</h2>
-    <p class="section-note">These rejected, failed, late, or already-triggered structures still have recognizable pattern context. Keep them visible for manual lifecycle review because a setup can rebuild and trigger again.{omitted_note}</p>
+    <p class="section-note">These rejected, failed, late, or already-triggered structures still have recognizable pattern context. Keep them visible for manual lifecycle review because a setup can rebuild and trigger again.{compact_note}</p>
     {review_rows}
 """
     warning_rows = "\n".join(_trigger_warning_card(item, output_file.parent) for item in trigger_warnings)
@@ -376,7 +383,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     )
     setup_panel = _setup_distribution_panel(candidates)
     market_panel = _market_distribution_panel(scanned_by_market, data_errors_by_market)
-    rrg_rows = candidates + trigger_warnings + review_setups + near_matches
+    rrg_rows = candidates + trigger_warnings + all_review_setups + near_matches
     rrg_overview = _rrg_market_overview_section(payload, rrg_rows)
     new_count = int(change_counts.get("NEW", 0))
     dropped_count = len(dropped)
@@ -818,6 +825,15 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       content-visibility: auto;
       contain-intrinsic-size: auto 720px;
     }}
+    article.compact-review {{
+      contain-intrinsic-size: auto 180px;
+      margin-bottom: 10px;
+    }}
+    .compact-review .card-head {{ border-bottom: 0; }}
+    .compact-review-summary {{ color: var(--muted); font-size: 12px; padding: 0 16px 14px; }}
+    .compact-review-links {{ display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: 8px; }}
+    .compact-review-links a {{ color: var(--accent); font-size: 12px; font-weight: 700; text-decoration: none; }}
+    .compact-review-links a:hover {{ text-decoration: underline; }}
     .card-head {{
       display: flex;
       justify-content: space-between;
@@ -1488,25 +1504,34 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         const matchesScore = nodeStatus === 'coverage' || nodeScore >= minimumScore;
         const matchesText = !text || haystack.includes(text);
         const visible = matchesTimeframe && matchesMarket && matchesBroker && matchesStatus && matchesTechnique && matchesSetup && matchesDirection && matchesEmaSide && matchesChange && matchesScore && matchesText;
+        if (dedupMode !== 'symbol') {{
+          node.style.display = visible ? '' : 'none';
+          if (visible && node.classList.contains('result-card')) {{
+            visibleResults += 1;
+          }}
+          continue;
+        }}
         baseVisibility.set(node, visible);
-        if (visible && dedupMode === 'symbol' && node.classList.contains('result-card')) {{
+        if (visible && node.classList.contains('result-card')) {{
           const symbolKey = (node.dataset.symbol || '').trim();
           if (symbolKey && isBetterDedupCard(node, bestBySymbol.get(symbolKey))) {{
             bestBySymbol.set(symbolKey, node);
           }}
         }}
       }}
-      for (const bestNode of bestBySymbol.values()) {{
-        selectedDedupCards.add(bestNode);
-      }}
-      for (const node of filterable) {{
-        let visible = Boolean(baseVisibility.get(node));
-        if (visible && dedupMode === 'symbol' && node.classList.contains('result-card')) {{
-          visible = selectedDedupCards.has(node);
+      if (dedupMode === 'symbol') {{
+        for (const bestNode of bestBySymbol.values()) {{
+          selectedDedupCards.add(bestNode);
         }}
-        node.style.display = visible ? '' : 'none';
-        if (visible && node.classList.contains('result-card')) {{
-          visibleResults += 1;
+        for (const node of filterable) {{
+          let visible = Boolean(baseVisibility.get(node));
+          if (visible && node.classList.contains('result-card')) {{
+            visible = selectedDedupCards.has(node);
+          }}
+          node.style.display = visible ? '' : 'none';
+          if (visible && node.classList.contains('result-card')) {{
+            visibleResults += 1;
+          }}
         }}
       }}
       if (coverageSection) {{
@@ -2222,16 +2247,14 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     setup = candidate.get("setup", "all")
     timeframe = str(candidate.get("timeframe", "D1"))
     status = str(evidence.get("status", "review"))
-    direction = _direction_from_evidence(evidence)
-    ema_side = _ema_side(candidate)
     display_setup = _display_setup(candidate)
-    change = str(candidate.get("watchlist_change", ""))
     lower_timeframe_confirmation = _lower_timeframe_confirmation_html(candidate, report_dir)
     direction_authority = _direction_authority_html(candidate)
     rrg_reference = _rrg_reference_panel(candidate)
     exness_supported = _is_row_exness_supported(candidate)
+    filter_attributes = _review_setup_filter_attributes(candidate)
 
-    return f"""<article class="near result-card" data-filterable="true" data-status="review" data-symbol="{escape(candidate["symbol"])}" data-timeframe="{escape(timeframe)}" data-market="{escape(candidate["market"])}" data-technique="{escape(technique)}" data-setup="{escape(setup)}" data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" data-exness="{str(exness_supported).lower()}" data-symbols="{escape(candidate["symbol"] + " " + candidate["tradingview_symbol"] + " " + candidate["market"] + " " + timeframe + " " + technique + " " + setup + " " + display_setup + " " + direction + " " + change + " " + ("exness" if exness_supported else ""))}">
+    return f"""<article class="near result-card" {filter_attributes}>
   <div class="card-head">
     <div>
       <div class="symbol">{escape(candidate["symbol"])} <span class="badge near-badge">Review</span><span class="badge">{escape(display_setup)}</span><span class="badge">{escape(status)}</span>{_exness_badge(exness_supported)}</div>
@@ -2258,6 +2281,100 @@ def _review_setup_card(candidate: dict, report_dir: Path) -> str:
     </div>
   </div>
 </article>"""
+
+
+def _review_setup_filter_attributes(candidate: dict) -> str:
+    evidence = candidate.get("evidence", {})
+    symbol = str(candidate.get("symbol", ""))
+    tradingview_symbol = str(candidate.get("tradingview_symbol", ""))
+    market = str(candidate.get("market", ""))
+    timeframe = str(candidate.get("timeframe", "D1"))
+    technique = str(candidate.get("technique", "vcp"))
+    setup = str(candidate.get("setup", "all"))
+    direction = _direction_from_evidence(evidence)
+    ema_side = _ema_side(candidate)
+    change = str(candidate.get("watchlist_change", ""))
+    display_setup = _display_setup(candidate)
+    exness_supported = _is_row_exness_supported(candidate)
+    search_terms = " ".join(
+        (
+            symbol,
+            tradingview_symbol,
+            market,
+            timeframe,
+            technique,
+            setup,
+            display_setup,
+            direction,
+            change,
+            "exness" if exness_supported else "",
+        )
+    )
+    return (
+        f'data-filterable="true" data-status="review" data-symbol="{escape(symbol)}" '
+        f'data-timeframe="{escape(timeframe)}" data-market="{escape(market)}" '
+        f'data-technique="{escape(technique)}" data-setup="{escape(setup)}" '
+        f'data-direction="{escape(direction)}" data-ema-side="{escape(ema_side)}" '
+        f'data-change="{escape(change)}" data-score="{escape(str(evidence.get("score", 0)))}" '
+        f'data-exness="{str(exness_supported).lower()}" data-symbols="{escape(search_terms)}"'
+    )
+
+
+def _compact_review_setup_card(candidate: dict, report_dir: Path) -> str:
+    evidence = candidate.get("evidence", {})
+    symbol = str(candidate.get("symbol", ""))
+    tradingview_symbol = str(candidate.get("tradingview_symbol", ""))
+    market = str(candidate.get("market", ""))
+    timeframe = str(candidate.get("timeframe", "D1"))
+    technique = str(candidate.get("technique", "vcp"))
+    setup = str(candidate.get("setup", "all"))
+    status = str(evidence.get("status", "review"))
+    display_setup = _display_setup(candidate)
+    exness_supported = _is_row_exness_supported(candidate)
+    tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tradingview_symbol)}"
+    failures = evidence.get("failures", [])
+    failure_summary = f" · {escape(str(failures[0]))}" if failures else ""
+    chart_links = _compact_review_chart_links(candidate, report_dir)
+    filter_attributes = _review_setup_filter_attributes(candidate)
+
+    return f"""<article class="near result-card compact-review" {filter_attributes}>
+  <div class="card-head">
+    <div>
+      <div class="symbol">{escape(symbol)} <span class="badge near-badge">Review</span><span class="badge">{escape(display_setup)}</span><span class="badge">{escape(status)}</span>{_exness_badge(exness_supported)}</div>
+      <div class="meta">{escape(market)} · {escape(timeframe)} · {escape(technique)} / {escape(setup)}{_data_as_of_text(candidate)} · <a href="{tv_url}" target="_blank" rel="noreferrer">{escape(tradingview_symbol)}</a></div>
+    </div>
+    <div class="score">{escape(_fmt(candidate.get("review_score")))}</div>
+  </div>
+  <div class="compact-review-summary">Pivot {escape(_fmt(evidence.get("pivot")))} · Current {escape(_fmt(evidence.get("current_close")))} · Distance {escape(_fmt(evidence.get("distance_to_pivot_pct"), suffix="%"))}{failure_summary}{chart_links}</div>
+</article>"""
+
+
+def _compact_review_chart_links(item: dict, report_dir: Path) -> str:
+    chart_paths: list[tuple[str, str]] = []
+    if item.get("chart_path"):
+        chart_paths.append(("Open pattern chart", str(item["chart_path"])))
+    rrg_path = (item.get("rrg") or {}).get("rrg_chart_path")
+    if rrg_path:
+        chart_paths.append(("Open RRG chart", str(rrg_path)))
+    lower_timeframe_rows = list(item.get("lower_timeframe_reviews") or [])
+    if item.get("lower_timeframe_confirmation"):
+        lower_timeframe_rows.append(item["lower_timeframe_confirmation"])
+    for review in lower_timeframe_rows:
+        if review.get("chart_path"):
+            label = f"Open {review.get('timeframe') or 'lower timeframe'} chart"
+            chart_paths.append((label, str(review["chart_path"])))
+
+    links = []
+    seen_paths = set()
+    for label, chart_path in chart_paths:
+        if chart_path in seen_paths:
+            continue
+        seen_paths.add(chart_path)
+        chart_src, _ = _chart_sources(chart_path, report_dir)
+        links.append(f'<a href="{chart_src}" target="_blank" rel="noreferrer">{escape(label)}</a>')
+    if not links:
+        return ""
+    return f'<div class="compact-review-links">{"".join(links)}</div>'
 
 
 def _trigger_warning_card(item: dict, report_dir: Path) -> str:

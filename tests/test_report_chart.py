@@ -10,7 +10,7 @@ from filter_pattern.chart import _minimum_body_height, _price_label, _date_forma
 from filter_pattern.detector import detect_vcp
 from filter_pattern.models import Candle, ScanResult, SymbolSpec
 from filter_pattern.report import (
-    REVIEW_RENDER_LIMIT,
+    REVIEW_FULL_CARD_LIMIT,
     apply_watchlist_changes,
     result_payload,
     write_combined_html_report,
@@ -549,12 +549,13 @@ def test_materialized_asset_url_changes_when_chart_content_changes(tmp_path: Pat
     assert Path(second_url).exists()
 
 
-def test_report_limits_initial_review_cards_and_keeps_full_results_link(tmp_path: Path) -> None:
+def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tmp_path: Path) -> None:
     reviews = []
-    for index in range(REVIEW_RENDER_LIMIT + 25):
+    for index in range(REVIEW_FULL_CARD_LIMIT + 25):
         row = _candidate(f"SYM{index}", "dd", 60, "FAILED")
         row["review_score"] = 60 - (index / 1000)
         reviews.append(row)
+    reviews[-1]["chart_path"] = "assets/charts/SYM324.hash.jpg"
     payload = result_payload([], [], {"timeframe": "D1"})
     payload["review_setups"] = reviews
     results_path = tmp_path / "results.json"
@@ -563,9 +564,19 @@ def test_report_limits_initial_review_cards_and_keeps_full_results_link(tmp_path
     report_path = write_html_report(results_path, tmp_path / "index.html")
     html = report_path.read_text()
 
-    assert html.count('data-status="review"') == REVIEW_RENDER_LIMIT
-    assert f"Showing the top {REVIEW_RENDER_LIMIT:,} of {len(reviews):,} reviews" in html
+    assert html.count('data-status="review"') == len(reviews)
+    assert html.count('class="near result-card compact-review"') == len(reviews) - REVIEW_FULL_CARD_LIMIT
+    assert f"The first {REVIEW_FULL_CARD_LIMIT:,} reviews include full inline charts" in html
+    assert "Every review remains searchable and filterable" in html
     assert 'href="results.json"' in html
+    for index in range(len(reviews)):
+        assert f'data-symbol="SYM{index}"' in html
+    assert (
+        'class="near result-card compact-review" data-filterable="true" data-status="review" '
+        'data-symbol="SYM324" data-timeframe="D1" data-market="US stock" '
+        'data-technique="nhathoai" data-setup="dd" data-direction="long"'
+    ) in html
+    assert 'href="assets/charts/SYM324.hash.jpg"' in html
     assert "content-visibility: auto" in html
 
 
