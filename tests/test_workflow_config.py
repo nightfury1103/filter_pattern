@@ -57,3 +57,12 @@ def test_pages_workflow_builds_lightweight_site_index() -> None:
 
     assert "Build site entry report" in workflow
     assert "python -m filter_pattern.cli site-index" in workflow
+
+
+def test_pages_workflow_validates_asset_integrity_and_size_before_upload() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    validation = "python -m filter_pattern.cli validate-site --root public --max-bytes 1000000000"
+    assert "Validate Pages size and chart assets" in workflow
+    assert validation in workflow
+    assert workflow.index(validation) < workflow.index("actions/upload-pages-artifact")

@@ -363,6 +363,9 @@ jobs:
               > public/index.html
           fi
 
+      - name: Validate Pages size and chart assets
+        run: python -m filter_pattern.cli validate-site --root public --max-bytes 1000000000
+
       - name: Save compact scanner state
         shell: bash
         env:

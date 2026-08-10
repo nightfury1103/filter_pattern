@@ -6,9 +6,10 @@ import shutil
 from collections import defaultdict
 from datetime import datetime, timezone
 from html import escape
+from html.parser import HTMLParser
 from os.path import relpath
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 from .exness import is_exness_supported_symbol
 
@@ -17,6 +18,7 @@ TRIGGER_WARNING_DISTANCE_PCT = 5.0
 REVIEW_SETUP_LIMIT = 5000
 REVIEW_FULL_CARD_LIMIT = 300
 ASSET_HASH_LENGTH = 12
+DEFAULT_SITE_SIZE_LIMIT_BYTES = 1_000_000_000
 
 
 def write_html_report(results_path: str | Path, output_path: str | Path) -> Path:
@@ -195,6 +197,90 @@ def write_site_index(results_paths: list[str | Path], output_path: str | Path) -
     return output_file
 
 
+def validate_published_site(
+    site_root: str | Path,
+    max_bytes: int = DEFAULT_SITE_SIZE_LIMIT_BYTES,
+) -> dict[str, int]:
+    root = Path(site_root).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"Published site root not found: {root}")
+    if max_bytes <= 0:
+        raise ValueError("Published site size limit must be greater than zero")
+    total_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+    if total_bytes > max_bytes:
+        raise ValueError(f"Published site is {total_bytes:,} bytes; limit is {max_bytes:,} bytes")
+
+    checked_assets: set[Path] = set()
+    missing_assets: set[Path] = set()
+    for html_file in root.rglob("*.html"):
+        parser = _AssetReferenceParser()
+        parser.feed(html_file.read_text())
+        for reference in parser.references:
+            asset_path = _html_asset_path(reference, html_file.parent, root)
+            if asset_path is None:
+                continue
+            checked_assets.add(asset_path)
+            if not asset_path.is_file():
+                missing_assets.add(asset_path)
+
+    for results_file in root.rglob("results.json"):
+        payload = json.loads(results_file.read_text())
+        for _, _, path_value in _payload_asset_paths(payload):
+            asset_path = _results_asset_path(str(path_value), results_file, root)
+            checked_assets.add(asset_path)
+            if not asset_path.is_file():
+                missing_assets.add(asset_path)
+
+    if missing_assets:
+        examples = ", ".join(str(path) for path in sorted(missing_assets)[:5])
+        raise ValueError(f"Published site has {len(missing_assets)} missing asset(s): {examples}")
+    return {"total_bytes": total_bytes, "checked_assets": len(checked_assets)}
+
+
+class _AssetReferenceParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.references: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        for name, value in attrs:
+            if name in {"href", "src", "data-src"} and value and "assets/" in value:
+                self.references.append(value)
+
+
+def _html_asset_path(reference: str, report_dir: Path, site_root: Path) -> Path | None:
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc:
+        return None
+    decoded_path = unquote(parsed.path)
+    if not decoded_path:
+        return None
+    if decoded_path.startswith("/"):
+        resolved = (site_root / decoded_path.lstrip("/")).resolve()
+    else:
+        resolved = (report_dir / decoded_path).resolve()
+    try:
+        resolved.relative_to(site_root)
+    except ValueError:
+        raise ValueError(f"HTML asset reference escapes the published site: {reference}") from None
+    return resolved
+
+
+def _results_asset_path(path_value: str, results_file: Path, site_root: Path) -> Path:
+    asset_path = Path(path_value)
+    if asset_path.is_absolute():
+        resolved = asset_path.resolve()
+    elif asset_path.parts and asset_path.parts[0] == site_root.name:
+        resolved = (site_root.parent / asset_path).resolve()
+    else:
+        resolved = (results_file.parent / asset_path).resolve()
+    try:
+        resolved.relative_to(site_root)
+    except ValueError:
+        raise ValueError(f"results.json asset reference escapes the published site: {path_value}") from None
+    return resolved
+
+
 def write_watchlist_state(results_path: str | Path, output_path: str | Path) -> Path:
     """Write the minimal previous-run payload needed by apply_watchlist_changes."""
     results_file = Path(results_path)
@@ -241,18 +327,43 @@ def combined_result_payload(results_paths: list[str | Path]) -> dict:
 
 def materialize_combined_assets(payload: dict, output_dir: str | Path) -> dict:
     base_dir = Path(output_dir)
+    full_chart_sources, preview_chart_sources, rrg_sources = _published_asset_sources(payload)
     copied: dict[Path, Path] = {}
+    processed_fields: set[tuple[int, str]] = set()
     for container, key, path_value in _payload_asset_paths(payload):
-        source = Path(str(path_value))
-        if not source.exists():
+        field_id = (id(container), key)
+        if field_id in processed_fields:
             continue
+        processed_fields.add(field_id)
+        source = Path(str(path_value))
         source_key = source.resolve()
+        if key == "chart_path" and source_key not in full_chart_sources | preview_chart_sources:
+            container[key] = ""
+            continue
+        if key == "rrg_chart_path" and source_key not in rrg_sources:
+            container[key] = ""
+            continue
+        if not source.exists():
+            container[key] = ""
+            continue
         if source_key in copied:
             container[key] = str(copied[source_key])
             continue
         destination = _combined_asset_destination(source, base_dir)
         if source.resolve() != destination.resolve():
             destination = _content_hashed_path(destination, source)
+
+        if key == "chart_path" and source_key in preview_chart_sources and source_key not in full_chart_sources:
+            preview_source = _preview_path(str(source))
+            copy_source = preview_source if preview_source is not None and preview_source.exists() else source
+            destination = destination.parent / "preview" / destination.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if copy_source.resolve() != destination.resolve():
+                shutil.copy2(copy_source, destination)
+            copied[source_key] = destination
+            container[key] = str(destination)
+            continue
+
         destination.parent.mkdir(parents=True, exist_ok=True)
         if source.resolve() != destination.resolve():
             shutil.copy2(source, destination)
@@ -265,6 +376,27 @@ def materialize_combined_assets(payload: dict, output_dir: str | Path) -> dict:
         copied[source_key] = destination
         container[key] = str(destination)
     return payload
+
+
+def _published_asset_sources(payload: dict) -> tuple[set[Path], set[Path], set[Path]]:
+    candidates = payload.get("candidates") or []
+    near_matches = payload.get("near_matches") or []
+    trigger_warnings = payload.get("trigger_warnings") or []
+    review_setups = payload.get("review_setups") or []
+    full_rows = candidates
+    preview_rows = near_matches + trigger_warnings + review_setups
+    full_chart_sources = _asset_source_keys(full_rows, "chart_path")
+    preview_chart_sources = _asset_source_keys(preview_rows, "chart_path") - full_chart_sources
+    rrg_sources = _asset_source_keys(full_rows + preview_rows, "rrg_chart_path")
+    return full_chart_sources, preview_chart_sources, rrg_sources
+
+
+def _asset_source_keys(rows: list[dict], asset_key: str) -> set[Path]:
+    return {
+        Path(str(path_value)).resolve()
+        for _, key, path_value in _payload_asset_paths(rows)
+        if key == asset_key
+    }
 
 
 def _content_hashed_path(destination: Path, source: Path) -> Path:
@@ -339,8 +471,8 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         compact_note = ""
         if compact_review_setups:
             compact_note = (
-                f" The first {len(full_review_setups):,} reviews include full inline charts; the remaining "
-                f"{len(compact_review_setups):,} use lightweight cards with on-demand chart links. "
+                f" The first {len(full_review_setups):,} reviews use detailed inline chart cards; the remaining "
+                f"{len(compact_review_setups):,} use lightweight cards with lazy-loaded chart previews. "
                 'Every review remains searchable and filterable, with complete evaluation details in <a href="results.json">results.json</a>.'
             )
         review_rows = f"""
@@ -826,7 +958,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       contain-intrinsic-size: auto 720px;
     }}
     article.compact-review {{
-      contain-intrinsic-size: auto 180px;
+      contain-intrinsic-size: auto 680px;
       margin-bottom: 10px;
     }}
     .compact-review .card-head {{ border-bottom: 0; }}
@@ -834,6 +966,16 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .compact-review-links {{ display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: 8px; }}
     .compact-review-links a {{ color: var(--accent); font-size: 12px; font-weight: 700; text-decoration: none; }}
     .compact-review-links a:hover {{ text-decoration: underline; }}
+    .compact-review-chart {{
+      display: block;
+      max-width: 880px;
+      margin: 0 auto 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #ffffff;
+    }}
+    .compact-review-chart img {{ display: block; width: 100%; height: auto; border: 0; background: #ffffff; }}
     .card-head {{
       display: flex;
       justify-content: space-between;
@@ -2334,6 +2476,7 @@ def _compact_review_setup_card(candidate: dict, report_dir: Path) -> str:
     tv_url = f"https://www.tradingview.com/chart/?symbol={quote(tradingview_symbol)}"
     failures = evidence.get("failures", [])
     failure_summary = f" · {escape(str(failures[0]))}" if failures else ""
+    chart_preview = _compact_review_chart_preview(candidate, report_dir)
     chart_links = _compact_review_chart_links(candidate, report_dir)
     filter_attributes = _review_setup_filter_attributes(candidate)
 
@@ -2346,13 +2489,21 @@ def _compact_review_setup_card(candidate: dict, report_dir: Path) -> str:
     <div class="score">{escape(_fmt(candidate.get("review_score")))}</div>
   </div>
   <div class="compact-review-summary">Pivot {escape(_fmt(evidence.get("pivot")))} · Current {escape(_fmt(evidence.get("current_close")))} · Distance {escape(_fmt(evidence.get("distance_to_pivot_pct"), suffix="%"))}{failure_summary}{chart_links}</div>
+  {chart_preview}
 </article>"""
+
+
+def _compact_review_chart_preview(item: dict, report_dir: Path) -> str:
+    chart_path = str(item.get("chart_path") or "")
+    if not chart_path:
+        return ""
+    full_src, preview_src = _chart_sources(chart_path, report_dir)
+    alt = f'{item.get("symbol", "")} lifecycle review chart'
+    return f'<a class="compact-review-chart" href="{full_src}" target="_blank" rel="noreferrer">{_chart_img(preview_src, alt)}</a>'
 
 
 def _compact_review_chart_links(item: dict, report_dir: Path) -> str:
     chart_paths: list[tuple[str, str]] = []
-    if item.get("chart_path"):
-        chart_paths.append(("Open pattern chart", str(item["chart_path"])))
     rrg_path = (item.get("rrg") or {}).get("rrg_chart_path")
     if rrg_path:
         chart_paths.append(("Open RRG chart", str(rrg_path)))

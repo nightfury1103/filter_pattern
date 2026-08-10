@@ -8,6 +8,8 @@ from pathlib import Path
 
 from .direction_backtest import run_direction_backtest
 from .report import (
+    DEFAULT_SITE_SIZE_LIMIT_BYTES,
+    validate_published_site,
     write_combined_html_report,
     write_combined_outputs,
     write_html_report,
@@ -305,6 +307,13 @@ def main(argv: list[str] | None = None) -> int:
     site_index_parser.add_argument("--inputs", nargs="+", required=True, help="timeframe results.json files")
     site_index_parser.add_argument("--out", required=True, help="landing page output path")
 
+    validate_site_parser = subparsers.add_parser(
+        "validate-site",
+        help="verify published size and every local chart asset reference",
+    )
+    validate_site_parser.add_argument("--root", required=True, help="published site root")
+    validate_site_parser.add_argument("--max-bytes", type=int, default=DEFAULT_SITE_SIZE_LIMIT_BYTES)
+
     args = parser.parse_args(argv)
     try:
         if args.command == "init-config":
@@ -443,6 +452,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "site-index":
             output_path = write_site_index(args.inputs, args.out)
             print(f"Wrote {output_path}")
+            return 0
+        if args.command == "validate-site":
+            summary = validate_published_site(args.root, args.max_bytes)
+            print(
+                f"Validated {summary['checked_assets']:,} asset(s); "
+                f"published size is {summary['total_bytes']:,} bytes"
+            )
             return 0
     except (FileNotFoundError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

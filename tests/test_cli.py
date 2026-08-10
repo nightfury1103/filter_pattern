@@ -81,6 +81,24 @@ def test_site_index_cli_passes_timeframe_results_to_writer(tmp_path: Path, monke
     assert "Wrote" in captured.out
 
 
+def test_validate_site_cli_checks_requested_root_and_limit(monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_validate_published_site(root: str, max_bytes: int) -> dict[str, int]:
+        seen.update({"root": root, "max_bytes": max_bytes})
+        return {"checked_assets": 42, "total_bytes": 123_456}
+
+    monkeypatch.setattr("filter_pattern.cli.validate_published_site", fake_validate_published_site)
+
+    exit_code = main(["validate-site", "--root", "public", "--max-bytes", "999999"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert seen == {"root": "public", "max_bytes": 999_999}
+    assert "Validated 42 asset(s)" in captured.out
+    assert "123,456 bytes" in captured.out
+
+
 def test_scan_cli_passes_technique_and_setup_to_scanner(tmp_path: Path, monkeypatch, capsys) -> None:
     seen: dict[str, object] = {}
 

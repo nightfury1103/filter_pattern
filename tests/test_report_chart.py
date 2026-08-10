@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from filter_pattern.chart import _minimum_body_height, _price_label, _date_formatter, _session_positions, render_chart
 from filter_pattern.detector import detect_vcp
@@ -12,7 +15,10 @@ from filter_pattern.models import Candle, ScanResult, SymbolSpec
 from filter_pattern.report import (
     REVIEW_FULL_CARD_LIMIT,
     apply_watchlist_changes,
+    materialize_combined_assets,
     result_payload,
+    write_combined_outputs,
+    validate_published_site,
     write_combined_html_report,
     write_combined_results_json,
     write_html_report,
@@ -549,13 +555,166 @@ def test_materialized_asset_url_changes_when_chart_content_changes(tmp_path: Pat
     assert Path(second_url).exists()
 
 
+def test_materialized_assets_publish_full_candidates_and_preview_only_reviews(tmp_path: Path) -> None:
+    shard_dir = tmp_path / "public" / "d1-shards" / "d1-shard-crypto"
+
+    def chart_files(name: str, content: bytes) -> Path:
+        chart_path = shard_dir / "charts" / f"{name}.jpg"
+        preview_path = chart_path.parent / "preview" / chart_path.name
+        chart_path.parent.mkdir(parents=True, exist_ok=True)
+        preview_path.parent.mkdir(parents=True, exist_ok=True)
+        chart_path.write_bytes(content)
+        preview_path.write_bytes(b"preview " + content)
+        return chart_path
+
+    full_chart = chart_files("full", b"full chart")
+    compact_chart = chart_files("compact", b"compact chart")
+    unused_chart = chart_files("unused", b"unused chart")
+    compact_rrg = shard_dir / "rrg-reference" / "compact-rrg.jpg"
+    compact_rrg.parent.mkdir(parents=True)
+    compact_rrg.write_bytes(b"compact rrg")
+
+    candidate = _candidate("FULL", "dd", 90, "WAITING")
+    candidate["chart_path"] = str(full_chart)
+    reviews = [_candidate(f"SYM{index}", "dd", 60, "FAILED") for index in range(REVIEW_FULL_CARD_LIMIT + 1)]
+    reviews[-1]["chart_path"] = str(compact_chart)
+    reviews[-1]["rrg"] = {"rrg_chart_path": str(compact_rrg)}
+    unused = _candidate("UNUSED", "dd", 60, "FAILED")
+    unused["chart_path"] = str(unused_chart)
+    payload = result_payload([candidate], [], {"timeframe": "D1"})
+    payload["review_setups"] = reviews
+    payload["rejected"] = [unused]
+
+    output_dir = tmp_path / "public" / "d1"
+    materialize_combined_assets(payload, output_dir)
+
+    full_hash = hashlib.sha256(b"full chart").hexdigest()[:12]
+    compact_hash = hashlib.sha256(b"compact chart").hexdigest()[:12]
+    full_destination = output_dir / "assets" / "d1-shard-crypto" / "charts" / f"full.{full_hash}.jpg"
+    compact_full_destination = (
+        output_dir / "assets" / "d1-shard-crypto" / "charts" / f"compact.{compact_hash}.jpg"
+    )
+    compact_preview_destination = compact_full_destination.parent / "preview" / compact_full_destination.name
+
+    assert full_destination.exists()
+    assert (full_destination.parent / "preview" / full_destination.name).exists()
+    assert payload["candidates"][0]["chart_path"] == str(full_destination)
+    assert not compact_full_destination.exists()
+    assert compact_preview_destination.exists()
+    assert compact_preview_destination.read_bytes() == b"preview compact chart"
+    assert payload["review_setups"][-1]["chart_path"] == str(compact_preview_destination)
+    assert Path(payload["review_setups"][-1]["rrg"]["rrg_chart_path"]).exists()
+    assert payload["rejected"][0]["chart_path"] == ""
+
+
+def test_validate_published_site_checks_html_and_results_assets(tmp_path: Path) -> None:
+    site_root = tmp_path / "public"
+    report_dir = site_root / "d1"
+    asset_path = report_dir / "assets" / "chart.abc123.jpg"
+    asset_path.parent.mkdir(parents=True)
+    asset_path.write_bytes(b"preview")
+    (report_dir / "index.html").write_text(
+        '<a href="assets/chart.abc123.jpg"><img data-src="/d1/assets/chart.abc123.jpg"></a>'
+    )
+    (report_dir / "results.json").write_text(
+        json.dumps({"review_setups": [{"chart_path": "public/d1/assets/chart.abc123.jpg"}]})
+    )
+
+    expected_size = sum(path.stat().st_size for path in site_root.rglob("*") if path.is_file())
+    summary = validate_published_site(site_root)
+
+    assert summary == {"total_bytes": expected_size, "checked_assets": 1}
+
+
+def test_validate_published_site_rejects_missing_asset(tmp_path: Path) -> None:
+    site_root = tmp_path / "public"
+    report_dir = site_root / "d1"
+    report_dir.mkdir(parents=True)
+    (report_dir / "index.html").write_text('<img data-src="assets/missing.jpg">')
+
+    with pytest.raises(ValueError, match=r"1 missing asset"):
+        validate_published_site(site_root)
+
+
+def test_validate_published_site_rejects_oversized_site(tmp_path: Path) -> None:
+    site_root = tmp_path / "public"
+    site_root.mkdir()
+    (site_root / "index.html").write_bytes(b"12345")
+
+    with pytest.raises(ValueError, match=r"5 bytes; limit is 4 bytes"):
+        validate_published_site(site_root, max_bytes=4)
+
+
+def test_validate_published_site_rejects_asset_path_outside_site(tmp_path: Path) -> None:
+    site_root = tmp_path / "public"
+    report_dir = site_root / "d1"
+    report_dir.mkdir(parents=True)
+    outside_asset = tmp_path / "outside.jpg"
+    outside_asset.write_bytes(b"outside")
+    (report_dir / "results.json").write_text(json.dumps({"chart_path": str(outside_asset)}))
+
+    with pytest.raises(ValueError, match=r"escapes the published site"):
+        validate_published_site(site_root)
+
+
+def test_combined_output_publishes_a_loadable_compact_review_preview(tmp_path: Path) -> None:
+    shard_dir = tmp_path / "source" / "d1-shards" / "d1-shard-0"
+    chart_path = shard_dir / "charts" / "compact.png"
+    preview_path = chart_path.parent / "preview" / chart_path.name
+    preview_path.parent.mkdir(parents=True)
+    image_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    chart_path.write_bytes(image_bytes)
+    preview_path.write_bytes(image_bytes)
+
+    reviews = []
+    for index in range(REVIEW_FULL_CARD_LIMIT + 1):
+        review = _candidate(f"SYM{index}", "dd", 60, "FAILED")
+        review["review_score"] = REVIEW_FULL_CARD_LIMIT - index
+        reviews.append(review)
+    reviews[-1]["chart_path"] = str(chart_path)
+    payload = result_payload([], [], {"timeframe": "D1"})
+    payload["review_setups"] = reviews
+    shard_results = shard_dir / "results.json"
+    shard_results.write_text(json.dumps(payload))
+
+    site_root = tmp_path / "public"
+    report_dir = site_root / "d1"
+    html_path, results_path = write_combined_outputs(
+        [shard_results],
+        report_dir / "index.html",
+        report_dir / "results.json",
+        copy_assets=True,
+    )
+
+    chart_hash = hashlib.sha256(image_bytes).hexdigest()[:12]
+    published_preview = report_dir / "assets" / "d1-shard-0" / "charts" / "preview" / f"compact.{chart_hash}.png"
+    published_full = published_preview.parent.parent / published_preview.name
+    html = html_path.read_text()
+    published_payload = json.loads(results_path.read_text())
+
+    assert published_preview.read_bytes() == image_bytes
+    assert not published_full.exists()
+    assert f'data-src="assets/d1-shard-0/charts/preview/{published_preview.name}"' in html
+    assert 'class="compact-review-chart"' in html
+    assert Path(published_payload["review_setups"][-1]["chart_path"]) == published_preview
+    assert validate_published_site(site_root)["checked_assets"] == 1
+
+
 def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tmp_path: Path) -> None:
     reviews = []
     for index in range(REVIEW_FULL_CARD_LIMIT + 25):
         row = _candidate(f"SYM{index}", "dd", 60, "FAILED")
         row["review_score"] = 60 - (index / 1000)
         reviews.append(row)
-    reviews[-1]["chart_path"] = "assets/charts/SYM324.hash.jpg"
+    chart_path = tmp_path / "assets" / "charts" / "SYM324.hash.jpg"
+    preview_path = chart_path.parent / "preview" / chart_path.name
+    chart_path.parent.mkdir(parents=True)
+    preview_path.parent.mkdir(parents=True)
+    chart_path.write_bytes(b"full chart")
+    preview_path.write_bytes(b"preview chart")
+    reviews[-1]["chart_path"] = str(chart_path)
     payload = result_payload([], [], {"timeframe": "D1"})
     payload["review_setups"] = reviews
     results_path = tmp_path / "results.json"
@@ -566,7 +725,7 @@ def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tm
 
     assert html.count('data-status="review"') == len(reviews)
     assert html.count('class="near result-card compact-review"') == len(reviews) - REVIEW_FULL_CARD_LIMIT
-    assert f"The first {REVIEW_FULL_CARD_LIMIT:,} reviews include full inline charts" in html
+    assert f"The first {REVIEW_FULL_CARD_LIMIT:,} reviews use detailed inline chart cards" in html
     assert "Every review remains searchable and filterable" in html
     assert 'href="results.json"' in html
     for index in range(len(reviews)):
@@ -577,6 +736,9 @@ def test_report_keeps_every_review_filterable_and_compacts_only_heavy_content(tm
         'data-technique="nhathoai" data-setup="dd" data-direction="long"'
     ) in html
     assert 'href="assets/charts/SYM324.hash.jpg"' in html
+    assert 'class="compact-review-chart"' in html
+    assert 'data-src="assets/charts/preview/SYM324.hash.jpg"' in html
+    assert 'loading="lazy" decoding="async"' in html
     assert "content-visibility: auto" in html
 
 
