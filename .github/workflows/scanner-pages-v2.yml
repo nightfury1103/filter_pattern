@@ -79,6 +79,11 @@ jobs:
             markets: "Crypto"
             shard_index: 2
             shard_count: 3
+          - id: index
+            label: Index CFD
+            markets: "Index"
+            shard_index: 0
+            shard_count: 1
           - id: commodity-forex
             label: Commodity, Commodity ETF, Forex
             markets: "Commodity,Commodity ETF,Forex"

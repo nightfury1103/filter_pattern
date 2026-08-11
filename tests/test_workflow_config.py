@@ -29,6 +29,14 @@ def test_pages_workflow_splits_d1_crypto_into_parallel_shards() -> None:
     assert workflow.count("shard_count: 3") >= 6
 
 
+def test_pages_workflow_scans_exness_indices_in_a_parallel_d1_shard() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert "id: index" in workflow
+    assert "label: Index CFD" in workflow
+    assert 'markets: "Index"' in workflow
+
+
 def test_pages_workflow_uses_compact_per_shard_state_instead_of_restoring_full_site() -> None:
     workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
 

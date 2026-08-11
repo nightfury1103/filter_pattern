@@ -133,6 +133,7 @@ def test_scan_market_passes_all_supported_markets_to_rrg_reference_attachment(tm
         UniverseSymbol("EURUSD", "Forex", "OANDA:EURUSD", "EURUSD=X"),
         UniverseSymbol("XAUUSD", "Commodity", "OANDA:XAUUSD", "GC=F"),
         UniverseSymbol("GLD", "Commodity ETF", "AMEX:GLD", "GLD"),
+        UniverseSymbol("US500", "Index", "EXNESS:US500", "^GSPC"),
     ]
 
     def fake_loader(symbols: list[str], period: str = "2y", timeframe: str = "D1"):
@@ -150,7 +151,7 @@ def test_scan_market_passes_all_supported_markets_to_rrg_reference_attachment(tm
 
     scan_market(tmp_path / "reports/all-markets", universe_name="default", markets="all")
 
-    assert seen["markets"] == ["Commodity", "Commodity ETF", "Crypto", "Forex", "US stock", "Vietnam stock"]
+    assert seen["markets"] == ["Commodity", "Commodity ETF", "Crypto", "Forex", "Index", "US stock", "Vietnam stock"]
 
 
 def test_scan_all_csv_uses_tradingview_csv_source_and_all_patterns(tmp_path: Path) -> None:

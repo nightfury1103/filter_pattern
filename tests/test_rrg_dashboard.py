@@ -108,6 +108,18 @@ def test_cross_market_stockcharts_rrg_symbol_mapping() -> None:
     assert rrg_dashboard._commodity_stockcharts_symbol("USOIL", "Commodity") == "$WTIC"
     assert rrg_dashboard._commodity_stockcharts_symbol("GOLD_ETF", "Commodity ETF") == "GLD"
     assert rrg_dashboard._commodity_stockcharts_symbol("DBC", "Commodity ETF") == "DBC"
+    assert rrg_dashboard.INDEX_STOCKCHARTS_SYMBOLS == {
+        "AUS200": "$AORD",
+        "DE30": "$DAX",
+        "FR40": "$CAC",
+        "HK50": "$HSI",
+        "JP225": "$NIKK",
+        "STOXX50": "CSX5.L",
+        "UK100": "ISF.L",
+        "US30": "$INDU",
+        "US500": "$SPX",
+        "USTEC": "$NDX",
+    }
 
 
 def test_commodity_rrg_references_keep_all_alias_symbols(monkeypatch) -> None:

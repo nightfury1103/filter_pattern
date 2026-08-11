@@ -94,6 +94,7 @@ def default_universe() -> list[UniverseSymbol]:
     return [
         *_us_stocks(),
         *_vietnam_stocks(),
+        *_indices(),
         *_commodities(),
         *_forex(),
         *_crypto(),
@@ -296,10 +297,12 @@ def sp500_universe() -> list[UniverseSymbol]:
 
 
 def _dedupe_symbols(items: list[UniverseSymbol]) -> list[UniverseSymbol]:
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     deduped: list[UniverseSymbol] = []
     for item in items:
-        key = item.symbol
+        # The same ticker can legitimately exist in different markets (for
+        # example, Exness US stock ABT and Vietnam stock ABT).
+        key = (item.market, item.symbol)
         if key in seen:
             continue
         seen.add(key)
@@ -357,8 +360,24 @@ def _us_stocks() -> list[UniverseSymbol]:
         ("DE", "NYSE:DE"),
         ("BA", "NYSE:BA"),
         ("BABA", "NYSE:BABA"),
+        ("BEKE", "NYSE:BEKE"),
         ("BIDU", "NASDAQ:BIDU"),
         ("BILI", "NASDAQ:BILI"),
+        ("EDU", "NYSE:EDU"),
+        ("FUTU", "NASDAQ:FUTU"),
+        ("JD", "NASDAQ:JD"),
+        ("LI", "NASDAQ:LI"),
+        ("NIO", "NYSE:NIO"),
+        ("PDD", "NASDAQ:PDD"),
+        ("TAL", "NYSE:TAL"),
+        ("TME", "NYSE:TME"),
+        ("TSM", "NYSE:TSM"),
+        ("VIPS", "NYSE:VIPS"),
+        ("XPEV", "NYSE:XPEV"),
+        ("YUMC", "NYSE:YUMC"),
+        ("CSX", "NASDAQ:CSX"),
+        ("SPCX", "AMEX:SPCX"),
+        ("UPS", "NYSE:UPS"),
         ("LMT", "NYSE:LMT"),
         ("XOM", "NYSE:XOM"),
         ("CVX", "NYSE:CVX"),
@@ -374,6 +393,43 @@ def _us_stocks() -> list[UniverseSymbol]:
         ("NTES", "NASDAQ:NTES"),
         ("TMUS", "NASDAQ:TMUS"),
         ("ZTO", "NYSE:ZTO"),
+        ("ABT", "NYSE:ABT"),
+        ("AMGN", "NASDAQ:AMGN"),
+        ("AMT", "NYSE:AMT"),
+        ("BIIB", "NASDAQ:BIIB"),
+        ("BMY", "NYSE:BMY"),
+        ("C", "NYSE:C"),
+        ("CHTR", "NASDAQ:CHTR"),
+        ("CMCSA", "NASDAQ:CMCSA"),
+        ("CME", "NASDAQ:CME"),
+        ("CSCO", "NASDAQ:CSCO"),
+        ("CVS", "NYSE:CVS"),
+        ("EA", "NASDAQ:EA"),
+        ("EBAY", "NASDAQ:EBAY"),
+        ("EQIX", "NASDAQ:EQIX"),
+        ("F", "NYSE:F"),
+        ("FDX", "NYSE:FDX"),
+        ("GILD", "NASDAQ:GILD"),
+        ("GOOG", "NASDAQ:GOOG"),
+        ("IBM", "NYSE:IBM"),
+        ("INTU", "NASDAQ:INTU"),
+        ("JNJ", "NYSE:JNJ"),
+        ("KO", "NYSE:KO"),
+        ("LIN", "NASDAQ:LIN"),
+        ("MDLZ", "NASDAQ:MDLZ"),
+        ("MMM", "NYSE:MMM"),
+        ("MO", "NYSE:MO"),
+        ("MS", "NYSE:MS"),
+        ("PEP", "NASDAQ:PEP"),
+        ("PFE", "NYSE:PFE"),
+        ("PG", "NYSE:PG"),
+        ("PM", "NYSE:PM"),
+        ("PYPL", "NASDAQ:PYPL"),
+        ("REGN", "NASDAQ:REGN"),
+        ("T", "NYSE:T"),
+        ("VRTX", "NASDAQ:VRTX"),
+        ("VZ", "NYSE:VZ"),
+        ("WFC", "NYSE:WFC"),
         ("SPY", "AMEX:SPY"),
         ("QQQ", "NASDAQ:QQQ"),
         ("IWM", "AMEX:IWM"),
@@ -801,6 +857,22 @@ def _vietnam_stocks() -> list[UniverseSymbol]:
         )
         for ticker in dict.fromkeys(tickers)
     ]
+
+
+def _indices() -> list[UniverseSymbol]:
+    items = [
+        ("AUS200", "Index", "EXNESS:AUS200", "^AXJO"),
+        ("DE30", "Index", "EXNESS:DE30", "^GDAXI"),
+        ("FR40", "Index", "EXNESS:FR40", "^FCHI"),
+        ("HK50", "Index", "EXNESS:HK50", "^HSI"),
+        ("JP225", "Index", "EXNESS:JP225", "^N225"),
+        ("STOXX50", "Index", "EXNESS:STOXX50", "^STOXX50E"),
+        ("UK100", "Index", "EXNESS:UK100", "^FTSE"),
+        ("US30", "Index", "EXNESS:US30", "^DJI"),
+        ("US500", "Index", "EXNESS:US500", "^GSPC"),
+        ("USTEC", "Index", "EXNESS:USTEC", "^NDX"),
+    ]
+    return [UniverseSymbol(*item) for item in items]
 
 
 def _commodities() -> list[UniverseSymbol]:

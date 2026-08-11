@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from filter_pattern.exness import filter_exness_supported
+from filter_pattern.exness import EXNESS_INDICES, EXNESS_US_STOCKS, filter_exness_supported
 from filter_pattern.universe import UniverseSymbol, get_universe
 
 
@@ -13,19 +13,25 @@ def test_exness_filter_limits_us_forex_and_commodities_but_keeps_other_markets()
         UniverseSymbol("XAUUSD", "Commodity", "OANDA:XAUUSD", "GC=F"),
         UniverseSymbol("XNIUSD", "Commodity", "EXNESS:XNIUSD", "NICKEL=F"),
         UniverseSymbol("CORN", "Commodity", "CBOT:ZC1!", "ZC=F"),
+        UniverseSymbol("US500", "Index", "EXNESS:US500", "^GSPC"),
+        UniverseSymbol("VIX", "Index", "CBOE:VIX", "^VIX"),
         UniverseSymbol("FPT", "Vietnam stock", "HOSE:FPT", "FPT.VN"),
         UniverseSymbol("BTCUSDT", "Crypto", "BINANCE:BTCUSDT", "BTC-USD"),
     ]
 
     filtered = filter_exness_supported(items)
 
-    assert [item.symbol for item in filtered] == ["AAPL", "EURUSD", "EURHUF", "XAUUSD", "XNIUSD", "FPT", "BTCUSDT"]
+    assert [item.symbol for item in filtered] == ["AAPL", "EURUSD", "EURHUF", "XAUUSD", "XNIUSD", "US500", "FPT", "BTCUSDT"]
 
 
 def test_exness_filtered_broad_universe_includes_base_metals_and_more_forex() -> None:
     filtered = filter_exness_supported(get_universe("broad"))
     commodity_symbols = {item.symbol for item in filtered if item.market == "Commodity"}
     forex_symbols = {item.symbol for item in filtered if item.market == "Forex"}
+    stock_symbols = {item.symbol for item in filtered if item.market == "US stock"}
+    index_symbols = {item.symbol for item in filtered if item.market == "Index"}
 
     assert {"XALUSD", "XCUUSD", "XNIUSD", "XPBUSD", "XZNUSD"}.issubset(commodity_symbols)
     assert len(forex_symbols) >= 80
+    assert EXNESS_US_STOCKS.issubset(stock_symbols)
+    assert index_symbols == EXNESS_INDICES

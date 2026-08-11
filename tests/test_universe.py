@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from filter_pattern.exness import EXNESS_INDICES, EXNESS_US_STOCKS
 from filter_pattern.universe import _crypto_from_exchange_markets, default_universe, expand_crypto_universe, get_universe
 
 
@@ -9,6 +10,7 @@ def test_default_universe_covers_multiple_markets_with_substantial_non_us_lists(
     counts = Counter(item.market for item in default_universe())
 
     assert counts["US stock"] >= 60
+    assert counts["Index"] == 10
     assert counts["Vietnam stock"] >= 300
     assert counts["Forex"] >= 30
     assert counts["Crypto"] >= 200
@@ -25,6 +27,58 @@ def test_broad_universe_includes_sp500_plus_cross_market_symbols() -> None:
     assert counts["Forex"] >= 80
     assert counts["Crypto"] >= 200
     assert counts["Commodity"] >= 30
+
+
+def test_default_universe_includes_current_exness_stock_cfds_with_data_mappings() -> None:
+    by_symbol = {item.symbol: item for item in get_universe("default") if item.market == "US stock"}
+    expected_exchanges = {
+        "BEKE": "NYSE:BEKE",
+        "CSX": "NASDAQ:CSX",
+        "EDU": "NYSE:EDU",
+        "FUTU": "NASDAQ:FUTU",
+        "JD": "NASDAQ:JD",
+        "LI": "NASDAQ:LI",
+        "NIO": "NYSE:NIO",
+        "PDD": "NASDAQ:PDD",
+        "SPCX": "AMEX:SPCX",
+        "TAL": "NYSE:TAL",
+        "TME": "NYSE:TME",
+        "TSM": "NYSE:TSM",
+        "UPS": "NYSE:UPS",
+        "VIPS": "NYSE:VIPS",
+        "XPEV": "NYSE:XPEV",
+        "YUMC": "NYSE:YUMC",
+    }
+
+    assert EXNESS_US_STOCKS.issubset(by_symbol)
+    assert {symbol: by_symbol[symbol].tradingview_symbol for symbol in expected_exchanges} == expected_exchanges
+    assert all(by_symbol[symbol].yahoo_symbol == symbol for symbol in expected_exchanges)
+
+
+def test_default_universe_includes_all_exness_index_cfds_with_data_mappings() -> None:
+    by_symbol = {item.symbol: item for item in get_universe("default") if item.market == "Index"}
+    expected_yahoo = {
+        "AUS200": "^AXJO",
+        "DE30": "^GDAXI",
+        "FR40": "^FCHI",
+        "HK50": "^HSI",
+        "JP225": "^N225",
+        "STOXX50": "^STOXX50E",
+        "UK100": "^FTSE",
+        "US30": "^DJI",
+        "US500": "^GSPC",
+        "USTEC": "^NDX",
+    }
+
+    assert set(by_symbol) == EXNESS_INDICES
+    assert {symbol: item.yahoo_symbol for symbol, item in by_symbol.items()} == expected_yahoo
+    assert all(item.tradingview_symbol == f"EXNESS:{item.symbol}" for item in by_symbol.values())
+
+
+def test_broad_universe_keeps_same_ticker_in_different_markets() -> None:
+    abt_markets = {item.market for item in get_universe("broad") if item.symbol == "ABT"}
+
+    assert abt_markets == {"US stock", "Vietnam stock"}
 
 
 def test_crypto_universe_uses_usdt_pairs_and_exchange_specific_tradingview_ids() -> None:

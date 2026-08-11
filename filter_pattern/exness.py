@@ -18,6 +18,19 @@ EXNESS_COMMODITIES = {
     "XZNUSD",
 }
 
+EXNESS_INDICES = {
+    "AUS200",
+    "DE30",
+    "FR40",
+    "HK50",
+    "JP225",
+    "STOXX50",
+    "UK100",
+    "US30",
+    "US500",
+    "USTEC",
+}
+
 EXNESS_FOREX = {
     "AUDCAD",
     "AUDCHF",
@@ -117,6 +130,7 @@ EXNESS_US_STOCKS = {
     "BA",
     "BABA",
     "BAC",
+    "BEKE",
     "BIDU",
     "BIIB",
     "BILI",
@@ -127,14 +141,17 @@ EXNESS_US_STOCKS = {
     "CME",
     "COST",
     "CSCO",
+    "CSX",
     "CVS",
     "DIS",
     "EA",
     "EBAY",
+    "EDU",
     "EQIX",
     "F",
     "FDX",
     "FTNT",
+    "FUTU",
     "GILD",
     "GOOG",
     "GOOGL",
@@ -144,10 +161,12 @@ EXNESS_US_STOCKS = {
     "INTU",
     "ISRG",
     "JNJ",
+    "JD",
     "JPM",
     "KO",
     "LIN",
     "LLY",
+    "LI",
     "LMT",
     "MA",
     "MCD",
@@ -159,10 +178,12 @@ EXNESS_US_STOCKS = {
     "MS",
     "MSFT",
     "NFLX",
+    "NIO",
     "NKE",
     "NTES",
     "NVDA",
     "ORCL",
+    "PDD",
     "PEP",
     "PFE",
     "PG",
@@ -170,17 +191,25 @@ EXNESS_US_STOCKS = {
     "PYPL",
     "REGN",
     "SBUX",
+    "SPCX",
     "T",
+    "TAL",
+    "TME",
     "TMO",
     "TMUS",
     "TSLA",
+    "TSM",
     "UNH",
+    "UPS",
     "V",
     "VRTX",
     "VZ",
+    "VIPS",
     "WFC",
     "WMT",
     "XOM",
+    "XPEV",
+    "YUMC",
     "ZTO",
 }
 
@@ -206,6 +235,8 @@ def _is_supported_symbol(symbol: str, market: str) -> bool:
         return symbol in EXNESS_US_STOCKS
     if market == "Forex":
         return symbol in EXNESS_FOREX
+    if market == "Index":
+        return symbol in EXNESS_INDICES
     if market in {"Commodity", "Commodity ETF"}:
         return symbol in EXNESS_COMMODITIES
     return True

@@ -72,14 +72,27 @@ QUADRANT_BACKGROUNDS = {
     "WEAKENING": "#fef3c7",
     "LAGGING": "#fee2e2",
 }
-RRG_REFERENCE_MARKETS = {"US stock", "Vietnam stock", "Crypto", "Forex", "Commodity", "Commodity ETF"}
+RRG_REFERENCE_MARKETS = {"US stock", "Vietnam stock", "Crypto", "Forex", "Index", "Commodity", "Commodity ETF"}
 RRG_MARKET_REPRESENTATIVES = {
     "US stock": ["SPY"],
     "Vietnam stock": ["VNINDEX"],
     "Crypto": ["BTCUSDT", "ETHUSDT"],
     "Forex": ["DXY"],
+    "Index": ["US500"],
     "Commodity": ["XAUUSD"],
     "Commodity ETF": ["DBC"],
+}
+INDEX_STOCKCHARTS_SYMBOLS = {
+    "AUS200": "$AORD",
+    "DE30": "$DAX",
+    "FR40": "$CAC",
+    "HK50": "$HSI",
+    "JP225": "$NIKK",
+    "STOXX50": "CSX5.L",
+    "UK100": "ISF.L",
+    "US30": "$INDU",
+    "US500": "$SPX",
+    "USTEC": "$NDX",
 }
 COMMODITY_STOCKCHARTS_SYMBOLS = {
     "XAUUSD": "$GOLD",
@@ -217,7 +230,7 @@ def attach_rrg_references(payload: dict, output_dir: str | Path, timeframe: str 
             "enabled": True,
             "status": "no_supported_symbols",
             "attached_count": 0,
-            "note": "RRG reference supports US stock, Vietnam stock, crypto, forex, commodity, and commodity ETF symbols when data is available.",
+            "note": "RRG reference supports US stock, Vietnam stock, crypto, forex, index, commodity, and commodity ETF symbols when data is available.",
         }
         return payload
 
@@ -230,6 +243,7 @@ def attach_rrg_references(payload: dict, output_dir: str | Path, timeframe: str 
         "Crypto": lambda symbols: _crypto_rrg_references(symbols, timeframe),
         "Vietnam stock": _vnstock_rrg_references,
         "Forex": _forex_rrg_references,
+        "Index": _index_rrg_references,
         "Commodity": lambda symbols: _commodity_rrg_references(symbols, "Commodity"),
         "Commodity ETF": lambda symbols: _commodity_rrg_references(symbols, "Commodity ETF"),
     }
@@ -238,6 +252,7 @@ def attach_rrg_references(payload: dict, output_dir: str | Path, timeframe: str 
         "Crypto": lambda symbols: _crypto_rrg_references(symbols, "D1"),
         "Vietnam stock": _vnstock_rrg_references,
         "Forex": _forex_rrg_references,
+        "Index": _index_rrg_references,
         "Commodity": lambda symbols: _commodity_rrg_references(symbols, "Commodity"),
         "Commodity ETF": lambda symbols: _commodity_rrg_references(symbols, "Commodity ETF"),
     }
@@ -1054,6 +1069,29 @@ def _commodity_rrg_references(symbols: list[str], market: str) -> dict[str, RRGS
             selection = _selection_from_points(symbol, sector, benchmark, points)
             if selection is not None:
                 selections[symbol] = selection
+    return selections
+
+
+def _index_rrg_references(symbols: list[str]) -> dict[str, RRGSelection]:
+    mapped = [(symbol, INDEX_STOCKCHARTS_SYMBOLS.get(symbol.upper(), "")) for symbol in symbols]
+    mapped = [(symbol, stockcharts_symbol) for symbol, stockcharts_symbol in mapped if stockcharts_symbol]
+    if not mapped:
+        return {}
+
+    display_by_stockcharts = {stockcharts_symbol: symbol for symbol, stockcharts_symbol in mapped}
+    stockcharts_symbols = list(display_by_stockcharts)
+    combined: dict[str, list[dict]] = {}
+    for index in range(0, len(stockcharts_symbols), RRG_CHUNK_SIZE):
+        chunk = stockcharts_symbols[index : index + RRG_CHUNK_SIZE]
+        combined.update(_series_from_stockcharts(_fetch_stockcharts_rrg(chunk, "$ONE"), chunk))
+        time.sleep(0.08)
+
+    selections: dict[str, RRGSelection] = {}
+    for stockcharts_symbol, points in combined.items():
+        symbol = display_by_stockcharts.get(stockcharts_symbol, stockcharts_symbol)
+        selection = _selection_from_points(symbol, "Index", "$ONE", points)
+        if selection is not None:
+            selections[symbol] = selection
     return selections
 
 

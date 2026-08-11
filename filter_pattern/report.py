@@ -2121,7 +2121,7 @@ def _exness_supported_count(rows: list[dict]) -> int:
 
 def _is_row_exness_supported(row: dict) -> bool:
     market = str(row.get("market", ""))
-    if market not in {"Commodity", "Forex", "US stock"}:
+    if market not in {"Commodity", "Forex", "Index", "US stock"}:
         return False
     return is_exness_supported_symbol(str(row.get("symbol", "")), market)
 
