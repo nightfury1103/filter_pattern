@@ -815,8 +815,9 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     }}
     .rrg-axis {{ stroke: #94a3b8; stroke-width: 1.4; opacity: .9; }}
     .rrg-gridline {{ stroke: #e2e8f0; stroke-width: 1; opacity: 1; }}
-    .rrg-tail {{ fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .95; }}
-    .rrg-arrow-segment {{ opacity: 1; }}
+    .rrg-tail {{ fill: none; stroke-linecap: round; stroke-linejoin: round; }}
+    .rrg-history-tail {{ stroke-width: 2; opacity: .28; }}
+    .rrg-direction-head {{ stroke-width: 4.5; opacity: 1; }}
     .rrg-dot {{ stroke: #ffffff; stroke-width: 1.8; }}
     .rrg-label {{ fill: #0f1729; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round; }}
     .rrg-small-label {{ fill: #64748b; font-size: 11px; font-weight: 700; }}
@@ -3160,22 +3161,34 @@ def _rrg_overview_chart_svg(items: list[dict], market: str = "all", title: str =
         coords = [(sx(float(x)), sy(float(y))) for x, y in series]
         marker_id = f"{marker_prefix}-arrow-{index}"
         marker_defs.append(
-            f'<marker id="{escape(marker_id)}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4.8" markerHeight="4.8" orient="auto-start-reverse">'
+            f'<marker id="{escape(marker_id)}" viewBox="0 0 10 10" refX="8.5" refY="5" '
+            'markerWidth="7.2" markerHeight="7.2" orient="auto-start-reverse">'
             f'<path class="rrg-arrow-head" d="M 0 0 L 10 5 L 0 10 z" style="color:{color}"></path>'
             '</marker>'
         )
-        if len(coords) >= 2:
-            path = " ".join(f"{'M' if index == 0 else 'L'} {x:.1f} {y:.1f}" for index, (x, y) in enumerate(coords))
-            paths.append(f'<path class="rrg-tail" d="{path}" stroke="{color}"><title>{escape(str(item.get("symbol")))} daily RRG tail</title></path>')
+        history_coords = coords[:-1]
+        if len(history_coords) >= 2:
+            history_path = " ".join(
+                f"{'M' if point_index == 0 else 'L'} {x:.1f} {y:.1f}"
+                for point_index, (x, y) in enumerate(history_coords)
+            )
+            paths.append(
+                f'<path class="rrg-tail rrg-history-tail" d="{history_path}" stroke="{color}">'
+                f'<title>{escape(str(item.get("symbol")))} historical RRG tail</title></path>'
+            )
         x, y = coords[-1]
         symbol = str(item.get("symbol"))
-        paths.append(f'<circle class="rrg-dot" cx="{x:.1f}" cy="{y:.1f}" r="5.2" fill="{color}"><title>{escape(symbol)} current</title></circle>')
+        paths.append(
+            f'<circle class="rrg-dot" cx="{x:.1f}" cy="{y:.1f}" r="5.6" fill="{color}">'
+            f'<title>{escape(symbol)} current</title></circle>'
+        )
         if len(coords) >= 2:
             start_x, start_y = coords[-2]
             arrow_path = f"M {start_x:.1f} {start_y:.1f} L {x:.1f} {y:.1f}"
             paths.append(
-                f'<path class="rrg-tail rrg-arrow-segment" d="{arrow_path}" stroke="{color}" marker-end="url(#{escape(marker_id)})">'
-                f'<title>{escape(symbol)} direction: older to current</title></path>'
+                f'<path class="rrg-tail rrg-direction-head" d="{arrow_path}" stroke="{color}" '
+                f'marker-end="url(#{escape(marker_id)})">'
+                f'<title>{escape(symbol)} direction: previous to current</title></path>'
             )
         if symbol in label_symbols:
             label_x = min(width - right - 4, x + 8)

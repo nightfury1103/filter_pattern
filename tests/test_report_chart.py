@@ -208,6 +208,36 @@ def test_rrg_overview_renders_representative_status_cards_without_long_lists() -
     assert 'class="market-rrg-grid"' not in html
 
 
+def test_rrg_chart_fades_history_and_emphasizes_only_the_final_arrow() -> None:
+    item = report._rrg_overview_items(
+        [_overview_representative("SPY", "US stock", "LEADING", dx=0.8, dy=0.7)]
+    )[0]
+    item["series"] = [(99.2, 99.1), (100.0, 100.2), (101.0, 101.0)]
+
+    html = report._rrg_overview_chart_svg([item])
+
+    assert html.count('class="rrg-tail rrg-history-tail"') == 1
+    assert html.count('class="rrg-tail rrg-direction-head"') == 1
+    assert html.count("marker-end=") == 1
+    assert 'markerWidth="7.2"' in html
+    assert 'markerHeight="7.2"' in html
+    assert "SPY direction: previous to current" in html
+
+
+def test_rrg_chart_single_point_has_endpoint_without_direction_arrow() -> None:
+    item = report._rrg_overview_items(
+        [_overview_representative("SPY", "US stock", "LEADING")]
+    )[0]
+    item["series"] = [(101.0, 101.0)]
+
+    html = report._rrg_overview_chart_svg([item])
+
+    assert 'class="rrg-dot"' in html
+    assert 'class="rrg-tail rrg-history-tail"' not in html
+    assert 'class="rrg-tail rrg-direction-head"' not in html
+    assert "marker-end=" not in html
+
+
 def test_report_renders_market_rrg_overview(tmp_path: Path) -> None:
     first = _candidate("BTCUSDT", "bb", 86, "WAITING")
     first.update({"market": "Crypto", "timeframe": "D1"})
@@ -378,7 +408,8 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
     assert "function updateRrgOverview" in html
     assert "updateRrgOverview(market);" in html
     assert "marker-end=" in html
-    assert html.index('<circle class="rrg-dot"') < html.index('class="rrg-tail rrg-arrow-segment"')
+    assert 'class="rrg-tail rrg-direction-head"' in html
+    assert html.index('class="rrg-tail rrg-history-tail"') < html.index('class="rrg-tail rrg-direction-head"')
 
 
 def test_report_uses_full_width_chart_layout_without_right_side_panel(tmp_path: Path) -> None:
