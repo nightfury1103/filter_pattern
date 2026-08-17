@@ -19,7 +19,7 @@ The all-markets overview uses these D1 representatives:
 | Market | Internal fetch symbol | Overview label |
 | --- | --- | --- |
 | US stock | `SPY` | `SPY` |
-| Vietnam stock | `VNINDEX` | `VNINDEX` |
+| Vietnam stock | `E1VFVN30` | `E1VFVN30` |
 | Crypto | `BTCUSDT` | `BTCUSD` |
 | Crypto | `ETHUSDT` | `ETHUSD` |
 | Forex | `DXY` | `DXY` |
@@ -28,6 +28,10 @@ The all-markets overview uses these D1 representatives:
 | Commodity ETF | `DBC` | `DBC` |
 
 Provider-compatible symbols remain internal. Display aliases affect only overview labels and do not change data retrieval or candidate symbol identifiers.
+
+`E1VFVN30` is the Vietnam-market proxy because Fialda returns a usable RRG series for it against VNINDEX. VNINDEX and VN30 themselves return no RRG series from the available providers. The overview must display `E1VFVN30` transparently rather than labeling the proxy as VNINDEX or VN30.
+
+The Forex report symbol remains `DXY`, but its StockCharts request symbol is `$USD`; `$DXY` returns no StockCharts RRG series. Commodity ETF representative `DBC` must be requested whenever Commodity ETF is included in the scan configuration, even when the broker filter removes Commodity ETF candidates from the pattern universe.
 
 ## Overview Layout
 
@@ -71,7 +75,7 @@ When a trail contains only one usable point, the chart shows the endpoint withou
 
 ## Data Flow
 
-1. `attach_rrg_references` collects supported markets from the report payload.
+1. `attach_rrg_references` collects supported markets from both the requested scan configuration and report rows, so a configured market does not disappear when it has no candidate rows.
 2. The existing market-specific fetchers request D1 data for each configured representative.
 3. Representative rows retain their internal symbol and receive an overview display label.
 4. The report layer normalizes representative rows into status-card and chart items.
@@ -102,6 +106,9 @@ Movement direction comes from the delta between the final two usable points. It 
 Automated tests will verify:
 
 - The fixed representative map for every supported market.
+- `E1VFVN30` retrieval through Fialda with VNINDEX as its benchmark.
+- DXY retrieval through the StockCharts `$USD` provider symbol while retaining the `DXY` report label.
+- DBC representative retrieval when Commodity ETF is configured but absent from scanned candidate rows.
 - D1 fetching for representatives even when the report timeframe is H4.
 - `BTCUSDT` and `ETHUSDT` retrieval with `BTCUSD` and `ETHUSD` overview labels.
 - Single-representative quadrant status.
@@ -125,3 +132,5 @@ Automated tests will verify:
 - A missing representative produces an Unavailable card instead of removing the market.
 - Market drill-down and candidate qualification behavior remain unchanged.
 - The GitHub Pages combined report uses the fixed representatives instead of highest-ranked candidate fallbacks.
+- The Vietnam card and trail use `E1VFVN30`, not an unavailable VNINDEX or VN30 self-reference.
+- Configured DXY and DBC representatives remain present when valid provider data is returned.
