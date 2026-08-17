@@ -86,6 +86,9 @@ RRG_MARKET_REPRESENTATIVE_LABELS = {
     ("Crypto", "BTCUSDT"): "BTCUSD",
     ("Crypto", "ETHUSDT"): "ETHUSD",
 }
+FOREX_STOCKCHARTS_SYMBOLS = {
+    "DXY": "$USD",
+}
 INDEX_STOCKCHARTS_SYMBOLS = {
     "AUS200": "$AORD",
     "DE30": "$DAX",
@@ -1104,7 +1107,7 @@ def _index_rrg_references(symbols: list[str]) -> dict[str, RRGSelection]:
 
 def _forex_stockcharts_symbol(symbol: str) -> str:
     cleaned = re.sub(r"[^A-Z]", "", str(symbol).upper())
-    return f"${cleaned}" if cleaned else ""
+    return FOREX_STOCKCHARTS_SYMBOLS.get(cleaned, f"${cleaned}" if cleaned else "")
 
 
 def _commodity_stockcharts_symbol(symbol: str, market: str) -> str:

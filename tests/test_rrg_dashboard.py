@@ -130,6 +130,7 @@ def test_crypto_symbol_mapping_for_stockcharts_rrg() -> None:
 
 def test_cross_market_stockcharts_rrg_symbol_mapping() -> None:
     assert rrg_dashboard._forex_stockcharts_symbol("EURUSD") == "$EURUSD"
+    assert rrg_dashboard._forex_stockcharts_symbol("DXY") == "$USD"
     assert rrg_dashboard._commodity_stockcharts_symbol("XAUUSD", "Commodity") == "$GOLD"
     assert rrg_dashboard._commodity_stockcharts_symbol("USOIL", "Commodity") == "$WTIC"
     assert rrg_dashboard._commodity_stockcharts_symbol("GOLD_ETF", "Commodity ETF") == "GLD"
@@ -146,6 +147,31 @@ def test_cross_market_stockcharts_rrg_symbol_mapping() -> None:
         "US500": "$SPX",
         "USTEC": "$NDX",
     }
+
+
+def test_dxy_rrg_uses_stockcharts_usd_symbol_but_keeps_dxy_identity(monkeypatch) -> None:
+    payload = {
+        "rrgdata": [
+            {"rrgdata": {"$USD": {"jdkratio": 99.0, "jdkmom": 99.4, "price": 100.0}}},
+            {"rrgdata": {"$USD": {"jdkratio": 99.3, "jdkmom": 99.7, "price": 100.2}}},
+            {"rrgdata": {"$USD": {"jdkratio": 99.7, "jdkmom": 100.1, "price": 100.5}}},
+            {"rrgdata": {"$USD": {"jdkratio": 100.1, "jdkmom": 100.4, "price": 100.8}}},
+        ]
+    }
+
+    def fake_fetch(symbols: list[str], benchmark: str) -> dict:
+        assert symbols == ["$USD"]
+        assert benchmark == "$ONE"
+        return payload
+
+    monkeypatch.setattr(rrg_dashboard, "_fetch_stockcharts_rrg", fake_fetch)
+    monkeypatch.setattr(rrg_dashboard.time, "sleep", lambda _seconds: None)
+
+    selections = rrg_dashboard._forex_rrg_references(["DXY"])
+
+    assert list(selections) == ["DXY"]
+    assert selections["DXY"].benchmark == "$ONE"
+    assert len(selections["DXY"].rrg_series) == 4
 
 
 def test_commodity_rrg_references_keep_all_alias_symbols(monkeypatch) -> None:
