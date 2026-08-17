@@ -94,6 +94,32 @@ def test_fialda_rrg_series_uses_ratio_and_momentum_fields() -> None:
     }
 
 
+def test_vietnam_representative_uses_e1vfvn30_rrg_against_vnindex(monkeypatch) -> None:
+    payload = {
+        "result": [
+            {"date": "20260811", "rrgdata": {"E1VFVN30": {"price": 20.0, "ratio": 98.8, "mom": 99.4}}},
+            {"date": "20260812", "rrgdata": {"E1VFVN30": {"price": 20.2, "ratio": 99.1, "mom": 99.7}}},
+            {"date": "20260813", "rrgdata": {"E1VFVN30": {"price": 20.4, "ratio": 99.5, "mom": 100.1}}},
+            {"date": "20260814", "rrgdata": {"E1VFVN30": {"price": 20.7, "ratio": 99.9, "mom": 100.5}}},
+        ]
+    }
+
+    def fake_fetch(symbols: list[str], icbs: list[str]) -> dict:
+        assert symbols == ["E1VFVN30"]
+        assert icbs == []
+        return payload
+
+    monkeypatch.setattr(rrg_dashboard, "_fetch_fialda_rrg", fake_fetch)
+    monkeypatch.setattr(rrg_dashboard, "_safe_vn_sector_by_symbol", lambda _symbols: {})
+    monkeypatch.setattr(rrg_dashboard.time, "sleep", lambda _seconds: None)
+
+    selections = rrg_dashboard._vnstock_rrg_references(["E1VFVN30"])
+
+    assert list(selections) == ["E1VFVN30"]
+    assert selections["E1VFVN30"].benchmark == "VNINDEX"
+    assert len(selections["E1VFVN30"].rrg_series) == 4
+
+
 def test_crypto_symbol_mapping_for_stockcharts_rrg() -> None:
     assert rrg_dashboard._crypto_stockcharts_symbol("BTCUSDT") == "$BTCUSD"
     assert rrg_dashboard._crypto_stockcharts_symbol("ATOMUSDT.P") == "$ATOMUSD"
@@ -191,7 +217,7 @@ def test_rrg_reference_attaches_to_review_setup_rows(tmp_path, monkeypatch) -> N
 def test_market_representative_configuration_and_display_labels_are_fixed() -> None:
     assert rrg_dashboard.RRG_MARKET_REPRESENTATIVES == {
         "US stock": ["SPY"],
-        "Vietnam stock": ["VNINDEX"],
+        "Vietnam stock": ["E1VFVN30"],
         "Crypto": ["BTCUSDT", "ETHUSDT"],
         "Forex": ["DXY"],
         "Index": ["US500"],

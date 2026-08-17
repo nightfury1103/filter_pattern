@@ -75,7 +75,7 @@ QUADRANT_BACKGROUNDS = {
 RRG_REFERENCE_MARKETS = {"US stock", "Vietnam stock", "Crypto", "Forex", "Index", "Commodity", "Commodity ETF"}
 RRG_MARKET_REPRESENTATIVES = {
     "US stock": ["SPY"],
-    "Vietnam stock": ["VNINDEX"],
+    "Vietnam stock": ["E1VFVN30"],
     "Crypto": ["BTCUSDT", "ETHUSDT"],
     "Forex": ["DXY"],
     "Index": ["US500"],
