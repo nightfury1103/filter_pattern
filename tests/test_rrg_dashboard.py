@@ -188,6 +188,70 @@ def test_rrg_reference_attaches_to_review_setup_rows(tmp_path, monkeypatch) -> N
     assert payload["review_setups"][0]["rrg"]["rrg_chart_path"].endswith("xznusd-rrg-proof.jpg")
 
 
+def test_market_representative_configuration_and_display_labels_are_fixed() -> None:
+    assert rrg_dashboard.RRG_MARKET_REPRESENTATIVES == {
+        "US stock": ["SPY"],
+        "Vietnam stock": ["VNINDEX"],
+        "Crypto": ["BTCUSDT", "ETHUSDT"],
+        "Forex": ["DXY"],
+        "Index": ["US500"],
+        "Commodity": ["XAUUSD"],
+        "Commodity ETF": ["DBC"],
+    }
+    assert rrg_dashboard.RRG_MARKET_REPRESENTATIVE_LABELS == {
+        ("Crypto", "BTCUSDT"): "BTCUSD",
+        ("Crypto", "ETHUSDT"): "ETHUSD",
+    }
+
+
+def test_market_representative_rows_keep_internal_symbols_and_unavailable_slots() -> None:
+    btc = RRGSelection(
+        symbol="BTCUSDT",
+        sector="Crypto",
+        benchmark="$ONE",
+        latest={"x": 101.4, "y": 101.2},
+        intent={"quadrant": "LEADING", "dx1": 1.2, "dy1": 1.1},
+        sector_latest={},
+        sector_intent={},
+        rrg_series=[{"x": 100.2, "y": 100.1}, {"x": 101.4, "y": 101.2}],
+    )
+    errors: list[str] = []
+
+    rows = rrg_dashboard._market_representative_rrg_rows(
+        {"Crypto": {"SOLUSDT"}},
+        {"Crypto": lambda symbols: {"BTCUSDT": btc}},
+        errors,
+    )
+
+    assert [(row["symbol"], row["display_symbol"]) for row in rows] == [
+        ("BTCUSDT", "BTCUSD"),
+        ("ETHUSDT", "ETHUSD"),
+    ]
+    assert rows[0]["evidence"]["status"] == "RRG_MARKET_REPRESENTATIVE"
+    assert rows[0]["rrg"]["stock_intent"]["quadrant"] == "LEADING"
+    assert rows[1]["evidence"]["status"] == "RRG_MARKET_UNAVAILABLE"
+    assert rows[1]["rrg"] == {}
+    assert errors == []
+
+
+def test_market_representative_fetch_failure_keeps_unavailable_rows() -> None:
+    def fail_fetch(_symbols: list[str]) -> dict[str, RRGSelection]:
+        raise RuntimeError("provider offline")
+
+    errors: list[str] = []
+    rows = rrg_dashboard._market_representative_rrg_rows(
+        {"US stock": {"AAPL"}},
+        {"US stock": fail_fetch},
+        errors,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["symbol"] == "SPY"
+    assert rows[0]["display_symbol"] == "SPY"
+    assert rows[0]["evidence"]["status"] == "RRG_MARKET_UNAVAILABLE"
+    assert errors == ["US stock representative: provider offline"]
+
+
 def test_rrg_reference_adds_daily_market_representatives(tmp_path, monkeypatch) -> None:
     candidate = {
         "symbol": "AAPL",
@@ -285,6 +349,7 @@ def test_rrg_reference_adds_btc_and_eth_crypto_market_representatives(tmp_path, 
     representatives = payload["rrg_reference"]["market_representatives"]
     crypto_representatives = [row for row in representatives if row["market"] == "Crypto"]
     assert [row["symbol"] for row in crypto_representatives] == ["BTCUSDT", "ETHUSDT"]
+    assert [row["display_symbol"] for row in crypto_representatives] == ["BTCUSD", "ETHUSD"]
     assert all(row["timeframe"] == "D1" for row in crypto_representatives)
 
 

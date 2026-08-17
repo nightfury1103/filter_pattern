@@ -82,6 +82,10 @@ RRG_MARKET_REPRESENTATIVES = {
     "Commodity": ["XAUUSD"],
     "Commodity ETF": ["DBC"],
 }
+RRG_MARKET_REPRESENTATIVE_LABELS = {
+    ("Crypto", "BTCUSDT"): "BTCUSD",
+    ("Crypto", "ETHUSDT"): "ETHUSD",
+}
 INDEX_STOCKCHARTS_SYMBOLS = {
     "AUS200": "$AORD",
     "DE30": "$DAX",
@@ -311,26 +315,29 @@ def _market_representative_rrg_rows(
             selections = fetchers[market](symbols)
         except Exception as exc:  # Keep representative context non-blocking.
             errors.append(f"{market} representative: {exc}")
-            continue
+            selections = {}
         for symbol in symbols:
             selected = selections.get(symbol)
-            if selected is None:
-                continue
+            available = selected is not None
             rows.append(
                 {
-                    "symbol": _market_representative_display_symbol(market, symbol),
+                    "symbol": symbol,
+                    "display_symbol": _market_representative_display_symbol(market, symbol),
                     "market": market,
                     "timeframe": "D1",
                     "setup": "market",
-                    "evidence": {"status": "RRG_MARKET_REPRESENTATIVE", "score": 0},
-                    "rrg": _rrg_json(selected),
+                    "evidence": {
+                        "status": "RRG_MARKET_REPRESENTATIVE" if available else "RRG_MARKET_UNAVAILABLE",
+                        "score": 0,
+                    },
+                    "rrg": _rrg_json(selected) if selected is not None else {},
                 }
             )
     return rows
 
 
 def _market_representative_display_symbol(market: str, symbol: str) -> str:
-    return symbol
+    return RRG_MARKET_REPRESENTATIVE_LABELS.get((market, symbol), symbol)
 
 
 def build_usstock_rrg_demo(
