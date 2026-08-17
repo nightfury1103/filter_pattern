@@ -552,6 +552,46 @@ def test_report_adds_symbol_dedup_filter_mode(tmp_path: Path) -> None:
     assert "dedupFilter.addEventListener('change', applyFilters);" in html
 
 
+def test_combined_results_preserve_market_rrg_representatives() -> None:
+    unavailable_spy = _overview_representative("SPY", "US stock", None)
+    available_spy = _overview_representative("SPY", "US stock", "LEADING")
+    btc = _overview_representative("BTCUSDT", "Crypto", "LEADING", display_symbol="BTCUSD")
+    eth = _overview_representative("ETHUSDT", "Crypto", None, display_symbol="ETHUSD")
+    first = result_payload([], [], {"timeframe": "D1"})
+    first["rrg_reference"] = {
+        "enabled": True,
+        "status": "attached",
+        "attached_count": 2,
+        "errors": ["temporary provider warning"],
+        "market_representatives": [unavailable_spy, btc],
+    }
+    second = result_payload([], [], {"timeframe": "D1"})
+    second["rrg_reference"] = {
+        "enabled": True,
+        "status": "attached",
+        "attached_count": 1,
+        "errors": ["temporary provider warning", "second warning"],
+        "market_representatives": [available_spy, eth],
+    }
+
+    combined = report._combined_payload([first, second], ["first.json", "second.json"])
+    reference = combined["rrg_reference"]
+    representatives = {
+        (row["market"], row["symbol"]): row
+        for row in reference["market_representatives"]
+    }
+
+    assert list(representatives) == [
+        ("Crypto", "BTCUSDT"),
+        ("Crypto", "ETHUSDT"),
+        ("US stock", "SPY"),
+    ]
+    assert representatives[("US stock", "SPY")]["rrg"]["stock_intent"]["quadrant"] == "LEADING"
+    assert representatives[("Crypto", "ETHUSDT")]["rrg"] == {}
+    assert reference["attached_count"] == 3
+    assert reference["errors"] == ["temporary provider warning", "second warning"]
+
+
 def test_combined_results_preserve_review_rrg_references(tmp_path: Path) -> None:
     review_row = _candidate("ATOMUSDT", "irb", 60, "rejected")
     review_row.update(

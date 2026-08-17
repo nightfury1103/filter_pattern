@@ -1720,6 +1720,53 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
     }
 
 
+def _combined_rrg_reference(payloads: list[dict]) -> dict | None:
+    references = [payload.get("rrg_reference") for payload in payloads]
+    references = [reference for reference in references if isinstance(reference, dict)]
+    if not references:
+        return None
+
+    representatives: dict[tuple[str, str], dict] = {}
+    errors: list[str] = []
+    for reference in references:
+        for error in reference.get("errors") or []:
+            error_text = str(error)
+            if error_text not in errors:
+                errors.append(error_text)
+        for row in reference.get("market_representatives") or []:
+            if not isinstance(row, dict):
+                continue
+            key = (str(row.get("market") or ""), str(row.get("symbol") or ""))
+            if not all(key):
+                continue
+            current = representatives.get(key)
+            if current is None or (
+                _usable_market_rrg_representative(row)
+                and not _usable_market_rrg_representative(current)
+            ):
+                representatives[key] = row
+
+    combined = dict(references[0])
+    combined["enabled"] = any(bool(reference.get("enabled")) for reference in references)
+    combined["status"] = "attached" if any(
+        reference.get("status") == "attached" for reference in references
+    ) else str(references[0].get("status") or "unavailable")
+    combined["attached_count"] = sum(int(reference.get("attached_count") or 0) for reference in references)
+    combined["errors"] = errors
+    combined["market_representatives"] = [representatives[key] for key in sorted(representatives)]
+    return combined
+
+
+def _usable_market_rrg_representative(row: dict) -> bool:
+    intent = ((row.get("rrg") or {}).get("stock_intent") or {})
+    return str(intent.get("quadrant") or "").upper() in {
+        "LEADING",
+        "IMPROVING",
+        "WEAKENING",
+        "LAGGING",
+    }
+
+
 def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> dict:
     candidates: list[dict] = []
     rejected: list[dict] = []
@@ -1754,6 +1801,9 @@ def _combined_payload(payloads: list[dict], source_paths: list[str | Path]) -> d
     payload["trigger_warnings"] = _trigger_warnings(candidates + payload["near_matches"] + payload["review_setups"])
     payload["watchlist_dropped"] = dropped
     payload["watchlist_changes"] = _watchlist_change_summary(candidates, dropped)
+    rrg_reference = _combined_rrg_reference(payloads)
+    if rrg_reference is not None:
+        payload["rrg_reference"] = rrg_reference
     return payload
 
 
