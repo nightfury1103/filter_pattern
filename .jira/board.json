@@ -1,0 +1,106 @@
+{
+  "project": {
+    "key": "FP",
+    "name": "Filter Pattern",
+    "repo": "git@github.com-personal:nightfury1103/filter_pattern.git",
+    "created": "2026-08-17T15:24:21+07:00",
+    "updated": "2026-08-17T15:24:21+07:00",
+    "counter": 4
+  },
+  "types": [
+    "Epic",
+    "Story",
+    "Task",
+    "Bug",
+    "Sub-task"
+  ],
+  "statuses": [
+    "To Do",
+    "In Progress",
+    "In Review",
+    "Done",
+    "Cancelled"
+  ],
+  "priorities": [
+    "Highest",
+    "High",
+    "Medium",
+    "Low",
+    "Lowest"
+  ],
+  "issues": [
+    {
+      "key": "FP-1",
+      "type": "Epic",
+      "title": "Multi-market pattern scanning and reporting",
+      "description": "Scan supported markets for chart patterns and publish reviewable reports.",
+      "status": "Done",
+      "priority": "High",
+      "parent": null,
+      "labels": [],
+      "components": [],
+      "assignee": "",
+      "created": "2026-08-17T15:24:21+07:00",
+      "updated": "2026-08-17T15:24:21+07:00",
+      "comments": []
+    },
+    {
+      "key": "FP-2",
+      "type": "Story",
+      "title": "Generate filterable HTML market reports",
+      "description": "Generate searchable, filterable HTML reports for qualified and reviewable market setups.",
+      "status": "Done",
+      "priority": "High",
+      "parent": "FP-1",
+      "labels": [],
+      "components": [
+        "report"
+      ],
+      "assignee": "",
+      "created": "2026-08-17T15:24:21+07:00",
+      "updated": "2026-08-17T15:24:21+07:00",
+      "comments": []
+    },
+    {
+      "key": "FP-3",
+      "type": "Story",
+      "title": "Attach non-blocking RRG references across supported markets",
+      "description": "Attach RRG context across supported markets without using it as a scanner gate.",
+      "status": "Done",
+      "priority": "High",
+      "parent": "FP-1",
+      "labels": [],
+      "components": [
+        "rrg"
+      ],
+      "assignee": "",
+      "created": "2026-08-17T15:24:21+07:00",
+      "updated": "2026-08-17T15:24:21+07:00",
+      "comments": []
+    },
+    {
+      "key": "FP-4",
+      "type": "Story",
+      "title": "Simplify the market RRG overview with representative status cards and clear direction arrows",
+      "description": "Replace the crowded multi-symbol overview with fixed D1 market representatives, explicit market status cards, and an emphasized final-segment arrow on each RRG trail.",
+      "status": "In Progress",
+      "priority": "High",
+      "parent": "FP-1",
+      "labels": [],
+      "components": [
+        "report",
+        "rrg"
+      ],
+      "assignee": "",
+      "created": "2026-08-17T15:24:21+07:00",
+      "updated": "2026-08-17T15:24:21+07:00",
+      "comments": [
+        {
+          "author": "agent",
+          "at": "2026-08-17T15:24:21+07:00",
+          "body": "Designing the compact representative-symbol overview: SPY, VNINDEX, BTCUSD and ETHUSD, plus fixed leaders for the remaining markets; use a faded historical tail and emphasized final arrow."
+        }
+      ]
+    }
+  ]
+}
