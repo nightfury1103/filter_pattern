@@ -80,6 +80,12 @@ When a trail contains only one usable point, the chart shows the endpoint withou
 
 Representative retrieval remains best-effort. Fetch errors are recorded in the existing RRG reference error list and do not fail the pattern scan or report generation.
 
+### Combined Report Aggregation
+
+GitHub Pages builds D1 and H4 reports by combining multiple market shards. The combine boundary must preserve `rrg_reference.market_representatives` from every shard instead of rebuilding the overview from candidate rows.
+
+Combined representatives are deduplicated by market and internal symbol. If duplicate shards disagree, a row with usable RRG data wins over an Unavailable row. Unavailable rows are otherwise retained so every fetched market slot remains visible. Combined RRG errors are deduplicated, and candidate-level RRG references continue to flow through their existing rows.
+
 ## Status Semantics
 
 Quadrant labels come directly from the current RRG point:
@@ -107,6 +113,8 @@ Automated tests will verify:
 - Endpoint-only rendering when only one point is available.
 - Preservation of selected-market detailed chart behavior.
 - Continued non-blocking behavior when representative retrieval fails.
+- Preservation and deduplication of representative rows in combined shard reports.
+- Preference for an available representative when another shard reports the same representative as unavailable.
 
 ## Acceptance Criteria
 
@@ -116,3 +124,4 @@ Automated tests will verify:
 - BTC and ETH both remain visible in the crypto card and chart.
 - A missing representative produces an Unavailable card instead of removing the market.
 - Market drill-down and candidate qualification behavior remain unchanged.
+- The GitHub Pages combined report uses the fixed representatives instead of highest-ranked candidate fallbacks.
