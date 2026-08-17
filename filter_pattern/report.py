@@ -822,92 +822,55 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     .rrg-small-label {{ fill: #64748b; font-size: 11px; font-weight: 700; }}
     .rrg-legend {{ fill: #64748b; font-size: 11px; font-weight: 700; }}
     .rrg-arrow-head {{ fill: currentColor; }}
-    .quadrant-grid {{
+    .market-status-grid {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
+      margin: 0 0 12px;
     }}
-    .quadrant-card {{
+    .market-status-card {{
       border: 1px solid var(--line);
+      border-top: 4px solid var(--line-strong);
       border-radius: 8px;
-      background: var(--panel);
-      overflow: hidden;
-      min-height: 178px;
+      background: var(--soft);
+      padding: 10px;
     }}
-    .quadrant-card.leading {{ border-top: 4px solid #16a34a; }}
-    .quadrant-card.improving {{ border-top: 4px solid #2563eb; }}
-    .quadrant-card.weakening {{ border-top: 4px solid #ea580c; }}
-    .quadrant-card.lagging {{ border-top: 4px solid #dc2626; }}
-    .quadrant-head {{
+    .market-status-card.status-leading {{ border-top-color: #16a34a; }}
+    .market-status-card.status-improving {{ border-top-color: #2563eb; }}
+    .market-status-card.status-weakening {{ border-top-color: #ea580c; }}
+    .market-status-card.status-lagging {{ border-top-color: #dc2626; }}
+    .market-status-card.status-mixed {{ border-top-color: #8b5cf6; }}
+    .market-status-card.status-partial,
+    .market-status-card.status-unavailable {{ border-top-color: #94a3b8; }}
+    .market-status-head,
+    .market-status-symbol,
+    .market-status-symbol > div {{
       display: flex;
       justify-content: space-between;
-      gap: 10px;
-      padding: 10px;
-      border-bottom: 1px solid var(--line);
+      gap: 8px;
     }}
-    .quadrant-head strong {{ color: var(--text); }}
-    .quadrant-head span {{ color: var(--muted); font-size: 12px; }}
-    .quadrant-count {{
-      min-width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      border-radius: 7px;
-      background: var(--soft);
-      color: var(--text);
+    .market-status-head {{ align-items: center; margin-bottom: 8px; }}
+    .market-status-head span {{
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 10px;
       font-weight: 800;
+      text-transform: uppercase;
     }}
-    .quadrant-list {{
-      display: grid;
-      gap: 6px;
-      padding: 10px;
-    }}
-    .overview-symbol {{
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      padding: 7px;
-      background: var(--soft);
-      font-size: 12px;
-    }}
-    .overview-symbol b {{ color: var(--text); overflow-wrap: anywhere; }}
-    .overview-symbol span {{ color: var(--muted); display: block; margin-top: 2px; }}
-    .overview-symbol em {{ color: #334155; font-style: normal; font-variant-numeric: tabular-nums; }}
-    .market-rrg-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 8px;
-      margin-top: 12px;
-    }}
-    .market-rrg {{
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: var(--soft);
-      padding: 9px;
-      font-size: 12px;
-    }}
-    .market-rrg strong {{ color: var(--text); display: block; margin-bottom: 7px; }}
-    .market-bars {{
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 3px;
-    }}
-    .market-bars span {{
-      min-height: 22px;
-      display: grid;
-      place-items: center;
-      border-radius: 5px;
-      color: #ffffff;
+    .market-status-symbols {{ display: grid; gap: 6px; }}
+    .market-status-symbol {{
+      align-items: end;
+      border-top: 1px solid var(--line);
+      padding-top: 6px;
       font-size: 11px;
-      font-weight: 800;
     }}
-    .market-bars .leading {{ background: #15803d; }}
-    .market-bars .improving {{ background: #0369a1; }}
-    .market-bars .weakening {{ background: #c2410c; }}
-    .market-bars .lagging {{ background: #b91c1c; }}
+    .market-status-symbol > div {{ flex-direction: column; }}
+    .market-status-symbol > div:last-child {{ text-align: right; }}
+    .market-status-symbol b {{ color: var(--text); font-size: 14px; }}
+    .market-status-symbol span {{ color: var(--muted); }}
+    .market-status-symbol em {{ color: var(--text); font-style: normal; font-weight: 700; }}
+    .rrg-chart-empty {{ padding: 36px 16px; text-align: center; color: var(--muted); }}
     .layout {{ display: block; }}
     .main-column {{ min-width: 0; }}
     .side-panel {{
@@ -1308,7 +1271,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       input, select {{
         color-scheme: dark;
       }}
-      .tag, .rrg-chart-title, .overview-symbol em, .symbol-chip, .body ul, .chart-tile strong {{
+      .tag, .rrg-chart-title, .market-status-symbol em, .symbol-chip, .body ul, .chart-tile strong {{
         color: #cbd5e1;
       }}
       .bar {{
@@ -1406,7 +1369,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       .toolbar {{ grid-template-columns: repeat(2, 1fr); }}
       .overview-head {{ display: block; }}
       .overview-score {{ min-width: 0; margin-top: 12px; }}
-      .quadrant-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .market-status-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .card-content {{ grid-template-columns: 1fr; }}
       .chart-pair {{ grid-template-columns: 1fr; }}
       .chart-frame {{ border-bottom: 1px solid #cbd5e1; }}
@@ -1418,7 +1381,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
       .toolbar {{ grid-template-columns: 1fr; position: static; }}
       .card-head {{ flex-direction: column; }}
       .score {{ text-align: left; }}
-      .overview-score, .quadrant-grid {{ grid-template-columns: 1fr; }}
+      .overview-score, .market-status-grid {{ grid-template-columns: 1fr; }}
       .stats, .metrics {{ grid-template-columns: 1fr; }}
     }}
   </style>
@@ -2992,90 +2955,99 @@ def _not_configured_rows(rejected: list[dict]) -> list[dict]:
 
 
 def _rrg_market_overview_section(payload: dict, rows: list[dict]) -> str:
-    items = _rrg_overview_items(rows)
-    if not items:
+    detail_items = _rrg_overview_items(rows)
+    representative_items = _rrg_market_representative_items(payload, detail_items)
+    if not representative_items:
         return ""
 
-    quadrants = ["LEADING", "IMPROVING", "WEAKENING", "LAGGING"]
-    by_quadrant = {quadrant: [] for quadrant in quadrants}
-    by_market: dict[str, dict[str, int]] = defaultdict(lambda: {quadrant: 0 for quadrant in quadrants})
-    for item in items:
-        quadrant = item["quadrant"]
-        by_quadrant[quadrant].append(item)
-        by_market[item["market"]][quadrant] += 1
+    available = [item for item in representative_items if item.get("available", True)]
+    representative_by_market = _rrg_items_by_market(representative_items)
+    supportive = sum(1 for item in available if item["quadrant"] in {"LEADING", "IMPROVING"})
+    risk = sum(1 for item in available if item["quadrant"] in {"WEAKENING", "LAGGING"})
+    ratio = f"{supportive}:{risk}"
+    status_cards = "\n".join(
+        _rrg_market_status_card(market, market_items)
+        for market, market_items in sorted(representative_by_market.items())
+    )
 
-    for quadrant in quadrants:
-        by_quadrant[quadrant].sort(key=_rrg_overview_rank, reverse=True)
-
-    supportive = len(by_quadrant["LEADING"]) + len(by_quadrant["IMPROVING"])
-    risk = len(by_quadrant["WEAKENING"]) + len(by_quadrant["LAGGING"])
-    ratio = f"{supportive}:{risk}" if risk else f"{supportive}:0"
-    representative_items = _rrg_market_representative_items(payload, items)
-    representative_items_by_market = _rrg_items_by_market(representative_items)
-    charts = [_rrg_overview_chart_svg(representative_items, "all", "Market Representative RRG", "Representative trail per market")]
-    for market, market_items in sorted(_rrg_items_by_market(items).items()):
-        if market == "Crypto" and representative_items_by_market.get(market):
-            market_items = representative_items_by_market[market]
-        charts.append(
-            _rrg_overview_chart_svg(
-                market_items,
-                market,
-                f"Daily RRG Chart - {market}",
-                "Detailed daily RRG for the selected market",
-                hidden=True,
-            )
+    all_chart = _rrg_overview_chart_svg(
+        available,
+        "all",
+        "Market Representative RRG",
+        "Fixed D1 representative trails",
+    )
+    if not all_chart:
+        all_chart = (
+            '<div class="rrg-chart-shell" data-rrg-market="all">'
+            '<div class="rrg-chart-empty">Representative RRG data is unavailable for this report.</div>'
+            '</div>'
         )
-    chart = "\n".join(charts)
-    quadrant_cards = "\n".join(_rrg_quadrant_card(quadrant, by_quadrant[quadrant]) for quadrant in quadrants)
-    market_cards = "\n".join(_rrg_market_card(market, counts) for market, counts in sorted(by_market.items()))
+    charts = [all_chart]
+    for market, market_items in sorted(_rrg_items_by_market(detail_items).items()):
+        if market == "Crypto" and representative_by_market.get(market):
+            market_items = [item for item in representative_by_market[market] if item.get("available", True)]
+        market_chart = _rrg_overview_chart_svg(
+            market_items,
+            market,
+            f"Daily RRG Chart - {market}",
+            "Detailed daily RRG for the selected market",
+            hidden=True,
+        )
+        if market_chart:
+            charts.append(market_chart)
+
     return f"""
       <section class="rrg-overview">
         <div class="overview-head">
           <div>
             <h2>Market RRG Overview</h2>
-            <p>All markets use representative RRG trails. Selecting one market switches this chart to that market's daily RRG.</p>
+            <p>Fixed D1 representatives show each market's current quadrant and observed movement.</p>
           </div>
           <div class="overview-score">
-            <div><strong>{len(items)}</strong><span>RRG symbols</span></div>
-            <div><strong>{supportive}</strong><span>Leading + improving</span></div>
+            <div><strong>{len(representative_by_market)}</strong><span>Markets</span></div>
+            <div><strong>{len(available)}</strong><span>Representative trails</span></div>
             <div><strong>{escape(ratio)}</strong><span>Support / risk</span></div>
           </div>
         </div>
+        <div class="market-status-grid">{status_cards}</div>
         <div id="rrgChartMode" class="filter-count">All markets: representative RRG trails</div>
-        {chart}
-        <div class="quadrant-grid">{quadrant_cards}</div>
-        <div class="market-rrg-grid">{market_cards}</div>
+        {"".join(charts)}
       </section>
 """
 
 
-def _rrg_overview_items(rows: list[dict]) -> list[dict]:
-    by_symbol: dict[tuple[str, str], dict] = {}
+def _rrg_overview_items(rows: list[dict], include_unavailable: bool = False) -> list[dict]:
+    by_symbol: dict[tuple[str, str, str], dict] = {}
+    valid_quadrants = {"LEADING", "IMPROVING", "WEAKENING", "LAGGING"}
     for row in rows:
         rrg = row.get("rrg") or {}
         intent = rrg.get("stock_intent") or {}
         quadrant = str(intent.get("quadrant") or "").upper()
-        if quadrant not in {"LEADING", "IMPROVING", "WEAKENING", "LAGGING"}:
+        available = quadrant in valid_quadrants
+        if not available and not include_unavailable:
             continue
-        symbol = str(row.get("symbol") or "").strip()
-        if not symbol:
+        source_symbol = str(row.get("symbol") or "").strip()
+        symbol = str(row.get("display_symbol") or source_symbol).strip()
+        if not source_symbol or not symbol:
             continue
         item = {
             "symbol": symbol,
+            "source_symbol": source_symbol,
             "market": str(row.get("market") or "Unknown"),
             "timeframe": str(row.get("timeframe") or ""),
             "setup": str(row.get("setup") or ""),
             "status": str((row.get("evidence") or {}).get("status") or ""),
             "score": _score_value(row) or 0.0,
-            "quadrant": quadrant,
+            "quadrant": quadrant if available else "UNAVAILABLE",
+            "available": available,
             "x": _numeric((rrg.get("latest") or {}).get("x")) or _numeric(intent.get("x")) or 0.0,
             "y": _numeric((rrg.get("latest") or {}).get("y")) or _numeric(intent.get("y")) or 0.0,
             "dx": _numeric(intent.get("dx1")) or 0.0,
             "dy": _numeric(intent.get("dy1")) or 0.0,
-            "series": _rrg_overview_series(rrg, intent),
-            "latest_date": _rrg_latest_date(rrg),
+            "series": _rrg_overview_series(rrg, intent) if available else [],
+            "latest_date": _rrg_latest_date(rrg) if available else "",
         }
-        key = (item["timeframe"], symbol)
+        key = (item["timeframe"], item["market"], source_symbol)
         if key not in by_symbol or _rrg_overview_rank(item) > _rrg_overview_rank(by_symbol[key]):
             by_symbol[key] = item
     return list(by_symbol.values())
@@ -3083,9 +3055,9 @@ def _rrg_overview_items(rows: list[dict]) -> list[dict]:
 
 def _rrg_market_representative_items(payload: dict, fallback_items: list[dict]) -> list[dict]:
     representatives = (payload.get("rrg_reference") or {}).get("market_representatives") or []
-    items = _rrg_overview_items(representatives)
+    items = _rrg_overview_items(representatives, include_unavailable=True)
     if items:
-        return sorted(items, key=lambda item: str(item.get("market") or ""))
+        return sorted(items, key=lambda item: (str(item.get("market") or ""), str(item.get("symbol") or "")))
     by_market = _rrg_items_by_market(fallback_items)
     return [
         sorted(market_items, key=_rrg_overview_rank, reverse=True)[0]
@@ -3278,51 +3250,59 @@ def _rrg_latest_date(rrg: dict) -> str:
     return ""
 
 
-def _rrg_quadrant_card(quadrant: str, items: list[dict], limit: int = 8) -> str:
-    label = quadrant.title()
-    detail = {
-        "LEADING": "Strong relative strength",
-        "IMPROVING": "Momentum turning up",
-        "WEAKENING": "Momentum cooling",
-        "LAGGING": "Weak relative strength",
-    }[quadrant]
-    rows = "\n".join(_rrg_overview_symbol(item) for item in items[:limit])
-    if not rows:
-        rows = '<div class="overview-symbol"><div><b>No symbols</b><span>Nothing currently mapped here</span></div><em>-</em></div>'
-    extra = len(items) - limit
-    if extra > 0:
-        rows += f'<div class="overview-symbol"><div><b>+{extra} more</b><span>Use filters below to inspect the full list</span></div><em></em></div>'
-    return f"""
-          <div class="quadrant-card {escape(quadrant.lower())}">
-            <div class="quadrant-head"><div><strong>{escape(label)}</strong><span>{escape(detail)}</span></div><div class="quadrant-count">{len(items)}</div></div>
-            <div class="quadrant-list">{rows}</div>
-          </div>
-"""
+def _rrg_market_status(items: list[dict]) -> str:
+    available = [
+        item
+        for item in items
+        if item.get("available", True) and item.get("quadrant") != "UNAVAILABLE"
+    ]
+    if not available:
+        return "UNAVAILABLE"
+    if len(available) < len(items):
+        return "PARTIAL"
+    quadrants = {str(item.get("quadrant") or "") for item in available}
+    return next(iter(quadrants)) if len(quadrants) == 1 else "MIXED"
 
 
-def _rrg_overview_symbol(item: dict) -> str:
-    movement = f"dx {_fmt(item.get('dx'))} / dy {_fmt(item.get('dy'))}"
-    meta = f"{item.get('market')} · {item.get('timeframe')} · {item.get('setup')} · {item.get('status')}"
+def _rrg_direction_arrow(item: dict) -> str:
+    if not item.get("available", True):
+        return "—"
+    dx = float(item.get("dx") or 0.0)
+    dy = float(item.get("dy") or 0.0)
+    if dx >= 0 and dy > 0:
+        return "↗"
+    if dx < 0 and dy >= 0:
+        return "↖"
+    if dx > 0 and dy <= 0:
+        return "↘"
+    if dx <= 0 and dy < 0:
+        return "↙"
+    return "→"
+
+
+def _rrg_market_status_card(market: str, items: list[dict]) -> str:
+    status = _rrg_market_status(items)
+    symbol_rows = []
+    for item in items:
+        quadrant = str(item.get("quadrant") or "UNAVAILABLE")
+        if item.get("available", True):
+            coordinates = f"RS {_fmt(item.get('x'))} · Mom {_fmt(item.get('y'))}"
+            movement = f"{_rrg_direction_arrow(item)} dx {_fmt(item.get('dx'))} / dy {_fmt(item.get('dy'))}"
+        else:
+            coordinates = "RRG data unavailable"
+            movement = "—"
+        symbol_rows.append(
+            '<div class="market-status-symbol">'
+            f'<div><b>{escape(str(item.get("symbol") or ""))}</b><span>{escape(quadrant.title())}</span></div>'
+            f'<div><span>{escape(coordinates)}</span><em>{escape(movement)}</em></div>'
+            '</div>'
+        )
     return (
-        '<div class="overview-symbol">'
-        f'<div><b>{escape(str(item.get("symbol")))}</b><span>{escape(meta)}</span></div>'
-        f"<em>{escape(movement)}</em>"
-        "</div>"
+        f'<article class="market-status-card status-{escape(status.lower())}" data-market-status="{escape(status)}">'
+        f'<div class="market-status-head"><strong>{escape(market)}</strong><span>{escape(status.title())}</span></div>'
+        f'<div class="market-status-symbols">{"".join(symbol_rows)}</div>'
+        '</article>'
     )
-
-
-def _rrg_market_card(market: str, counts: dict[str, int]) -> str:
-    return f"""
-          <div class="market-rrg">
-            <strong>{escape(market)}</strong>
-            <div class="market-bars">
-              <span class="leading" title="Leading">{counts.get("LEADING", 0)}</span>
-              <span class="improving" title="Improving">{counts.get("IMPROVING", 0)}</span>
-              <span class="weakening" title="Weakening">{counts.get("WEAKENING", 0)}</span>
-              <span class="lagging" title="Lagging">{counts.get("LAGGING", 0)}</span>
-            </div>
-          </div>
-"""
 
 
 def _coverage_section(scanned_by_market: dict[str, list[str]], data_errors_by_market: dict[str, int]) -> str:

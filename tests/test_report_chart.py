@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from filter_pattern import report
 from filter_pattern.chart import _minimum_body_height, _price_label, _date_formatter, _session_positions, render_chart
 from filter_pattern.detector import detect_vcp
 from filter_pattern.models import Candle, ScanResult, SymbolSpec
@@ -119,6 +120,92 @@ def test_report_renders_rrg_confidence_reference_beside_candidate_chart(tmp_path
     assert "RRG Early Reference" in html
     assert "Information Technology vs XLK" in html
     assert "msft-rrg-proof.jpg" in html
+
+
+def _overview_representative(
+    symbol: str,
+    market: str,
+    quadrant: str | None,
+    *,
+    display_symbol: str | None = None,
+    dx: float = 0.4,
+    dy: float = 0.5,
+) -> dict:
+    if quadrant is None:
+        return {
+            "symbol": symbol,
+            "display_symbol": display_symbol or symbol,
+            "market": market,
+            "timeframe": "D1",
+            "setup": "market",
+            "evidence": {"status": "RRG_MARKET_UNAVAILABLE", "score": 0},
+            "rrg": {},
+        }
+    latest = {
+        "x": 101.0 if quadrant in {"LEADING", "WEAKENING"} else 99.0,
+        "y": 101.0 if quadrant in {"LEADING", "IMPROVING"} else 99.0,
+    }
+    return {
+        "symbol": symbol,
+        "display_symbol": display_symbol or symbol,
+        "market": market,
+        "timeframe": "D1",
+        "setup": "market",
+        "evidence": {"status": "RRG_MARKET_REPRESENTATIVE", "score": 0},
+        "rrg": {
+            "latest": latest,
+            "stock_intent": {"quadrant": quadrant, "dx1": dx, "dy1": dy},
+            "rrg_series": [
+                {"x": latest["x"] - dx, "y": latest["y"] - dy, "end": "2026-08-16"},
+                {**latest, "end": "2026-08-17"},
+            ],
+        },
+    }
+
+
+def test_rrg_market_status_aggregates_same_mixed_partial_and_unavailable() -> None:
+    btc = _overview_representative("BTCUSDT", "Crypto", "LEADING", display_symbol="BTCUSD")
+    eth_leading = _overview_representative("ETHUSDT", "Crypto", "LEADING", display_symbol="ETHUSD")
+    eth_lagging = _overview_representative("ETHUSDT", "Crypto", "LAGGING", display_symbol="ETHUSD")
+    eth_missing = _overview_representative("ETHUSDT", "Crypto", None, display_symbol="ETHUSD")
+
+    normalize = lambda rows: report._rrg_overview_items(rows, include_unavailable=True)
+    assert report._rrg_market_status(normalize([btc, eth_leading])) == "LEADING"
+    assert report._rrg_market_status(normalize([btc, eth_lagging])) == "MIXED"
+    assert report._rrg_market_status(normalize([btc, eth_missing])) == "PARTIAL"
+    assert report._rrg_market_status(normalize([eth_missing])) == "UNAVAILABLE"
+
+
+def test_rrg_overview_renders_representative_status_cards_without_long_lists() -> None:
+    representatives = [
+        _overview_representative("SPY", "US stock", "LEADING", dx=0.8, dy=0.7),
+        _overview_representative("BTCUSDT", "Crypto", "LEADING", display_symbol="BTCUSD"),
+        _overview_representative(
+            "ETHUSDT",
+            "Crypto",
+            "WEAKENING",
+            display_symbol="ETHUSD",
+            dx=0.3,
+            dy=-0.4,
+        ),
+        _overview_representative("DXY", "Forex", None),
+    ]
+    html = report._rrg_market_overview_section(
+        {"rrg_reference": {"market_representatives": representatives}},
+        [],
+    )
+
+    assert 'class="market-status-grid"' in html
+    assert 'data-market-status="LEADING"' in html
+    assert 'data-market-status="MIXED"' in html
+    assert 'data-market-status="UNAVAILABLE"' in html
+    assert "BTCUSD" in html
+    assert "ETHUSD" in html
+    assert "DXY" in html
+    assert "4</strong><span>Representative trails" not in html
+    assert "3</strong><span>Representative trails" in html
+    assert 'class="quadrant-grid"' not in html
+    assert 'class="market-rrg-grid"' not in html
 
 
 def test_report_renders_market_rrg_overview(tmp_path: Path) -> None:
@@ -234,6 +321,7 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
             },
             {
                 "symbol": "BTCUSDT",
+                "display_symbol": "BTCUSD",
                 "market": "Crypto",
                 "timeframe": "D1",
                 "rrg": {
@@ -250,6 +338,7 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
             },
             {
                 "symbol": "ETHUSDT",
+                "display_symbol": "ETHUSD",
                 "market": "Crypto",
                 "timeframe": "D1",
                 "rrg": {
@@ -276,14 +365,14 @@ def test_report_rrg_overview_uses_representatives_and_switches_market_charts(tmp
     crypto_chart_start = html.index('data-rrg-market="Crypto"')
     all_chart_html = html[all_chart_start:crypto_chart_start]
     assert "SPY" in all_chart_html
-    assert "BTCUSDT" in all_chart_html
-    assert "ETHUSDT" in all_chart_html
+    assert "BTCUSD" in all_chart_html
+    assert "ETHUSD" in all_chart_html
     assert 'data-rrg-market="Crypto"' in html
     crypto_chart_start = html.index('data-rrg-market="Crypto"')
     crypto_chart_end = html.index("</svg>", crypto_chart_start)
     crypto_chart_html = html[crypto_chart_start:crypto_chart_end]
-    assert "BTCUSDT" in crypto_chart_html
-    assert "ETHUSDT" in crypto_chart_html
+    assert "BTCUSD" in crypto_chart_html
+    assert "ETHUSD" in crypto_chart_html
     assert "SOLUSDT" not in crypto_chart_html
     assert 'id="rrgChartMode"' in html
     assert "function updateRrgOverview" in html
