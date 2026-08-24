@@ -4,8 +4,8 @@
     "name": "Filter Pattern",
     "repo": "git@github.com-personal:nightfury1103/filter_pattern.git",
     "created": "2026-08-17T15:24:21+07:00",
-    "updated": "2026-08-17T15:24:21+07:00",
-    "counter": 4
+    "updated": "2026-08-24T21:57:55+07:00",
+    "counter": 5
   },
   "types": [
     "Epic",
@@ -99,6 +99,34 @@
           "author": "agent",
           "at": "2026-08-17T15:24:21+07:00",
           "body": "Designing the compact representative-symbol overview: SPY, VNINDEX, BTCUSD and ETHUSD, plus fixed leaders for the remaining markets; use a faded historical tail and emphasized final arrow."
+        }
+      ]
+    },
+    {
+      "key": "FP-5",
+      "type": "Bug",
+      "title": "Scheduled Pages deployments serve stale scanner artifacts",
+      "description": "Scheduled and manual scanner runs reuse one GITHUB_SHA; deploy-pages reports success while Pages can continue serving the previous artifact. Add reliable publication versioning, served-output verification, and per-market candle freshness safeguards.",
+      "status": "In Progress",
+      "priority": "Highest",
+      "parent": null,
+      "labels": [
+        "bug",
+        "freshness",
+        "pages"
+      ],
+      "components": [
+        "workflow",
+        "market-data"
+      ],
+      "assignee": "",
+      "created": "2026-08-24T21:57:49+07:00",
+      "updated": "2026-08-24T21:57:55+07:00",
+      "comments": [
+        {
+          "author": "agent",
+          "at": "2026-08-24T21:57:55+07:00",
+          "body": "Root cause confirmed. Designing the minimal complete fix for unique publication, served-version verification, market freshness reporting, and D1 candle policy."
         }
       ]
     }
