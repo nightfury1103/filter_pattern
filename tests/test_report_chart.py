@@ -1027,7 +1027,7 @@ def test_report_exposes_per_market_freshness_and_stale_symbol_warning(tmp_path: 
     ea["data_as_of"] = "2026-08-10T00:00:00+00:00"
     btc["data_as_of"] = "2026-08-24T12:00:00+00:00"
 
-    payload = result_payload([aapl, ea, btc], [], {"timeframe": "D1"})
+    payload = result_payload([aapl, btc], [ea], {"timeframe": "D1"})
     results_path = tmp_path / "results.json"
     results_path.write_text(json.dumps(payload))
     html = write_html_report(results_path, tmp_path / "index.html").read_text()

@@ -1697,12 +1697,12 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
 
 
 def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -> dict:
+    scanned = candidates + rejected
+    data_as_of_by_market, data_warnings_by_market = _annotate_data_freshness(scanned)
     near_matches = _near_matches(rejected)
     review_setups = _review_setups(rejected)
-    scanned = candidates + rejected
     scanned_by_market = _scanned_symbols_by_market(scanned)
     trigger_warnings = _trigger_warnings(candidates + near_matches + review_setups)
-    data_as_of_by_market, data_warnings_by_market = _annotate_data_freshness(scanned)
     data_timestamps = list(data_as_of_by_market.values())
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
