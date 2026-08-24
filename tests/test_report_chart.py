@@ -1017,6 +1017,30 @@ def test_site_index_is_lightweight_and_links_timeframe_reports(tmp_path: Path) -
     assert len(html.encode()) < 20_000
 
 
+def test_report_exposes_per_market_freshness_and_stale_symbol_warning(tmp_path: Path) -> None:
+    aapl = _candidate("AAPL", "bb", 84, "WAITING")
+    ea = _candidate("EA", "bb", 78, "WAITING")
+    btc = _candidate("BTCUSDT", "bb", 82, "WAITING")
+    btc["market"] = "Crypto"
+    btc["tradingview_symbol"] = "BINANCE:BTCUSDT"
+    aapl["data_as_of"] = "2026-08-24T00:00:00+00:00"
+    ea["data_as_of"] = "2026-08-10T00:00:00+00:00"
+    btc["data_as_of"] = "2026-08-24T12:00:00+00:00"
+
+    payload = result_payload([aapl, ea, btc], [], {"timeframe": "D1"})
+    results_path = tmp_path / "results.json"
+    results_path.write_text(json.dumps(payload))
+    html = write_html_report(results_path, tmp_path / "index.html").read_text()
+
+    assert payload["data_as_of_by_market"] == {
+        "Crypto": "2026-08-24T12:00:00+00:00",
+        "US stock": "2026-08-24T00:00:00+00:00",
+    }
+    assert [warning["symbol"] for warning in payload["data_warnings_by_market"]["US stock"]] == ["EA"]
+    assert "US stock: 2026-08-24T00:00:00+00:00 · 1 stale" in html
+    assert "EA data ends at 2026-08-10T00:00:00+00:00; US stock peers reach 2026-08-24T00:00:00+00:00." in html
+
+
 def test_combined_report_links_h4_volume_confirmation_to_d1_near_trigger(tmp_path: Path) -> None:
     d1_candidate = _candidate("AAPL", "bb", 84, "WAITING")
     h4_candidate = _candidate("AAPL", "compression", 88, "TRIGGERED")
@@ -1024,7 +1048,7 @@ def test_combined_report_links_h4_volume_confirmation_to_d1_near_trigger(tmp_pat
     h4_candidate["chart_path"] = str(tmp_path / "h4-aapl.png")
     h4_candidate["evidence"]["current_close"] = 101
     h4_candidate["evidence"]["reasons"].append(
-        "Trigger volume confirmed: latest closed candle volume 150,000 is 1.50x the previous 5-candle average"
+        "Trigger volume confirmed: latest candle volume 150,000 is 1.50x the previous 5-candle average"
     )
 
     d1_payload = result_payload([d1_candidate], [], {"timeframe": "D1", "technique": "nhathoai", "setup": "all"})
@@ -1039,7 +1063,7 @@ def test_combined_report_links_h4_volume_confirmation_to_d1_near_trigger(tmp_pat
 
     assert "Review lower timeframe" in html
     assert "Near break + H4 volume" in html
-    assert "H4 nhathoai / compression is triggered and latest closed candle has confirmed volume" in html
+    assert "H4 nhathoai / compression is triggered and latest candle has confirmed volume" in html
     assert "Use this lower-timeframe chart for manual review only" in html
 
 
@@ -1051,7 +1075,7 @@ def test_combined_report_does_not_link_h4_review_far_from_d1_trigger(tmp_path: P
     h4_candidate["evidence"]["pivot"] = 150
     h4_candidate["evidence"]["current_close"] = 151
     h4_candidate["evidence"]["reasons"].append(
-        "Trigger volume confirmed: latest closed candle volume 150,000 is 1.50x the previous 5-candle average"
+        "Trigger volume confirmed: latest candle volume 150,000 is 1.50x the previous 5-candle average"
     )
 
     d1_payload = result_payload([d1_candidate], [], {"timeframe": "D1", "technique": "nhathoai", "setup": "all"})

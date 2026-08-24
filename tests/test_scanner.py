@@ -59,6 +59,39 @@ def test_scan_market_uses_downloaded_data_and_writes_candidate(tmp_path: Path, m
     assert (tmp_path / "reports/latest/index.html").exists()
 
 
+def test_scan_market_keeps_stale_peer_visible_with_warning(tmp_path: Path, monkeypatch) -> None:
+    universe = [
+        UniverseSymbol("AAPL", "US stock", "NASDAQ:AAPL", "AAPL"),
+        UniverseSymbol("EA", "US stock", "NASDAQ:EA", "EA"),
+    ]
+    fresh = make_series([20, 12, 6], current_close=96, late_volume=80_000)
+    stale = fresh[:-1]
+
+    monkeypatch.setattr("filter_pattern.scanner.get_universe", lambda name: universe)
+    monkeypatch.setattr(
+        "filter_pattern.scanner.load_yahoo_ohlcv_many",
+        lambda symbols, period="2y", timeframe="D1": {"AAPL": fresh, "EA": stale},
+    )
+    monkeypatch.setattr("filter_pattern.rrg_dashboard.attach_rrg_references", lambda payload, *_args: payload)
+
+    results_path = scan_market(tmp_path / "reports/latest")
+    payload = json.loads(results_path.read_text())
+    rows = payload["candidates"] + payload["rejected"]
+    rows_by_symbol = {row["symbol"]: row for row in rows}
+
+    assert set(rows_by_symbol) == {"AAPL", "EA"}
+    assert "data_warning" not in rows_by_symbol["AAPL"]
+    assert rows_by_symbol["EA"]["data_warning"] == {
+        "status": "stale",
+        "data_as_of": stale[-1].datetime.isoformat(),
+        "market_data_as_of": fresh[-1].datetime.isoformat(),
+        "message": (
+            f"EA data ends at {stale[-1].datetime.isoformat()}; "
+            f"US stock peers reach {fresh[-1].datetime.isoformat()}."
+        ),
+    }
+
+
 def test_result_json_records_latest_close_side_against_ema21() -> None:
     candles = [
         Candle(

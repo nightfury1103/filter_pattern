@@ -997,7 +997,7 @@ def _apply_near_trigger_volume_signal(evidence: VCPEvidence, candles: list[Candl
     if status == "TRIGGERED":
         signal_prefix = "Trigger volume confirmed" if ratio >= 1.2 else "Trigger volume not confirmed"
         signal_detail = (
-            f"{signal_prefix}: latest closed candle volume {latest_volume:,.0f} is {ratio:.2f}x the previous "
+            f"{signal_prefix}: latest candle volume {latest_volume:,.0f} is {ratio:.2f}x the previous "
             f"{len(previous_volumes)}-candle average"
         )
         if signal_detail in evidence.reasons:

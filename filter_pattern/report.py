@@ -1425,6 +1425,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
           <span class="tag">Broker: {escape(broker_filter)}</span>
           <span class="tag">Source: {escape(str(payload.get("config", {}).get("data_source", "CSV")))}</span>
           <span class="tag">Data as of: {escape(str(payload.get("data_as_of") or "unknown"))}</span>
+          {_market_data_tags(payload)}
         </div>
       </header>
       <section class="stats">
@@ -1701,10 +1702,13 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
     scanned = candidates + rejected
     scanned_by_market = _scanned_symbols_by_market(scanned)
     trigger_warnings = _trigger_warnings(candidates + near_matches + review_setups)
-    data_timestamps = [str(item["data_as_of"]) for item in scanned if item.get("data_as_of")]
+    data_as_of_by_market, data_warnings_by_market = _annotate_data_freshness(scanned)
+    data_timestamps = list(data_as_of_by_market.values())
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "data_as_of": max(data_timestamps) if data_timestamps else None,
+        "data_as_of_by_market": data_as_of_by_market,
+        "data_warnings_by_market": data_warnings_by_market,
         "timeframe": config.get("timeframe", "D1"),
         "scanned_symbols": sum(len(symbols) for symbols in scanned_by_market.values()),
         "evaluation_count": len(scanned),
@@ -1718,6 +1722,39 @@ def result_payload(candidates: list[dict], rejected: list[dict], config: dict) -
         "rejected": rejected,
         "config": config,
     }
+
+
+def _annotate_data_freshness(scanned: list[dict]) -> tuple[dict[str, str], dict[str, list[dict]]]:
+    latest_by_market: dict[str, str] = {}
+    for item in scanned:
+        market = str(item.get("market") or "").strip()
+        data_as_of = str(item.get("data_as_of") or "").strip()
+        item.pop("data_warning", None)
+        if market and data_as_of:
+            latest_by_market[market] = max(latest_by_market.get(market, data_as_of), data_as_of)
+
+    warnings_by_market: dict[str, list[dict]] = {market: [] for market in sorted(latest_by_market)}
+    warned_symbols: set[tuple[str, str]] = set()
+    for item in scanned:
+        market = str(item.get("market") or "").strip()
+        symbol = str(item.get("symbol") or "").strip()
+        data_as_of = str(item.get("data_as_of") or "").strip()
+        market_data_as_of = latest_by_market.get(market, "")
+        if not data_as_of or not market_data_as_of or data_as_of >= market_data_as_of:
+            continue
+        warning = {
+            "status": "stale",
+            "data_as_of": data_as_of,
+            "market_data_as_of": market_data_as_of,
+            "message": f"{symbol} data ends at {data_as_of}; {market} peers reach {market_data_as_of}.",
+        }
+        item["data_warning"] = warning
+        key = (market, symbol)
+        if key not in warned_symbols:
+            warnings_by_market[market].append({"symbol": symbol, **warning})
+            warned_symbols.add(key)
+
+    return dict(sorted(latest_by_market.items())), warnings_by_market
 
 
 def _combined_rrg_reference(payloads: list[dict]) -> dict | None:
@@ -1973,7 +2010,7 @@ def _lower_timeframe_review_payload(item: dict) -> dict:
         "volume_detail": volume_detail,
         "volume_confirmed": volume_confirmed is not None,
         "note": (
-            f"{item.get('timeframe')} {item.get('technique')} / {item.get('setup')} is triggered and latest closed candle "
+            f"{item.get('timeframe')} {item.get('technique')} / {item.get('setup')} is triggered and latest candle "
             f"has confirmed volume: {volume_confirmed}"
             if volume_confirmed
             else ""
@@ -2235,7 +2272,21 @@ def _rrg_reference_meta(rrg: dict) -> str:
 
 def _data_as_of_text(item: dict) -> str:
     value = str(item.get("data_as_of") or "").strip()
-    return f" · Data as of {escape(value)}" if value else ""
+    text = f" · Data as of {escape(value)}" if value else ""
+    warning = item.get("data_warning") or {}
+    message = str(warning.get("message") or "").strip()
+    return f"{text} · Data warning: {escape(message)}" if message else text
+
+
+def _market_data_tags(payload: dict) -> str:
+    latest = payload.get("data_as_of_by_market") or {}
+    warnings = payload.get("data_warnings_by_market") or {}
+    tags = []
+    for market, data_as_of in sorted(latest.items()):
+        warning_count = len(warnings.get(market) or [])
+        suffix = f" · {warning_count} stale" if warning_count else ""
+        tags.append(f'<span class="tag">{escape(str(market))}: {escape(str(data_as_of))}{suffix}</span>')
+    return "".join(tags)
 
 
 def _candidate_card(candidate: dict, report_dir: Path) -> str:
