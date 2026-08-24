@@ -4,7 +4,7 @@
 
 **Goal:** Make every scheduled/manual Pages publication uniquely versioned and verifiably served, while keeping stale symbols visible with clear per-market freshness warnings.
 
-**Architecture:** Schedule/manual events only create a timestamp commit on `scanner-trigger`; that push and normal `main` pushes perform the scan. The deployed artifact carries `deployment.json`, and the deploy job polls the public marker. Scanner rows are annotated by comparing each symbol's final candle with its market peers; payload/report code summarizes those warnings.
+**Architecture:** Schedule/manual events create a timestamp commit on `scanner-trigger` and dispatch the workflow at that ref; the dispatched run and normal `main` pushes perform the scan. The deployed artifact carries `deployment.json`, and the deploy job polls the public marker. Scanner rows are annotated by comparing each symbol's final candle with its market peers; payload/report code summarizes those warnings.
 
 **Tech stack:** GitHub Actions YAML, Python 3.13, pytest, existing HTML renderer, curl.
 

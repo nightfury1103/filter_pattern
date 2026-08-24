@@ -74,3 +74,25 @@ def test_pages_workflow_validates_asset_integrity_and_size_before_upload() -> No
     assert "Validate Pages size and chart assets" in workflow
     assert validation in workflow
     assert workflow.index(validation) < workflow.index("actions/upload-pages-artifact")
+
+
+def test_pages_workflow_uses_unique_trigger_commits_for_scheduled_refreshes() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert "- scanner-trigger" in workflow
+    assert "trigger_scan:" in workflow
+    assert "github.event_name != 'push'" in workflow
+    assert 'git push --force origin "HEAD:scanner-trigger"' in workflow
+    assert workflow.count("if: github.event_name == 'push'") >= 2
+
+
+def test_pages_workflow_verifies_the_served_deployment_marker() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+
+    assert "public/deployment.json" in workflow
+    assert '"run_id": "${{ github.run_id }}"' in workflow
+    assert "Verify served deployment" in workflow
+    assert "PAGE_URL: ${{ steps.deployment.outputs.page_url }}" in workflow
+    assert 'MARKER_URL="${PAGE_URL%/}/deployment.json"' in workflow
+    assert workflow.index("public/deployment.json") < workflow.index("actions/upload-pages-artifact")
+    assert workflow.index("actions/deploy-pages@v4") < workflow.index("Verify served deployment")

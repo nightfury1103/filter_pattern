@@ -15,7 +15,7 @@ The scanner also accepts any non-empty Yahoo series without comparing its final 
 The workflow keeps the existing native GitHub Pages actions and adds one lightweight trigger branch:
 
 1. A scheduled or manually dispatched run creates a new timestamp commit on `scanner-trigger`, based on the current `main` tree.
-2. The push to `scanner-trigger` launches the real scan. Its unique trigger commit becomes `GITHUB_SHA`, so `deploy-pages` receives a new build version.
+2. The trigger run dispatches the workflow at `scanner-trigger` after pushing. (`GITHUB_TOKEN` pushes do not start workflows.) The dispatched run uses the unique trigger commit as `GITHUB_SHA`, so `deploy-pages` receives a new build version.
 3. A direct push to `main` continues to launch the real scan immediately.
 4. Schedule and manual runs do not scan themselves; they only create the trigger commit.
 5. The existing `scanner-state` branch remains dedicated to compact watchlist state.
