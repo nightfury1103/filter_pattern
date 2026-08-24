@@ -79,6 +79,7 @@ def test_pages_workflow_validates_asset_integrity_and_size_before_upload() -> No
 def test_pages_workflow_uses_unique_trigger_commits_for_scheduled_refreshes() -> None:
     workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
 
+    assert "actions: write" in workflow
     assert "- scanner-trigger" in workflow
     assert "trigger_scan:" in workflow
     assert "github.event_name != 'push'" in workflow
