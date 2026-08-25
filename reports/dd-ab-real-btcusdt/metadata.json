@@ -22,5 +22,16 @@
     "status": "rejected",
     "score": 0,
     "reason": "DD requires two consecutive valid doji candles near EMA21"
+  },
+  "visual_revision": {
+    "inset_range": "2025-05-24 to 2025-06-02",
+    "labels": [
+      "2025-05-31 Valid doji",
+      "2025-06-01 Interruption/non-doji",
+      "2025-06-02 Valid doji"
+    ],
+    "old_title": "OLD FALSE POSITIVE — WAITING 98",
+    "new_title": "NEW CORRECT REJECTION",
+    "rejection_banner": "DD requires two consecutive valid doji candles near EMA21"
   }
 }
