@@ -1,0 +1,26 @@
+{
+  "exchange": "binanceusdm",
+  "ccxt_symbol": "BTC/USDT:USDT",
+  "timeframe": "1d",
+  "fetch_start": "2019-09-08T00:00:00",
+  "fetch_end": "2026-08-25T00:00:00",
+  "selected_endpoint": "2025-06-02T00:00:00",
+  "selected_end_index": 2095,
+  "selected_candle_count": 2095,
+  "visible_chart_range": "2025-01-14 to 2025-06-02",
+  "ohlcv_sha256": "8e28c5e6b9f6f253b5161d3722c7f02cb595dbd1b68e215602d4c55cd5cddac1",
+  "old_commit": "8401c4b3",
+  "new_commit": "6d9d6e33",
+  "old_result": {
+    "qualified": true,
+    "status": "WAITING",
+    "score": 98,
+    "cluster": "2025-05-31 -> 2025-06-02 (3 candles)"
+  },
+  "new_result": {
+    "qualified": false,
+    "status": "rejected",
+    "score": 0,
+    "reason": "DD requires two consecutive valid doji candles near EMA21"
+  }
+}
