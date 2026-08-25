@@ -261,8 +261,9 @@ def test_dd_rejects_sharp_pullback_that_breaks_trend() -> None:
     evidence = detect_pattern(candles, "nhathoai", make_config(), setup="dd")
 
     assert not evidence.qualified
-    reject_output = "\n".join(evidence.failures).lower()
-    assert "pullback" in reject_output or "trend" in reject_output or "doji" in reject_output
+    reject_output = "\n".join(evidence.failures)
+    assert "pullback" in reject_output.lower() or "trend" in reject_output.lower()
+    assert "DD requires two consecutive valid doji candles near EMA21" not in reject_output
 
 
 def test_dd_rejects_interrupted_nonconsecutive_doji_pair() -> None:
@@ -656,10 +657,11 @@ def make_bullish_dd_series(triggered: bool, sharp_pullback: bool = False) -> lis
 
     if sharp_pullback:
         pullback = [
-            (109.0, 109.3, 104.0, 104.6),
-            (104.4, 104.8, 99.0, 100.2),
-            (100.1, 101.0, 96.5, 97.4),
-            (97.5, 98.2, 95.8, 96.6),
+            (109.5, 110.1, 107.6, 108.2),
+            (108.1, 108.5, 96.0, 107.0),
+            (106.9, 107.2, 105.3, 106.0),
+            (105.9, 106.1, 104.4, 105.0),
+            (105.0, 105.2, 103.7, 104.4),
         ]
     else:
         pullback = [
