@@ -3327,123 +3327,122 @@ def _score_dd_direction(
     ema_values: list[float],
     direction: str,
 ) -> _DDSetup:
-    best = _empty_dd(direction, ["Reject reason: no active 2+ doji cluster near EMA21 found"])
+    best = _empty_dd(direction, ["DD requires two consecutive valid doji candles near EMA21"])
     n = len(candles)
     for cluster_end in (n - 2, n - 1):
         if cluster_end < 5:
             continue
-        for cluster_len in range(2, 5):
-            cluster_start = cluster_end - cluster_len + 1
-            if cluster_start < 10:
-                continue
-            cluster = candles[cluster_start : cluster_end + 1]
-            cluster_score, cluster_reasons, cluster_failures = _score_dd_cluster(
-                cluster, candles, ema_values, cfg, direction, cluster_start
-            )
-            if cluster_score <= 0:
-                candidate = _empty_dd(direction, cluster_failures)
-                if candidate.score > best.score:
-                    best = candidate
-                continue
-
-            pullback_start = _dd_pullback_start(candles, direction, cluster_start)
-            if pullback_start is None:
-                candidate = _empty_dd(direction, ["Reject reason: no single clean pullback wave before the doji cluster"])
-                if candidate.score > best.score:
-                    best = candidate
-                continue
-            pullback = candles[pullback_start:cluster_start]
-            impulse_start = _dd_impulse_start(candles, direction, pullback_start)
-            if impulse_start is None:
-                candidate = _empty_dd(direction, ["Reject reason: no clear impulse wave before the pullback"])
-                if candidate.score > best.score:
-                    best = candidate
-                continue
-
-            impulse_end = pullback_start
-            trend_points, trend_reason, trend_failure = _score_dd_trend(
-                candles, ema_values, cfg, direction, impulse_start, impulse_end, cluster_end
-            )
-            ema_points, ema_reason, ema_failure = _score_dd_ema(
-                candles, ema_values, cfg, direction, cluster_start, cluster_end
-            )
-            pullback_points, pullback_reason, pullback_failure = _score_dd_pullback(
-                candles, direction, impulse_start, impulse_end, pullback_start, cluster_start
-            )
-            ema_reach_points, ema_reach_reason, ema_reach_failure = _score_dd_pullback_reaches_ema(
-                candles, ema_values, cfg, direction, pullback_start, cluster_end
-            )
-
-            signal = max(c.high for c in cluster) if direction == "long" else min(c.low for c in cluster)
-            stop = min(c.low for c in cluster) if direction == "long" else max(c.high for c in cluster)
-            status = _dd_entry_status(candles[-1], signal, stop, cfg, direction, cluster_end)
-            trigger_points, trigger_reason, trigger_failure = _score_dd_signal(
-                candles[-1], signal, status, cfg, direction
-            )
-            stop_points, stop_reason, stop_failure = _score_dd_stop(
-                candles, signal, stop, cfg, direction, cluster_start
-            )
-            obstacle = _nearest_dd_obstacle(candles, signal, direction, impulse_start, cluster_start)
-            obstacle_points, obstacle_reason, obstacle_failure = _score_dd_obstacle(
-                candles, signal, obstacle, direction, cluster_start
-            )
-
-            score = (
-                trend_points
-                + ema_points
-                + pullback_points
-                + ema_reach_points
-                + cluster_score
-                + trigger_points
-                + stop_points
-                + obstacle_points
-            )
-            reasons = [
-                trend_reason,
-                ema_reason,
-                pullback_reason,
-                ema_reach_reason,
-                *cluster_reasons,
-                trigger_reason,
-                stop_reason,
-                obstacle_reason,
-            ]
-            failures = [
-                *([] if trend_points else [trend_failure]),
-                *([] if ema_points else [ema_failure]),
-                *([] if pullback_points else [pullback_failure]),
-                *([] if ema_reach_points else [ema_reach_failure]),
-                *cluster_failures,
-                *([] if trigger_points else [trigger_failure]),
-                *([] if stop_points else [stop_failure]),
-                *([] if obstacle_points else [obstacle_failure]),
-            ]
-            if status in {"LATE", "FAILED", "REJECT"}:
-                failures.append(f"Status is {status}, not an active DD entry candidate")
-            if score < 80 and status in {"WAITING", "TRIGGERED"}:
-                status = "REJECT"
-                failures.append(f"Score {score:.0f} is below required DD threshold 80")
-
-            candidate = _DDSetup(
-                direction=direction,
-                status=status,
-                score=score,
-                impulse_start_index=impulse_start,
-                impulse_end_index=impulse_end,
-                pullback_start_index=pullback_start,
-                pullback_end_index=cluster_start - 1,
-                cluster_start_index=cluster_start,
-                cluster_end_index=cluster_end,
-                cluster_low=min(c.low for c in cluster),
-                cluster_high=max(c.high for c in cluster),
-                signal=signal,
-                stop=stop,
-                obstacle=obstacle,
-                reasons=[reason for reason in reasons if reason],
-                failures=[failure for failure in failures if failure],
-            )
-            if (_dd_status_rank(candidate.status), candidate.score) > (_dd_status_rank(best.status), best.score):
+        cluster_start = cluster_end - 1
+        if cluster_start < 10:
+            continue
+        cluster = candles[cluster_start : cluster_end + 1]
+        cluster_score, cluster_reasons, cluster_failures = _score_dd_cluster(
+            cluster, candles, ema_values, cfg, direction, cluster_start
+        )
+        if cluster_score <= 0:
+            candidate = _empty_dd(direction, cluster_failures)
+            if candidate.score > best.score:
                 best = candidate
+            continue
+
+        pullback_start = _dd_pullback_start(candles, direction, cluster_start)
+        if pullback_start is None:
+            candidate = _empty_dd(direction, ["Reject reason: no single clean pullback wave before the doji cluster"])
+            if candidate.score > best.score:
+                best = candidate
+            continue
+        pullback = candles[pullback_start:cluster_start]
+        impulse_start = _dd_impulse_start(candles, direction, pullback_start)
+        if impulse_start is None:
+            candidate = _empty_dd(direction, ["Reject reason: no clear impulse wave before the pullback"])
+            if candidate.score > best.score:
+                best = candidate
+            continue
+
+        impulse_end = pullback_start
+        trend_points, trend_reason, trend_failure = _score_dd_trend(
+            candles, ema_values, cfg, direction, impulse_start, impulse_end, cluster_end
+        )
+        ema_points, ema_reason, ema_failure = _score_dd_ema(
+            candles, ema_values, cfg, direction, cluster_start, cluster_end
+        )
+        pullback_points, pullback_reason, pullback_failure = _score_dd_pullback(
+            candles, direction, impulse_start, impulse_end, pullback_start, cluster_start
+        )
+        ema_reach_points, ema_reach_reason, ema_reach_failure = _score_dd_pullback_reaches_ema(
+            candles, ema_values, cfg, direction, pullback_start, cluster_end
+        )
+
+        signal = max(c.high for c in cluster) if direction == "long" else min(c.low for c in cluster)
+        stop = min(c.low for c in cluster) if direction == "long" else max(c.high for c in cluster)
+        status = _dd_entry_status(candles[-1], signal, stop, cfg, direction, cluster_end)
+        trigger_points, trigger_reason, trigger_failure = _score_dd_signal(
+            candles[-1], signal, status, cfg, direction
+        )
+        stop_points, stop_reason, stop_failure = _score_dd_stop(
+            candles, signal, stop, cfg, direction, cluster_start
+        )
+        obstacle = _nearest_dd_obstacle(candles, signal, direction, impulse_start, cluster_start)
+        obstacle_points, obstacle_reason, obstacle_failure = _score_dd_obstacle(
+            candles, signal, obstacle, direction, cluster_start
+        )
+
+        score = (
+            trend_points
+            + ema_points
+            + pullback_points
+            + ema_reach_points
+            + cluster_score
+            + trigger_points
+            + stop_points
+            + obstacle_points
+        )
+        reasons = [
+            trend_reason,
+            ema_reason,
+            pullback_reason,
+            ema_reach_reason,
+            *cluster_reasons,
+            trigger_reason,
+            stop_reason,
+            obstacle_reason,
+        ]
+        failures = [
+            *([] if trend_points else [trend_failure]),
+            *([] if ema_points else [ema_failure]),
+            *([] if pullback_points else [pullback_failure]),
+            *([] if ema_reach_points else [ema_reach_failure]),
+            *cluster_failures,
+            *([] if trigger_points else [trigger_failure]),
+            *([] if stop_points else [stop_failure]),
+            *([] if obstacle_points else [obstacle_failure]),
+        ]
+        if status in {"LATE", "FAILED", "REJECT"}:
+            failures.append(f"Status is {status}, not an active DD entry candidate")
+        if score < 80 and status in {"WAITING", "TRIGGERED"}:
+            status = "REJECT"
+            failures.append(f"Score {score:.0f} is below required DD threshold 80")
+
+        candidate = _DDSetup(
+            direction=direction,
+            status=status,
+            score=score,
+            impulse_start_index=impulse_start,
+            impulse_end_index=impulse_end,
+            pullback_start_index=pullback_start,
+            pullback_end_index=cluster_start - 1,
+            cluster_start_index=cluster_start,
+            cluster_end_index=cluster_end,
+            cluster_low=min(c.low for c in cluster),
+            cluster_high=max(c.high for c in cluster),
+            signal=signal,
+            stop=stop,
+            obstacle=obstacle,
+            reasons=[reason for reason in reasons if reason],
+            failures=[failure for failure in failures if failure],
+        )
+        if (_dd_status_rank(candidate.status), candidate.score) > (_dd_status_rank(best.status), best.score):
+            best = candidate
     return best
 
 
@@ -3563,43 +3562,36 @@ def _score_dd_cluster(
 ) -> tuple[float, list[str], list[str]]:
     prior = candles[max(0, cluster_start - 8) : cluster_start]
     prior_avg_range = mean(c.high - c.low for c in prior) if prior else mean(c.high - c.low for c in cluster)
-    small_count = 0
-    near_count = 0
-    wick_warning = False
+    consecutive_failure = ["DD requires two consecutive valid doji candles near EMA21"]
     for offset, candle in enumerate(cluster):
         candle_range = candle.high - candle.low
         if candle_range <= 0:
-            continue
+            return 0, [], consecutive_failure
         body_ratio = abs(candle.close - candle.open) / candle_range
         range_pct = _candle_range_pct(candle)
-        small_body = body_ratio <= max(cfg.doji_body_ratio, 0.35)
-        small_range = candle_range <= prior_avg_range * 0.90 and range_pct <= cfg.max_signal_range_pct
-        if small_body and small_range:
-            small_count += 1
+        if body_ratio > cfg.doji_body_ratio:
+            return 0, [], consecutive_failure
+        if candle_range > prior_avg_range * 0.90 or range_pct > cfg.max_signal_range_pct:
+            return 0, [], consecutive_failure
         ema = ema_values[cluster_start + offset]
-        distance = min(abs(candle.close - ema), abs(candle.high - ema), abs(candle.low - ema)) / ema * 100 if ema > 0 else 100
-        if distance <= cfg.max_pullback_ema_distance_pct:
-            near_count += 1
+        distance = (
+            min(abs(candle.close - ema), abs(candle.high - ema), abs(candle.low - ema)) / ema * 100
+            if ema > 0
+            else 100
+        )
+        if distance > cfg.max_pullback_ema_distance_pct:
+            return 0, [], consecutive_failure
         upper_wick = candle.high - max(candle.open, candle.close)
         lower_wick = min(candle.open, candle.close) - candle.low
         if direction == "long" and upper_wick > candle_range * 0.60:
-            wick_warning = True
+            return 0, [], consecutive_failure
         if direction == "short" and lower_wick > candle_range * 0.60:
-            wick_warning = True
-    if small_count >= 2 and near_count == len(cluster) and not wick_warning:
-        return (
-            15,
-            [f"Doji cluster: {len(cluster)} small hesitation candle(s) near EMA21"],
-            [],
-        )
-    failures = []
-    if small_count < 2:
-        failures.append(f"Doji cluster needs at least 2 valid small/doji candles, found {small_count}")
-    if near_count != len(cluster):
-        failures.append("Doji cluster is not fully near EMA21")
-    if wick_warning:
-        failures.append("Signal doji wick strongly rejects the trade direction")
-    return 0, [], failures
+            return 0, [], consecutive_failure
+    return (
+        15,
+        [f"Doji cluster: {len(cluster)} small hesitation candle(s) near EMA21"],
+        [],
+    )
 
 
 def _dd_entry_status(
@@ -3777,13 +3769,18 @@ def _dd_output_lines(result: _DDSetup, candles: list[Candle]) -> list[str]:
 
 def _dd_reject_lines(result: _DDSetup) -> list[str]:
     failures = result.failures or ["Reject reason: DD story is incomplete or unclear"]
-    return [
-        "Pattern: DD",
-        "Status: REJECT",
-        f"Score: {result.score:.0f}",
-        "Reject reason:",
-        *[f"- {failure}" for failure in failures[:8]],
-    ]
+    consecutive = "DD requires two consecutive valid doji candles near EMA21"
+    lines = ["Pattern: DD", "Status: REJECT"]
+    if consecutive in failures:
+        lines.append(consecutive)
+    lines.extend(
+        [
+            f"Score: {result.score:.0f}",
+            "Reject reason:",
+            *[f"- {failure}" for failure in failures[:8]],
+        ]
+    )
+    return lines
 
 
 def _dd_status_rank(status: str) -> int:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
@@ -262,6 +263,30 @@ def test_dd_rejects_sharp_pullback_that_breaks_trend() -> None:
     assert not evidence.qualified
     reject_output = "\n".join(evidence.failures).lower()
     assert "pullback" in reject_output or "trend" in reject_output or "doji" in reject_output
+
+
+def test_dd_rejects_interrupted_nonconsecutive_doji_pair() -> None:
+    candles = make_interrupted_nonconsecutive_dd_series()
+
+    evidence = detect_pattern(candles, "nhathoai", make_config(), setup="dd")
+
+    assert evidence.qualified is False
+    assert evidence.status == "rejected"
+    assert any(
+        "DD requires two consecutive valid doji candles near EMA21" in failure
+        for failure in evidence.failures
+    )
+
+
+def test_dd_respects_configured_doji_body_ratio() -> None:
+    candles = make_bullish_dd_series(triggered=False)
+    candles[-2] = replace(candles[-2], open=104.05, high=105.10, low=103.85, close=104.45)
+    config = replace(make_config(), doji_body_ratio=0.30)
+
+    evidence = detect_pattern(candles, "nhathoai", config, setup="dd")
+
+    assert evidence.qualified is False
+    assert evidence.status == "rejected"
 
 
 def test_sb_detects_bullish_second_break_triggered() -> None:
@@ -661,6 +686,14 @@ def make_bullish_dd_series(triggered: bool, sharp_pullback: bool = False) -> lis
     else:
         add(index, 104.45, 105.00, 103.95, 104.7)
     return candles
+
+
+def make_interrupted_nonconsecutive_dd_series() -> list[Candle]:
+    candles = make_bullish_dd_series(triggered=False)
+    first_doji, second_doji, waiting = candles[-3], candles[-2], candles[-1]
+    interruption = replace(first_doji, open=103.95, high=105.05, low=103.75, close=104.75)
+    latest = replace(waiting, open=104.10, high=105.00, low=103.95, close=104.70)
+    return [*candles[:-3], first_doji, interruption, second_doji, latest]
 
 
 def make_bullish_sb_series(triggered: bool) -> list[Candle]:

@@ -407,6 +407,22 @@ def _draw_dd_annotations(
 ) -> None:
     evidence = result.evidence
     lines = evidence.reasons + evidence.failures
+    if not evidence.qualified:
+        consecutive = next(
+            (line for line in evidence.failures if "DD requires two consecutive valid doji candles near EMA21" in line),
+            None,
+        )
+        if consecutive:
+            ax.text(
+                0.01,
+                0.97,
+                consecutive,
+                transform=ax.transAxes,
+                fontsize=10,
+                va="top",
+                color="#7f1d1d",
+                fontweight="bold",
+            )
     impulse_start, impulse_end = _parse_date_range(_line_value(lines, "Impulse wave:"))
     pullback_start, pullback_end = _parse_date_range(_line_value(lines, "Pullback description:"))
     cluster_value = _line_value(lines, "Doji cluster:")
@@ -451,7 +467,7 @@ def _draw_dd_annotations(
                     label="Doji cluster",
                 )
             )
-            ax.text(dates[start], cluster_high, " 2+ doji near EMA21", fontsize=8, va="bottom", color="#5b21b6")
+            ax.text(dates[start], cluster_high, " 2 consecutive dojis near EMA21", fontsize=8, va="bottom", color="#5b21b6")
 
     if signal is not None:
         ax.axhline(signal, color="#16a34a", linewidth=1.7, label=f"DD signal {_price_label(signal)}")
