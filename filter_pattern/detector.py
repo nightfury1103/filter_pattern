@@ -3564,8 +3564,6 @@ def _score_dd_cluster(
     prior = candles[max(0, cluster_start - 8) : cluster_start]
     prior_avg_range = mean(c.high - c.low for c in prior) if prior else mean(c.high - c.low for c in cluster)
     consecutive_failure = ["DD requires two consecutive valid doji candles near EMA21"]
-    near_count = 0
-    wick_warning = False
     for offset, candle in enumerate(cluster):
         candle_range = candle.high - candle.low
         if candle_range <= 0:
@@ -3582,26 +3580,19 @@ def _score_dd_cluster(
             if ema > 0
             else 100
         )
-        if distance <= cfg.max_pullback_ema_distance_pct:
-            near_count += 1
+        if distance > cfg.max_pullback_ema_distance_pct:
+            return 0, [], consecutive_failure
         upper_wick = candle.high - max(candle.open, candle.close)
         lower_wick = min(candle.open, candle.close) - candle.low
         if direction == "long" and upper_wick > candle_range * 0.60:
-            wick_warning = True
+            return 0, [], consecutive_failure
         if direction == "short" and lower_wick > candle_range * 0.60:
-            wick_warning = True
-    if near_count == len(cluster) and not wick_warning:
-        return (
-            15,
-            [f"Doji cluster: {len(cluster)} small hesitation candle(s) near EMA21"],
-            [],
-        )
-    failures = []
-    if near_count != len(cluster):
-        failures.append("Doji cluster is not fully near EMA21")
-    if wick_warning:
-        failures.append("Signal doji wick strongly rejects the trade direction")
-    return 0, [], failures
+            return 0, [], consecutive_failure
+    return (
+        15,
+        [f"Doji cluster: {len(cluster)} small hesitation candle(s) near EMA21"],
+        [],
+    )
 
 
 def _dd_entry_status(

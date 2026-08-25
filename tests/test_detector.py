@@ -290,6 +290,35 @@ def test_dd_respects_configured_doji_body_ratio() -> None:
     assert evidence.status == "rejected"
 
 
+def test_dd_rejects_doji_pair_far_from_ema21() -> None:
+    candles = make_bullish_dd_series(triggered=False)
+    candles[-3] = replace(candles[-3], open=109.95, high=110.55, low=109.65, close=110.05)
+    candles[-2] = replace(candles[-2], open=110.05, high=110.60, low=109.75, close=110.15)
+
+    evidence = detect_pattern(candles, "nhathoai", make_config(), setup="dd")
+
+    assert evidence.qualified is False
+    assert evidence.status == "rejected"
+    assert any(
+        "DD requires two consecutive valid doji candles near EMA21" in failure
+        for failure in evidence.failures
+    )
+
+
+def test_dd_rejects_doji_pair_with_directional_wick() -> None:
+    candles = make_bullish_dd_series(triggered=False)
+    candles[-2] = replace(candles[-2], open=104.35, high=105.40, low=103.85, close=104.45)
+
+    evidence = detect_pattern(candles, "nhathoai", make_config(), setup="dd")
+
+    assert evidence.qualified is False
+    assert evidence.status == "rejected"
+    assert any(
+        "DD requires two consecutive valid doji candles near EMA21" in failure
+        for failure in evidence.failures
+    )
+
+
 def test_sb_detects_bullish_second_break_triggered() -> None:
     candles = make_bullish_sb_series(triggered=True)
 
