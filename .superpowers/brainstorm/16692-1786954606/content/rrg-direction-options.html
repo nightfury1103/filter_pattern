@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RRG Direction Options</title>
+  <style>
+    :root { --bg:#f4f7fb; --panel:#fff; --text:#102038; --muted:#697991; --line:#dce4ef; --green:#168447; --blue:#2272d5; --orange:#cf6a16; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1180px; margin:auto; padding:30px 22px 50px; }
+    .eyebrow { color:#2563eb; font-size:12px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
+    h1 { margin:7px 0 8px; font-size:34px; letter-spacing:-.03em; }
+    .intro { margin:0 0 22px; color:var(--muted); max-width:820px; line-height:1.55; }
+    .options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .option { position:relative; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(34,53,84,.07); }
+    .option.recommended { border:2px solid #2563eb; }
+    .rec { position:absolute; right:10px; top:10px; z-index:4; padding:5px 8px; border-radius:999px; background:#2563eb; color:#fff; font-size:10px; font-weight:850; text-transform:uppercase; }
+    .plot { position:relative; height:260px; background:linear-gradient(90deg,rgba(34,114,213,.08) 0 50%,rgba(22,132,71,.08) 50% 100%),linear-gradient(90deg,rgba(196,63,75,.07) 0 50%,rgba(207,106,22,.07) 50% 100%); }
+    .plot:before { content:""; position:absolute; left:50%; top:0; bottom:0; border-left:1px solid #aab6c8; }
+    .plot:after { content:""; position:absolute; top:50%; left:0; right:0; border-top:1px solid #aab6c8; }
+    svg { position:relative; z-index:2; width:100%; height:100%; }
+    .old { fill:none; stroke:var(--green); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+    .faded { opacity:.28; }
+    .head { fill:none; stroke:var(--green); stroke-width:5; stroke-linecap:round; }
+    .dots circle { fill:var(--green); }
+    .labels { position:absolute; inset:0; z-index:1; color:#75849a; font-size:9px; font-weight:850; letter-spacing:.08em; }
+    .labels span:nth-child(1){position:absolute;top:12px;left:12px}.labels span:nth-child(2){position:absolute;top:12px;right:12px}.labels span:nth-child(3){position:absolute;bottom:12px;left:12px}.labels span:nth-child(4){position:absolute;bottom:12px;right:12px}
+    .body { padding:15px 16px 17px; }
+    h2 { margin:0 0 6px; font-size:17px; }
+    p { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+    .signal { display:inline-flex; margin-top:12px; gap:6px; align-items:center; padding:6px 8px; border-radius:7px; background:#edf8f1; color:var(--green); font-size:11px; font-weight:850; }
+    .note { margin-top:18px; padding:12px 14px; border:1px solid #bdd3fa; background:#eef5ff; border-radius:10px; color:#24456e; font-size:13px; }
+    @media(max-width:850px){.options{grid-template-columns:1fr}.plot{height:230px}}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">RRG chart refinement</div>
+    <h1>How should each trail show direction?</h1>
+    <p class="intro">All three use the same historical RRG trail. The difference is how strongly the chart identifies the move from older points toward the current point.</p>
+    <section class="options">
+      <article class="option recommended">
+        <div class="rec">Recommended</div>
+        <div class="plot">
+          <div class="labels"><span>IMPROVING</span><span>LEADING</span><span>LAGGING</span><span>WEAKENING</span></div>
+          <svg viewBox="0 0 340 260" aria-label="Large arrow on final RRG segment">
+            <defs><marker id="a-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#168447"/></marker></defs>
+            <path class="old faded" d="M62 205 C90 188,104 170,128 166 S170 154,190 135"/>
+            <g class="dots" opacity=".32"><circle cx="62" cy="205" r="4"/><circle cx="101" cy="176" r="4"/><circle cx="128" cy="166" r="4"/><circle cx="164" cy="154" r="4"/></g>
+            <path class="head" d="M190 135 L268 75" marker-end="url(#a-head)"/>
+            <circle cx="268" cy="75" r="7" fill="#168447" stroke="#fff" stroke-width="3"/>
+            <text x="274" y="65" fill="#102038" font-size="13" font-weight="850">SPY</text>
+            <text x="198" y="126" fill="#168447" font-size="11" font-weight="850">latest move</text>
+          </svg>
+        </div>
+        <div class="body"><h2>A. Emphasized final arrow</h2><p>Fade the old trail, thicken the final segment, and use one large arrowhead at the current point.</p><span class="signal">↗ Clear direction, low clutter</span></div>
+      </article>
+
+      <article class="option">
+        <div class="plot">
+          <div class="labels"><span>IMPROVING</span><span>LEADING</span><span>LAGGING</span><span>WEAKENING</span></div>
+          <svg viewBox="0 0 340 260" aria-label="Arrow on every RRG segment">
+            <defs><marker id="b-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#168447"/></marker></defs>
+            <path class="old" d="M62 205 L101 176" marker-end="url(#b-head)"/><path class="old" d="M101 176 L128 166" marker-end="url(#b-head)"/><path class="old" d="M128 166 L164 154" marker-end="url(#b-head)"/><path class="old" d="M164 154 L190 135" marker-end="url(#b-head)"/><path class="old" d="M190 135 L268 75" marker-end="url(#b-head)"/>
+            <circle cx="268" cy="75" r="6" fill="#168447" stroke="#fff" stroke-width="3"/><text x="274" y="65" fill="#102038" font-size="13" font-weight="850">SPY</text>
+          </svg>
+        </div>
+        <div class="body"><h2>B. Arrow on every segment</h2><p>Shows every step in sequence, but gets visually noisy when seven or eight trails overlap.</p><span class="signal">↗ More history, more clutter</span></div>
+      </article>
+
+      <article class="option">
+        <div class="plot">
+          <div class="labels"><span>IMPROVING</span><span>LEADING</span><span>LAGGING</span><span>WEAKENING</span></div>
+          <svg viewBox="0 0 340 260" aria-label="RRG trail with direction callout">
+            <path class="old faded" d="M62 205 C90 188,104 170,128 166 S170 154,190 135 S232 98,268 75"/>
+            <circle cx="268" cy="75" r="7" fill="#168447" stroke="#fff" stroke-width="3"/>
+            <rect x="183" y="50" width="142" height="46" rx="9" fill="#fff" stroke="#b9d9c6"/>
+            <text x="196" y="68" fill="#102038" font-size="12" font-weight="850">SPY · Leading</text><text x="196" y="85" fill="#168447" font-size="11" font-weight="850">Direction ↗ strengthening</text>
+          </svg>
+        </div>
+        <div class="body"><h2>C. Direction callout</h2><p>Add a text box at each endpoint. Very explicit, but callouts will cover nearby trails on the combined chart.</p><span class="signal">↗ Clearest text, highest overlap</span></div>
+      </article>
+    </section>
+    <div class="note"><b>Recommendation:</b> A. It conveys direction at a glance and preserves enough room for all fixed market representatives.</div>
+  </main>
+</body>
+</html>

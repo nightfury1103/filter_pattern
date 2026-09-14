@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RRG Market Status Overview</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #fff;
+      --text: #102038;
+      --muted: #697991;
+      --line: #dce4ef;
+      --blue: #2563eb;
+      --leading: #168447;
+      --improving: #2272d5;
+      --weakening: #cf6a16;
+      --lagging: #c43f4b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 56px; }
+    .eyebrow { color: var(--blue); font-size: 12px; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
+    h1 { margin: 7px 0 8px; font-size: clamp(27px, 4vw, 42px); letter-spacing: -.035em; }
+    .intro { max-width: 830px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+    .notice {
+      display: flex; gap: 10px; align-items: flex-start; margin: 22px 0 16px; padding: 12px 14px;
+      border: 1px solid #bdd3fa; background: #eef5ff; border-radius: 10px; color: #24456e; font-size: 13px;
+    }
+    .shell { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 14px 45px rgba(34,53,84,.09); overflow: hidden; }
+    .topbar { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .title h2 { margin: 0 0 4px; font-size: 20px; }
+    .title p { margin: 0; color: var(--muted); font-size: 13px; }
+    .summary { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .summary span { border: 1px solid var(--line); background: #f8fafc; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 750; }
+    .content { padding: 18px; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+    .market-card { border: 1px solid var(--line); border-top: 4px solid var(--tone); border-radius: 11px; padding: 13px; background: #fff; min-height: 134px; }
+    .market-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+    .market-name { font-size: 13px; color: var(--muted); font-weight: 750; }
+    .pill { color: var(--tone); background: color-mix(in srgb, var(--tone) 10%, white); border: 1px solid color-mix(in srgb, var(--tone) 26%, white); border-radius: 999px; padding: 4px 7px; font-size: 10px; font-weight: 850; text-transform: uppercase; }
+    .symbol { margin-top: 12px; font-size: 21px; font-weight: 880; letter-spacing: -.02em; }
+    .symbol small { color: var(--muted); font-size: 11px; font-weight: 700; }
+    .vector { display: flex; justify-content: space-between; align-items: end; gap: 10px; margin-top: 10px; }
+    .coords { color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .arrow { color: var(--tone); font-size: 24px; font-weight: 900; line-height: 1; }
+    .dual { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .coin { background: #f7f9fc; border: 1px solid var(--line); border-radius: 7px; padding: 7px; }
+    .coin b { display: block; font-size: 13px; }
+    .coin span { color: var(--coin-tone); font-size: 10px; font-weight: 850; text-transform: uppercase; }
+    .chart { margin-top: 14px; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+    .chart-head { display: flex; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--line); background: #f8fafc; font-size: 12px; }
+    .chart-head strong { font-size: 13px; }
+    .chart-head span { color: var(--muted); }
+    .plot { position: relative; height: 260px; background:
+      linear-gradient(90deg, rgba(34,114,213,.08) 0 50%, rgba(22,132,71,.08) 50% 100%),
+      linear-gradient(90deg, rgba(196,63,75,.07) 0 50%, rgba(207,106,22,.07) 50% 100%); }
+    .plot::before { content:""; position:absolute; left:50%; top:0; bottom:0; border-left:1px solid #9eacc0; }
+    .plot::after { content:""; position:absolute; left:0; right:0; top:50%; border-top:1px solid #9eacc0; }
+    .quad { position:absolute; color:#74849b; font-size:10px; font-weight:850; letter-spacing:.08em; z-index:1; }
+    .q1{top:13px;left:14px}.q2{top:13px;right:14px}.q3{bottom:13px;left:14px}.q4{bottom:13px;right:14px}
+    .trail { position:absolute; z-index:2; display:flex; align-items:center; gap:5px; color:var(--tone); font-size:11px; font-weight:850; }
+    .trail::before { content:""; width:44px; height:3px; border-radius:9px; background:var(--tone); transform:rotate(var(--angle)); transform-origin:right center; }
+    .t-spy{left:68%;top:23%}.t-vn{left:37%;top:32%}.t-btc{left:73%;top:39%}.t-eth{left:60%;top:63%}.t-dxy{left:22%;top:73%}.t-us5{left:40%;top:18%}.t-xau{left:80%;top:14%}.t-dbc{left:70%;top:77%}
+    .foot { display:flex; justify-content:space-between; gap:16px; margin-top:14px; color:var(--muted); font-size:12px; }
+    .removed { color:#485b73; }
+    .removed b { color:#b23e49; }
+    @media (max-width: 980px) { .cards { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 620px) { main{padding:20px 12px}.topbar{align-items:flex-start;flex-direction:column}.summary{justify-content:flex-start}.cards{grid-template-columns:1fr}.plot{height:220px}.foot{flex-direction:column} }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Visual proposal · simplified overview</div>
+    <h1>Market RRG at a glance</h1>
+    <p class="intro">The overview answers one question first: <b>what is the current RRG status of each market?</b> Each market uses a fixed daily representative, with BTC and ETH both retained for crypto.</p>
+    <div class="notice"><b>Assumption:</b><span>“Status” means the representative’s current RRG quadrant plus its latest direction. Crypto becomes “Mixed” when BTC and ETH disagree.</span></div>
+
+    <section class="shell">
+      <div class="topbar">
+        <div class="title"><h2>Market RRG Overview</h2><p>Fixed D1 representatives · latest movement shown beside every market</p></div>
+        <div class="summary"><span>7 markets</span><span>8 representative trails</span><span>4 supportive · 4 risk</span></div>
+      </div>
+      <div class="content">
+        <div class="cards">
+          <article class="market-card" style="--tone:var(--leading)"><div class="market-head"><div class="market-name">American stock</div><div class="pill">Leading</div></div><div class="symbol">SPY <small>market leader</small></div><div class="vector"><div class="coords">RS 101.4 · Mom 101.2<br>Momentum rising</div><div class="arrow">↗</div></div></article>
+          <article class="market-card" style="--tone:var(--improving)"><div class="market-head"><div class="market-name">Vietnam stock</div><div class="pill">Improving</div></div><div class="symbol">VNINDEX <small>market index</small></div><div class="vector"><div class="coords">RS 99.7 · Mom 101.0<br>Turning stronger</div><div class="arrow">↗</div></div></article>
+          <article class="market-card" style="--tone:#8b5cf6"><div class="market-head"><div class="market-name">Crypto</div><div class="pill">Mixed</div></div><div class="dual"><div class="coin" style="--coin-tone:var(--leading)"><b>BTCUSD</b><span>Leading ↗</span></div><div class="coin" style="--coin-tone:var(--weakening)"><b>ETHUSD</b><span>Weakening ↘</span></div></div><div class="coords" style="margin-top:8px">Both leaders remain visible—no forced average.</div></article>
+          <article class="market-card" style="--tone:var(--lagging)"><div class="market-head"><div class="market-name">Forex</div><div class="pill">Lagging</div></div><div class="symbol">DXY <small>US Dollar Index</small></div><div class="vector"><div class="coords">RS 98.8 · Mom 98.4<br>Momentum falling</div><div class="arrow">↙</div></div></article>
+          <article class="market-card" style="--tone:var(--improving)"><div class="market-head"><div class="market-name">Index</div><div class="pill">Improving</div></div><div class="symbol">US500 <small>broad index</small></div><div class="vector"><div class="coords">RS 99.4 · Mom 100.8<br>Turning stronger</div><div class="arrow">↗</div></div></article>
+          <article class="market-card" style="--tone:var(--leading)"><div class="market-head"><div class="market-name">Commodity</div><div class="pill">Leading</div></div><div class="symbol">XAUUSD <small>gold</small></div><div class="vector"><div class="coords">RS 100.7 · Mom 101.4<br>Momentum rising</div><div class="arrow">↗</div></div></article>
+          <article class="market-card" style="--tone:var(--weakening)"><div class="market-head"><div class="market-name">Commodity ETF</div><div class="pill">Weakening</div></div><div class="symbol">DBC <small>broad basket</small></div><div class="vector"><div class="coords">RS 101.0 · Mom 98.8<br>Momentum cooling</div><div class="arrow">↘</div></div></article>
+        </div>
+
+        <div class="chart">
+          <div class="chart-head"><strong>Representative RRG trails</strong><span>Only the symbols named above · D1</span></div>
+          <div class="plot">
+            <span class="quad q1">IMPROVING</span><span class="quad q2">LEADING</span><span class="quad q3">LAGGING</span><span class="quad q4">WEAKENING</span>
+            <span class="trail t-spy" style="--tone:var(--leading);--angle:-24deg">SPY</span>
+            <span class="trail t-vn" style="--tone:var(--improving);--angle:-18deg">VNINDEX</span>
+            <span class="trail t-btc" style="--tone:var(--leading);--angle:-10deg">BTCUSD</span>
+            <span class="trail t-eth" style="--tone:var(--weakening);--angle:22deg">ETHUSD</span>
+            <span class="trail t-dxy" style="--tone:var(--lagging);--angle:24deg">DXY</span>
+            <span class="trail t-us5" style="--tone:var(--improving);--angle:-20deg">US500</span>
+            <span class="trail t-xau" style="--tone:var(--leading);--angle:-15deg">XAUUSD</span>
+            <span class="trail t-dbc" style="--tone:var(--weakening);--angle:14deg">DBC</span>
+          </div>
+        </div>
+        <div class="foot"><span class="removed"><b>Removed:</b> four long symbol-by-quadrant lists and the market count bars.</span><span>Selecting a market can still switch the chart to detailed symbols for that market.</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
