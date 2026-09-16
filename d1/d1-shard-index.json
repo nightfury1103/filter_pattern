@@ -1,0 +1,1 @@
+{"schema_version":1,"candidates":[{"symbol":"JP225","market":"Index","tradingview_symbol":"EXNESS:JP225","timeframe":"D1","technique":"nhathoai","setup":"arb","evidence":{"status":"WAITING","score":98.0,"reasons":["Direction: Short"],"failures":[]}}]}
