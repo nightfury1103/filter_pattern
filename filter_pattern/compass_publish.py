@@ -50,10 +50,15 @@ def fetch_sources() -> dict[str, list[Candle] | Exception]:
 
 
 def build_payload(downloaded: dict, before: date, generated_at: str) -> dict:
+    """Display all provider bars; `before` limits completed performance labels only.
+
+    Providers label sessions in different timezones. A bar dated today or later
+    is conservatively provisional; its latest quote still belongs on the chart.
+    """
     assets, errors = {}, {}
     for symbol,(ticker,label,proxy) in SOURCES.items():
         a = {'source':label, 'source_symbol':ticker, 'proxy':proxy, 'history':[],
-             'last_date':None, 'stale':False}
+             'last_date':None, 'stale':False, 'latest_provisional':False}
         assets[symbol] = a
         try:
             cs = downloaded.get(symbol)
@@ -61,48 +66,57 @@ def build_payload(downloaded: dict, before: date, generated_at: str) -> dict:
                 raise cs
             if not cs:
                 raise ValueError('No candles returned')
-            # Omit the current provider calendar date for every market, even if
-            # an intraday download contains a still-open D1 bar.
-            cs = [c for c in cs if c.datetime.date() < before]
+            # Match scanner freshness: retain the newest returned D1 candle.
+            # Do not synthesize an OHLC bar from an unrelated live quote.
             a['quality'] = validate_source(cs)
             a['last_date'] = cs[-1].datetime.date().isoformat()
             a['stale'] = (before-cs[-1].datetime.date()).days > 5
+            a['latest_provisional'] = cs[-1].datetime.date() >= before
             for i,state in enumerate(series(cs)):
                 if i < WARMUP or state['date'] < '2024-01-01':
                     continue
                 a['history'].append({'index':i,'date':state['date'],'symbol':symbol,'close':cs[i].close,
+                    'provisional':cs[i].datetime.date() >= before,
                     'forecasts':{'wave':{k:v for k,v in state.items() if k not in ('date','original')},
                                  'original':state['original']},
-                    'outcomes':{str(h):outcome(cs,i,h) for h in (5,10,20) if i+h < len(cs)}})
+                    'outcomes':{str(h):outcome(cs,i,h) for h in (5,10,20)
+                                if i+h < len(cs) and cs[i+h].datetime.date() < before}})
             if not a['history']:
                 raise ValueError('No usable research-period candles after warmup')
         except Exception as exc:
             a['history'] = []
             a['last_date'] = None
             a['stale'] = False
+            a['latest_provisional'] = False
             # Keep full exception diagnostics in CI, not arbitrary provider text in public HTML.
             print(f'Compass source failed for {symbol}: {type(exc).__name__}: {exc}', flush=True)
             errors[symbol] = 'Không tải được hoặc dữ liệu không đạt kiểm tra OHLC/lịch sử.'
     return {'generated_at':generated_at,'before':before.isoformat(),'models':MODELS,'assets':assets,
-            'protocol':PROTOCOL,'errors':errors,'mode':'scheduled_d1_refresh',
+            'protocol':{**PROTOCOL,'display_timing':'Latest provider D1 bar, including provisional session',
+                        'performance_timing':'Only outcomes ending strictly before the refresh UTC date'},
+            'errors':errors,'mode':'scheduled_d1_refresh',
             'scope':'Six instruments plus GC=F gold futures proxy; D1 research only; not setup authority'}
 
 
 def publish(out: Path, downloaded: dict | None = None, before: date | None = None) -> dict:
+    downloaded = fetch_sources() if downloaded is None else downloaded
     now = datetime.now(timezone.utc)
     before = before or now.date()
-    payload = build_payload(fetch_sources() if downloaded is None else downloaded, before, now.isoformat())
+    payload = build_payload(downloaded, before, now.isoformat())
     out.mkdir(parents=True,exist_ok=True)
     dates = [a['last_date'] for a in payload['assets'].values() if a['last_date']]
     manifest = {'generated_at':payload['generated_at'],'last_date':max(dates) if dates else None,
                 'available':sum(bool(a['history']) for a in payload['assets'].values()),
                 'total':len(SOURCES),'stale':[s for s,a in payload['assets'].items() if a['stale']],
-                'missing':list(payload['errors']),'timeframe':'D1','experimental':True}
+                'missing':list(payload['errors']),'timeframe':'D1','experimental':True,
+                'provisional':[s for s,a in payload['assets'].items() if a['latest_provisional']],
+                'performance_completed_before':before.isoformat()}
     encoded = json.dumps(payload,ensure_ascii=False,allow_nan=False)
     (out/'results.json').write_text(encoded,encoding='utf-8')
     status = ('<p class="notice">Cập nhật '+escape(payload['generated_at'])+' · Có dữ liệu '
-              +str(manifest['available'])+'/7 mã · Nến có ngày từ '+escape(before.isoformat())
-              +' trở đi chưa được sử dụng. La bàn D1 tự tải lại mỗi lần xuất bản.</p>')
+              +str(manifest['available'])+'/7 mã · Hiển thị nến D1 mới nhất nguồn trả về, kể cả nến đang hình thành. '
+              'Giá và màu nến tạm thời có thể đổi ở lần cập nhật tiếp theo. Hiệu suất chỉ tính kết quả kết thúc trước '
+              +escape(before.isoformat())+'. Dữ liệu được tải lại mỗi lần workflow chạy; trang không tự stream giá.</p>')
     for symbol,a in payload['assets'].items():
         if symbol in payload['errors']:
             status += '<p class="notice">'+symbol+': '+escape(payload['errors'][symbol])+'</p>'

@@ -13,16 +13,20 @@ def candles():
             for i in range(800)]
 
 
-def test_completed_d1_only_missing_source_and_no_old_data_reuse(tmp_path):
-    cs=candles(); cutoff=date(2025,1,15)
+def test_latest_d1_display_completed_outcomes_only_and_no_old_data_reuse(tmp_path):
+    cutoff=date(2025,1,15)
+    cs=[c for c in candles() if c.datetime.date()<=cutoff]
     inputs={s:cs for s in cp.SOURCES}
     payload=cp.build_payload(inputs,cutoff,'2025-01-15T12:00:00Z')
     assert len(payload['assets'])==7
     gold=payload['assets']['XAUUSD']
     assert gold['proxy'] and gold['source_symbol']=='GC=F'
     for a in payload['assets'].values():
-        assert a['last_date']=='2025-01-14'
-        assert all(r['date']<'2025-01-15' for r in a['history'])
+        assert a['last_date']=='2025-01-15'
+        assert a['latest_provisional'] is True
+        assert a['history'][-1]['provisional'] is True
+        assert a['history'][-1]['close']==cs[-1].close
+        assert not a['history'][-2]['provisional']
         assert all(o['exit_date']<'2025-01-15' for r in a['history'] for o in r['outcomes'].values())
     cp.publish(tmp_path/'compass',inputs,cutoff)
     inputs['XAUUSD']=ValueError('Provider unavailable')
@@ -31,6 +35,27 @@ def test_completed_d1_only_missing_source_and_no_old_data_reuse(tmp_path):
     assert manifest['available']==6 and manifest['missing']==['XAUUSD']
     assert saved['assets']['XAUUSD']['history']==[]
     assert 'Provider unavailable' not in (tmp_path/'compass/index.html').read_text(encoding='utf-8')
+
+
+def test_intraday_quote_changes_current_compass_not_completed_history():
+    from dataclasses import replace
+    cutoff=date(2025,1,15)
+    cs=[c for c in candles() if c.datetime.date()<=cutoff]
+    first=cp.build_payload({'BTCUSD':cs},cutoff,'2025-01-15T12:00:00Z')['assets']['BTCUSD']['history']
+    updated=cs[:-1]+[replace(cs[-1],close=150,low=140)]
+    second=cp.build_payload({'BTCUSD':updated},cutoff,'2025-01-15T13:00:00Z')['assets']['BTCUSD']['history']
+    assert first[:-1]==second[:-1]
+    assert first[-1]['forecasts']!=second[-1]['forecasts']
+    assert second[-1]['close']==150 and second[-1]['outcomes']=={}
+    assert '10' not in second[-11]['outcomes']
+    assert '10' in second[-12]['outcomes']
+
+
+def test_next_day_session_label_retained_without_premature_outcome():
+    cs=[c for c in candles() if c.datetime.date()<=date(2025,1,16)]
+    a=cp.build_payload({'XAUUSD':cs},date(2025,1,15),'2025-01-15T23:30:00Z')['assets']['XAUUSD']
+    assert a['last_date']=='2025-01-16' and a['latest_provisional']
+    assert all(o['exit_date']<'2025-01-15' for r in a['history'] for o in r['outcomes'].values())
 
 
 def test_all_failed_refresh_replaces_previous_page_with_status(tmp_path):

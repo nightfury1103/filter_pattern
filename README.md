@@ -300,8 +300,13 @@ python -m filter_pattern.compass_publish --out public/compass
 
 Không cần cache nghiên cứu trong `reports/` để chạy trên CI. Yahoo cung
 cấp GC=F, BTC-USD, ETH-USD, DX-Y.NYB, ^GSPC, SPY; VCI cung cấp E1VFVN30
-(đơn vị nghìn VND theo provider). Loại nến mang ngày UTC hiện tại trở đi,
-ghi ngày cuối từng nguồn, đánh dấu cũ khi quá 5 ngày lịch. Lỗi nguồn được
+(đơn vị nghìn VND theo provider). Hiển thị nến D1 mới nhất nguồn trả về,
+kể cả nến đang hình thành; ghi ngày cuối từng nguồn, đánh dấu cũ khi quá
+5 ngày lịch. Nến mang ngày UTC hiện tại hoặc ngày phiên tiếp theo được
+đánh dấu tạm thời, vẽ nét đứt và được tính vào vị trí la bàn. Giá/màu nến
+này có thể đổi khi workflow chạy lại. Chỉ outcome kết thúc trước ngày
+UTC cập nhật được chấm hiệu suất; chưa dùng nến tạm thời làm kết quả đã
+đóng. Đây là cập nhật mỗi lần workflow chạy, không phải stream giá. Lỗi nguồn được
 hiển thị thiếu dữ liệu và không tự dùng lại snapshot cũ. Phân tích hiệu
 suất chỉ chấm outcome đã hoàn tất. Cache cookie/timezone của Yahoo ở
 `.cache/compass-yahoo`, không đi vào artifact công khai.
