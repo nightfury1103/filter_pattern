@@ -18,6 +18,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+research = [
+    "scikit-learn>=1.6,<2",
+]
 vnstock = [
     "vnstock>=4.0",
 ]

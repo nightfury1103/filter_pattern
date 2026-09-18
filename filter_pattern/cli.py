@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from .direction_backtest import run_direction_backtest
+from .compass_research import run_compass_research
 from .report import (
     DEFAULT_SITE_SIZE_LIMIT_BYTES,
     validate_published_site,
@@ -314,8 +315,55 @@ def main(argv: list[str] | None = None) -> int:
     validate_site_parser.add_argument("--root", required=True, help="published site root")
     validate_site_parser.add_argument("--max-bytes", type=int, default=DEFAULT_SITE_SIZE_LIMIT_BYTES)
 
+    compass_parser = subparsers.add_parser("compass-research", help="compare causal D1 Long/Short/Wait compass models without changing scanner gates")
+    compass_parser.add_argument("--out", required=True, help="research report output directory")
+    compass_parser.add_argument("--period", default="10y", help="Yahoo history period; ignored for CSV/cache")
+    compass_source = compass_parser.add_mutually_exclusive_group()
+    compass_source.add_argument("--config", help="D1 YAML config with exact instrument CSVs")
+    compass_source.add_argument("--cache", help="reuse a saved candles.json without network requests")
+    compass_parser.add_argument("--before", help="exclusive completed-bar cutoff YYYY-MM-DD; default today UTC")
+    compass_parser.add_argument("--rrg-results", help="optional existing RRG results.json snapshot for visual comparison")
+
+    forecast_parser = subparsers.add_parser("compass-forecast", help="research setup-independent D1 direction forecasts; no live gate changes")
+    forecast_parser.add_argument("--out", required=True)
+    forecast_parser.add_argument("--cache", required=True, help="completed D1 candles.json from compass-research")
+    forecast_parser.add_argument("--before", help="exclusive completed-bar cutoff YYYY-MM-DD")
+
+    context_parser = subparsers.add_parser("compass-context", help="D1 intermarket context research with yearly walk-forward; no live changes")
+    context_parser.add_argument("--out", required=True)
+    context_parser.add_argument("--cache", required=True, help="target candles.json from compass-research")
+    context_parser.add_argument("--context-cache", help="reuse context-sources.json offline")
+    context_parser.add_argument("--before", help="exclusive completed-bar cutoff YYYY-MM-DD")
+
+    exact_parser = subparsers.add_parser("compass-exact", help="optimize and render the seven screenshot symbols separately, D1 research only")
+    exact_parser.add_argument("--out", required=True)
+    exact_parser.add_argument("--cache", required=True)
+    exact_parser.add_argument("--context-cache", required=True)
+    exact_parser.add_argument("--before")
+
     args = parser.parse_args(argv)
     try:
+        if args.command == "compass-exact":
+            from .compass_exact import run_exact
+            print(f"Wrote {run_exact(args.out, args.cache, args.context_cache, args.before)}")
+            return 0
+        if args.command == "compass-context":
+            from .compass_context import run_context_research
+            results_path = run_context_research(args.out, args.cache, args.context_cache, args.before)
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "compass-forecast":
+            from .compass_forecast import run_forecast_research
+            results_path = run_forecast_research(args.out, args.cache, args.before)
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
+        if args.command == "compass-research":
+            results_path = run_compass_research(args.out, args.period, args.config, args.before, args.cache, args.rrg_results)
+            print(f"Wrote {results_path}")
+            print(f"Wrote {Path(args.out) / 'index.html'}")
+            return 0
         if args.command == "init-config":
             output_path = _init_config(args.out, args.force)
             print(f"Wrote {output_path}")

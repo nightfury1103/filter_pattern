@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 from .exness import is_exness_supported_symbol
+from .compass_navigation import compass_panel
 
 
 TRIGGER_WARNING_DISTANCE_PCT = 5.0
@@ -189,6 +190,7 @@ def write_site_index(results_paths: list[str | Path], output_path: str | Path) -
     <h1>Filter Pattern</h1>
     <p>Choose a timeframe. Each report shows its exact market-data timestamp so freshness is visible.</p>
     <section class="reports">{cards}</section>
+    {compass_panel(output_file)}
   </main>
 </body>
 </html>
@@ -517,6 +519,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
     market_panel = _market_distribution_panel(scanned_by_market, data_errors_by_market)
     rrg_rows = candidates + trigger_warnings + all_review_setups + near_matches
     rrg_overview = _rrg_market_overview_section(payload, rrg_rows)
+    compass_overview = compass_panel(output_file, embed=True)
     new_count = int(change_counts.get("NEW", 0))
     dropped_count = len(dropped)
     changed_count = sum(int(change_counts.get(key, 0)) for key in ("NEW", "TRIGGERED", "IMPROVED", "WEAKER", "STATUS_CHANGED"))
@@ -1441,6 +1444,7 @@ def write_html_payload(payload: dict, output_path: str | Path) -> Path:
         <div class="stat"><strong>{escape(str(data_errors))}</strong><span>Data unavailable</span></div>
       </section>
       {rrg_overview}
+      {compass_overview}
       <div class="toolbar">
         <input id="search" type="search" placeholder="Search symbol, setup, market, TradingView id">
         <select id="timeframeFilter"><option value="all">All timeframes</option>{timeframe_options}</select>
