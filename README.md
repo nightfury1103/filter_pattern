@@ -108,7 +108,7 @@ Provider options:
 - `--data-provider ccxt`: crypto-only data source; non-crypto symbols are reported as unsupported for this provider.
 - `--data-provider vnstock`: Vietnam-stock-only source for direct VNStock testing.
 
-VNStock is an optional dependency. Install it with `python -m pip install -e '.[vnstock]'` before using the direct VNStock provider or Vietnam fallback data.
+VNStock is an optional dependency. Install it with `python -m pip install --extra-index-url https://vnstocks.com/api/simple -e '.[vnstock]'` before using the direct VNStock provider or Vietnam fallback data.
 For crypto, CCXT tries Binance first, then Bybit, then OKX. This keeps the scanner closer to TradingView USDT-pair charts than Yahoo's `*-USD` crypto data.
 VNStock guest access is rate-limited, so the scanner throttles fallback calls with `VNSTOCK_REQUESTS_PER_MINUTE=18` by default. Use a lower value if the API rejects requests, or a higher value only if your VNStock account allows it.
 
@@ -294,7 +294,7 @@ D1/H4 có mục mở la bàn dưới RRG. Đây là mục thử nghiệm, không
 qualification/setup hoặc thay RRG. D1 được dùng kể cả khi mở từ trang H4.
 
 ```powershell
-python -m pip install -e '.[vnstock]'
+python -m pip install --extra-index-url https://vnstocks.com/api/simple -e '.[vnstock]'
 python -m filter_pattern.compass_publish --out public/compass
 ```
 

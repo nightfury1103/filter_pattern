@@ -290,7 +290,7 @@ jobs:
         run: python -m pip install -e .
 
       - name: Install Compass Vietnam data provider
-        run: python -m pip install -e '.[vnstock]'
+        run: python -m pip install --extra-index-url https://vnstocks.com/api/simple -e '.[vnstock]'
 
       - name: Refresh experimental D1 Market Compass
         timeout-minutes: 10

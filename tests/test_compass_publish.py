@@ -103,4 +103,4 @@ def test_workflow_refreshes_before_combined_reports_and_validation():
     assert text.index(step)<text.index('name: Build combined D1 report')
     assert text.index(step)<text.index('name: Build combined H4 report')
     assert text.index(step)<text.index('name: Validate Pages size')
-    assert "python -m pip install -e '.[vnstock]'" in text
+    assert "python -m pip install --extra-index-url https://vnstocks.com/api/simple -e '.[vnstock]'" in text
