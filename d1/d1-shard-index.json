@@ -1,0 +1,1 @@
+{"schema_version":1,"candidates":[{"symbol":"STOXX50","market":"Index","tradingview_symbol":"EXNESS:STOXX50","timeframe":"D1","technique":"nhathoai","setup":"sb","evidence":{"status":"TRIGGERED","score":100,"reasons":["Direction: Short"],"failures":[]}}]}
