@@ -112,10 +112,12 @@ VNStock is an optional dependency. Install it with the two commands below before
 
 ```bash
 python -m pip install requests beautifulsoup4 pandas seaborn openpyxl pydantic psutil packaging importlib-metadata tenacity pytz cffi
-python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock>=4.0' 'vnai>=2.6.0'
+python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock==4.0.9' 'vnai==2.6.4'
 ```
 
 The second command uses `--no-deps` because vnstock 4.0.x declares `vnstock_ezchart`, an optional chart backend that is quarantined on PyPI and missing from the vnstocks.com index, so `pip install -e '.[vnstock]'` cannot resolve. The scanner does not use that backend.
+
+The versions are pinned because the vendor yanked every vnstock 4.x and vnai release on 2026-11-10 and announced that 4.x stops working in favour of a newer generation; pip installs a yanked release only when it is pinned exactly. Treat VNStock data as unreliable until the provider is migrated or replaced. The Pages workflow only warns if this install fails, and Market Compass then publishes without E1VFVN30.
 
 For crypto, CCXT tries Binance first, then Bybit, then OKX. This keeps the scanner closer to TradingView USDT-pair charts than Yahoo's `*-USD` crypto data.
 VNStock guest access is rate-limited, so the scanner throttles fallback calls with `VNSTOCK_REQUESTS_PER_MINUTE=18` by default. Use a lower value if the API rejects requests, or a higher value only if your VNStock account allows it.
@@ -303,7 +305,7 @@ qualification/setup hoặc thay RRG. D1 được dùng kể cả khi mở từ t
 
 ```powershell
 python -m pip install requests beautifulsoup4 pandas seaborn openpyxl pydantic psutil packaging importlib-metadata tenacity pytz cffi
-python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock>=4.0' 'vnai>=2.6.0'
+python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock==4.0.9' 'vnai==2.6.4'
 python -m filter_pattern.compass_publish --out public/compass
 ```
 

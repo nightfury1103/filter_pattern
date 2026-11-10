@@ -103,5 +103,8 @@ def test_workflow_refreshes_before_combined_reports_and_validation():
     assert text.index(step)<text.index('name: Build combined D1 report')
     assert text.index(step)<text.index('name: Build combined H4 report')
     assert text.index(step)<text.index('name: Validate Pages size')
-    assert "python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock>=4.0' 'vnai>=2.6.0'" in text
+    assert "python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock==4.0.9' 'vnai==2.6.4'" in text
+    install=text[text.index('name: Install Compass Vietnam data provider'):text.index('name: Refresh experimental D1 Market Compass')]
+    assert '::warning::VNStock provider could not be installed' in install
+    assert 'set -euo pipefail' not in install
     assert "-e '.[vnstock]'" not in text
