@@ -290,7 +290,16 @@ jobs:
         run: python -m pip install -e .
 
       - name: Install Compass Vietnam data provider
-        run: python -m pip install --extra-index-url https://vnstocks.com/api/simple -e '.[vnstock]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # vnstock 4.0.x declares vnstock_ezchart, an optional chart backend that
+          # is quarantined on PyPI and absent from vnstocks.com, so a normal
+          # install cannot resolve. Install its real dependencies from PyPI, then
+          # vnstock and vnai alone from the vendor index.
+          python -m pip install requests beautifulsoup4 pandas seaborn openpyxl pydantic psutil packaging importlib-metadata tenacity pytz cffi
+          python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock>=4.0' 'vnai>=2.6.0'
+          python -c "from vnstock import Quote"
 
       - name: Refresh experimental D1 Market Compass
         timeout-minutes: 10
