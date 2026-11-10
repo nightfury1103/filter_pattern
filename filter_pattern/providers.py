@@ -186,7 +186,7 @@ def load_vnstock_ohlcv_many(
         from vnstock import Quote
     except ImportError:
         return {
-            symbol: RuntimeError("vnstock is required for Vietnam market scans. Run: python -m pip install -e '.[vnstock]'")
+            symbol: RuntimeError("vnstock is required for Vietnam market scans. See the VNStock install commands in README.md.")
             for symbol in unique_symbols
         }
 
