@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import io
 import os
-import signal
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime, timedelta, timezone
-from math import isnan
+from math import isfinite, isnan
+
+import requests
 
 from .models import Candle
 
@@ -182,15 +180,7 @@ def load_vnstock_ohlcv_many(
     if not unique_symbols:
         return {}
 
-    try:
-        from vnstock import Quote
-    except ImportError:
-        return {
-            symbol: RuntimeError("vnstock is required for Vietnam market scans. See the VNStock install commands in README.md.")
-            for symbol in unique_symbols
-        }
-
-    active_source = (source or os.environ.get("VNSTOCK_SOURCE") or "VCI").upper()
+    active_source = (source or os.environ.get("VNSTOCK_SOURCE") or "AUTO").strip().upper()
     rpm = _vnstock_requests_per_minute(requests_per_minute)
     delay_seconds = 60.0 / rpm if rpm > 0 else 0.0
     results: dict[str, list[Candle] | Exception] = {}
@@ -203,46 +193,90 @@ def load_vnstock_ohlcv_many(
                 time.sleep(delay_seconds - elapsed)
         last_request_at = time.monotonic()
         try:
-            results[symbol] = _load_vnstock_ohlcv_with_timeout(symbol, period, active_timeframe, active_source, Quote)
+            results[symbol] = _load_vietnam_ohlcv(symbol, period, active_timeframe, active_source)
         except KeyboardInterrupt:
             raise
-        except BaseException as exc:  # noqa: BLE001 - vnstock may raise SystemExit on rate-limit errors.
+        except Exception as exc:  # noqa: BLE001 - returned per symbol for scanner reporting.
             results[symbol] = RuntimeError(f"VNStock {active_source} {active_timeframe} data failed for {symbol}: {exc}")
     return results
 
 
-def _load_vnstock_ohlcv(symbol: str, period: str, timeframe: str, source: str, quote_class) -> list[Candle]:
+_VIETNAM_TIMEZONE = timezone(timedelta(hours=7))
+
+
+def _load_vietnam_ohlcv(symbol: str, period: str, timeframe: str, source: str) -> list[Candle]:
     start, end = _period_date_range(period)
-    interval = "1H" if timeframe == "H4" else "1D"
-    stdout_buffer = io.StringIO()
-    stderr_buffer = io.StringIO()
-    with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-        frame = quote_class(symbol=symbol, source=source).history(start=start, end=end, interval=interval)
-    candles = _candles_from_vnstock_frame(frame, symbol, timeframe)
-    if timeframe == "H4":
-        candles = _resample_to_h4(candles)
-    if not candles:
-        raise ValueError(f"No usable VNStock {timeframe} candles for {symbol}")
-    return candles
+    start_dt = datetime.fromisoformat(start).replace(tzinfo=_VIETNAM_TIMEZONE)
+    now = int(datetime.now(timezone.utc).timestamp())
+    days = (date.fromisoformat(end) - start_dt.date()).days + 1
+    timeout = _vnstock_request_timeout_seconds() or 15
+    sources = [source] if source in {"DNSE", "VCI"} else ["VCI", "DNSE"]
+    errors = []
+    for provider in sources:
+        try:
+            if provider == "DNSE":
+                response = requests.get(
+                    "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock",
+                    params={"from": int(start_dt.timestamp()), "to": now, "symbol": symbol,
+                            "resolution": "1H" if timeframe == "H4" else "1D"},
+                    timeout=timeout,
+                )
+            else:
+                response = requests.post(
+                    "https://trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart",
+                    json={"timeFrame": "ONE_HOUR" if timeframe == "H4" else "ONE_DAY",
+                          "symbols": [symbol], "to": now,
+                          "countBack": min(5000, max(1, days * 24 + 24)) if timeframe == "H4" else max(1, days + 10)},
+                    headers={"Content-Type": "application/json", "Accept": "application/json",
+                             "User-Agent": "Mozilla/5.0", "Origin": "https://trading.vietcap.com.vn",
+                             "Referer": "https://trading.vietcap.com.vn/"},
+                    timeout=timeout,
+                )
+            if not 200 <= response.status_code < 300:
+                raise ValueError(f"HTTP {response.status_code}: {response.text[:200]}")
+            payload = response.json()
+            if provider == "VCI":
+                if not isinstance(payload, list) or len(payload) != 1:
+                    raise ValueError("Vietcap payload must contain one symbol object")
+                payload = payload[0]
+            candles = _candles_from_chart_payload(payload, timeframe, 1000 if provider == "VCI" else 1)
+            candles = [c for c in candles if c.datetime >= start_dt.replace(tzinfo=None)]
+            if timeframe == "H4":
+                candles = _resample_to_h4(candles)
+            if not candles:
+                raise ValueError(f"No usable {timeframe} candles for {symbol}")
+            return candles
+        except Exception as exc:  # noqa: BLE001 - try the backup on HTTP, payload, or empty-data failures.
+            errors.append(f"{provider}: {exc}")
+    raise ValueError("; ".join(errors))
 
 
-def _load_vnstock_ohlcv_with_timeout(symbol: str, period: str, timeframe: str, source: str, quote_class) -> list[Candle]:
-    timeout_seconds = _vnstock_request_timeout_seconds()
-    if timeout_seconds <= 0 or threading.current_thread() is not threading.main_thread():
-        return _load_vnstock_ohlcv(symbol, period, timeframe, source, quote_class)
+def _candles_from_chart_payload(payload, timeframe: str, price_divisor: float) -> list[Candle]:
+    fields = ("t", "o", "h", "l", "c", "v")
+    if not isinstance(payload, dict) or any(not isinstance(payload.get(key), list) for key in fields):
+        raise ValueError("Chart payload requires arrays t, o, h, l, c, v")
+    if len({len(payload[key]) for key in fields}) != 1:
+        raise ValueError("Chart payload arrays t, o, h, l, c, v must have equal length")
 
-    previous_handler = signal.getsignal(signal.SIGALRM)
-
-    def _raise_timeout(_signum, _frame):
-        raise TimeoutError(f"VNStock request timed out after {timeout_seconds}s for {symbol}")
-
-    signal.signal(signal.SIGALRM, _raise_timeout)
-    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
-    try:
-        return _load_vnstock_ohlcv(symbol, period, timeframe, source, quote_class)
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
+    candles: dict[datetime, Candle] = {}
+    for timestamp, *values in zip(*(payload[key] for key in fields)):
+        try:
+            o, h, l, c = (float(value) / price_divisor for value in values[:4])
+            if any(not isfinite(value) or value <= 0 for value in (o, h, l, c)):
+                continue
+            dt = datetime.fromtimestamp(float(timestamp), tz=_VIETNAM_TIMEZONE).replace(tzinfo=None)
+        except (TypeError, ValueError, OverflowError, OSError):
+            continue
+        if timeframe == "D1":
+            dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        try:
+            volume = float(values[4])
+            if not isfinite(volume):
+                volume = 0.0
+        except (TypeError, ValueError):
+            volume = 0.0
+        candles[dt] = Candle(datetime=dt, open=o, high=h, low=l, close=c, volume=volume)
+    return [candles[dt] for dt in sorted(candles)]
 
 
 def _candles_from_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
@@ -275,45 +309,6 @@ def _candles_from_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
 
     if not candles:
         raise ValueError(f"No usable Yahoo Finance {timeframe} candles for {symbol}")
-    return candles
-
-
-def _candles_from_vnstock_frame(frame, symbol: str, timeframe: str) -> list[Candle]:
-    if frame is None or frame.empty:
-        raise ValueError(f"No VNStock {timeframe} data returned for {symbol}")
-
-    frame = frame.copy()
-    frame.columns = [str(column).strip().lower() for column in frame.columns]
-    required = {"time", "open", "high", "low", "close"}
-    missing = required - set(frame.columns)
-    if missing:
-        raise ValueError(f"VNStock data missing columns for {symbol}: {', '.join(sorted(missing))}")
-
-    frame = frame.sort_values("time").drop_duplicates(subset=["time"], keep="last")
-    candles: list[Candle] = []
-    for _, row in frame.iterrows():
-        open_value = _row_value(row, "open")
-        high = _row_value(row, "high")
-        low = _row_value(row, "low")
-        close = _row_value(row, "close")
-        volume = _row_value(row, "volume", default=0.0)
-        if any(_is_nan(value) for value in (open_value, high, low, close)):
-            continue
-        timestamp = row["time"]
-        dt = timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else datetime.fromisoformat(str(timestamp))
-        candles.append(
-            Candle(
-                datetime=dt.replace(tzinfo=None),
-                open=float(open_value),
-                high=float(high),
-                low=float(low),
-                close=float(close),
-                volume=0.0 if _is_nan(volume) else float(volume),
-            )
-        )
-
-    if not candles:
-        raise ValueError(f"No usable VNStock {timeframe} candles for {symbol}")
     return candles
 
 

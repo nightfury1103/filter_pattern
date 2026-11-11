@@ -23,7 +23,7 @@ SOURCES = {
     'DXY': ('DX-Y.NYB', 'Chỉ số USD · Yahoo', False),
     'US500': ('^GSPC', 'S&P 500 cash index · Yahoo', False),
     'SPY': ('SPY', 'SPY ETF · Yahoo', False),
-    'E1VFVN30': ('E1VFVN30', 'E1VFVN30 · VCI · nghìn VND', False),
+    'E1VFVN30': ('E1VFVN30', 'E1VFVN30 · Vietcap/DNSE · nghìn VND', False),
 }
 
 
@@ -41,8 +41,8 @@ def fetch_sources() -> dict[str, list[Candle] | Exception]:
     except Exception as exc:
         downloaded = dict.fromkeys(yahoo, exc)
     try:
-        print('Compass: refreshing E1VFVN30 D1 from VCI (10y)',flush=True)
-        vn = load_vnstock_ohlcv_many(['E1VFVN30'], period='10y', timeframe='D1', source='VCI')
+        print('Compass: refreshing E1VFVN30 D1 from Vietcap/DNSE (10y)',flush=True)
+        vn = load_vnstock_ohlcv_many(['E1VFVN30'], period='10y', timeframe='D1')
     except Exception as exc:
         vn = {'E1VFVN30': exc}
     return {s:(vn if s == 'E1VFVN30' else downloaded).get(ticker, ValueError('No data returned'))

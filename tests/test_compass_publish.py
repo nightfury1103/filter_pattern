@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 import json
+import re
 from pathlib import Path
 
 from filter_pattern import compass_publish as cp
@@ -94,7 +95,7 @@ def test_fetch_uses_existing_daily_providers_and_isolates_failure(monkeypatch):
     assert isinstance(result['E1VFVN30'],RuntimeError)
     assert calls[0][2]=={'period':'10y','timeframe':'D1'}
     assert 'GC=F' in calls[0][1] and 'BTC-USD' in calls[0][1]
-    assert calls[1][2]['source']=='VCI'
+    assert calls[1][2]=={'period':'10y','timeframe':'D1'}
 
 
 def test_workflow_refreshes_before_combined_reports_and_validation():
@@ -103,8 +104,6 @@ def test_workflow_refreshes_before_combined_reports_and_validation():
     assert text.index(step)<text.index('name: Build combined D1 report')
     assert text.index(step)<text.index('name: Build combined H4 report')
     assert text.index(step)<text.index('name: Validate Pages size')
-    assert "python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock==4.0.9' 'vnai==2.6.4'" in text
-    install=text[text.index('name: Install Compass Vietnam data provider'):text.index('name: Refresh experimental D1 Market Compass')]
-    assert '::warning::VNStock provider could not be installed' in install
-    assert 'set -euo pipefail' not in install
-    assert "-e '.[vnstock]'" not in text
+    assert 'vnstocks.com' not in text
+    assert not re.search(r"pip install[^\n]*(?:vnstock|vnai)", text, re.IGNORECASE)
+    assert 'name: Install Compass Vietnam data provider' not in text

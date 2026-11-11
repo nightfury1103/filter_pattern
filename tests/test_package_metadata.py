@@ -11,5 +11,6 @@ def test_default_dependencies_do_not_require_vnstock() -> None:
     optional_dependencies = pyproject["project"]["optional-dependencies"]
 
     assert not any(dependency.startswith("vnstock") for dependency in default_dependencies)
-    assert "vnstock" in optional_dependencies
-    assert any(dependency.startswith("vnstock") for dependency in optional_dependencies["vnstock"])
+    assert "vnstock" not in optional_dependencies
+    all_dependencies = default_dependencies + [dep for group in optional_dependencies.values() for dep in group]
+    assert not any(dep.lower().startswith(("vnstock", "vnai")) for dep in all_dependencies)

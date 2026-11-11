@@ -108,19 +108,10 @@ Provider options:
 - `--data-provider ccxt`: crypto-only data source; non-crypto symbols are reported as unsupported for this provider.
 - `--data-provider vnstock`: Vietnam-stock-only source for direct VNStock testing.
 
-VNStock is an optional dependency. Install it with the two commands below before using the direct VNStock provider or Vietnam fallback data.
-
-```bash
-python -m pip install requests beautifulsoup4 pandas seaborn openpyxl pydantic psutil packaging importlib-metadata tenacity pytz cffi
-python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock==4.0.9' 'vnai==2.6.4'
-```
-
-The second command uses `--no-deps` because vnstock 4.0.x declares `vnstock_ezchart`, an optional chart backend that is quarantined on PyPI and missing from the vnstocks.com index, so `pip install -e '.[vnstock]'` cannot resolve. The scanner does not use that backend.
-
-The versions are pinned because the vendor yanked every vnstock 4.x and vnai release on 2026-11-10 and announced that 4.x stops working in favour of a newer generation; pip installs a yanked release only when it is pinned exactly. Treat VNStock data as unreliable until the provider is migrated or replaced. The Pages workflow only warns if this install fails, and Market Compass then publishes without E1VFVN30.
+Vietnam fallback data comes from the public Vietcap chart API with DNSE Entrade as backup. No extra install or API key is needed, including for `--data-provider vnstock`.
 
 For crypto, CCXT tries Binance first, then Bybit, then OKX. This keeps the scanner closer to TradingView USDT-pair charts than Yahoo's `*-USD` crypto data.
-VNStock guest access is rate-limited, so the scanner throttles fallback calls with `VNSTOCK_REQUESTS_PER_MINUTE=18` by default. Use a lower value if the API rejects requests, or a higher value only if your VNStock account allows it.
+The scanner throttles calls to these public Vietnam chart APIs with `VNSTOCK_REQUESTS_PER_MINUTE=18` by default. Use a lower value if the APIs reject requests.
 
 Technique behavior:
 
@@ -304,14 +295,13 @@ D1/H4 có mục mở la bàn dưới RRG. Đây là mục thử nghiệm, không
 qualification/setup hoặc thay RRG. D1 được dùng kể cả khi mở từ trang H4.
 
 ```powershell
-python -m pip install requests beautifulsoup4 pandas seaborn openpyxl pydantic psutil packaging importlib-metadata tenacity pytz cffi
-python -m pip install --no-deps --index-url https://vnstocks.com/api/simple 'vnstock==4.0.9' 'vnai==2.6.4'
 python -m filter_pattern.compass_publish --out public/compass
 ```
 
 Không cần cache nghiên cứu trong `reports/` để chạy trên CI. Yahoo cung
-cấp GC=F, BTC-USD, ETH-USD, DX-Y.NYB, ^GSPC, SPY; VCI cung cấp E1VFVN30
-(đơn vị nghìn VND theo provider). Hiển thị nến D1 mới nhất nguồn trả về,
+cấp GC=F, BTC-USD, ETH-USD, DX-Y.NYB, ^GSPC, SPY; API biểu đồ công khai
+Vietcap cung cấp E1VFVN30, dự phòng bằng DNSE Entrade (đơn vị nghìn VND).
+Không cần cài thêm gói hay API key. Hiển thị nến D1 mới nhất nguồn trả về,
 kể cả nến đang hình thành; ghi ngày cuối từng nguồn, đánh dấu cũ khi quá
 5 ngày lịch. Nến mang ngày UTC hiện tại hoặc ngày phiên tiếp theo được
 đánh dấu tạm thời, vẽ nét đứt và được tính vào vị trí la bàn. Giá/màu nến
