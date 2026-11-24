@@ -124,3 +124,35 @@ def test_pages_workflow_retries_transient_deploy_failures() -> None:
     assert "steps.deployment_retry.outcome == 'failure'" in by_name[attempts[2]]["if"]
     assert "Wait for Pages artifact" not in names
     assert "actions/deploy-pages@v4" not in workflow
+
+    first, second, third = (by_name[name]["id"] for name in attempts)
+    assert len({first, second, third}) == 3
+    assert by_name["Wait before Pages deploy attempt 2"]["if"] == f"${{{{ steps.{first}.outcome == 'failure' }}}}"
+    assert by_name[attempts[1]]["if"] == f"${{{{ steps.{first}.outcome == 'failure' }}}}"
+    both_failed = f"${{{{ steps.{first}.outcome == 'failure' && steps.{second}.outcome == 'failure' }}}}"
+    assert by_name["Wait before Pages deploy attempt 3"]["if"] == both_failed
+    assert by_name[attempts[2]]["if"] == both_failed
+    page_url = (
+        f"${{{{ steps.{first}.outputs.page_url || steps.{second}.outputs.page_url"
+        f" || steps.{third}.outputs.page_url }}}}"
+    )
+    deploy_job = yaml.safe_load(workflow)["jobs"]["deploy"]
+    assert deploy_job["environment"]["url"] == page_url
+    assert by_name["Verify served deployment"]["env"]["PAGE_URL"] == page_url
+
+
+def test_pages_deploy_attempts_fit_inside_the_job_timeout() -> None:
+    deploy_job = yaml.safe_load(Path(".github/workflows/scanner-pages-v2.yml").read_text())["jobs"]["deploy"]
+    attempts = [step for step in deploy_job["steps"] if step.get("uses") == "actions/deploy-pages@v5"]
+
+    assert len(attempts) == 3
+    for step in attempts:
+        assert step["with"]["timeout"] <= 300000
+        assert step["timeout-minutes"] <= 6
+    pauses = sum(
+        int(step["run"].split()[-1]) for step in deploy_job["steps"] if step["name"].startswith("Wait before Pages deploy")
+    )
+    verify_minutes = 12
+    build_minutes = 15
+    worst_case = build_minutes + sum(step["timeout-minutes"] for step in attempts) + pauses / 60 + verify_minutes
+    assert worst_case <= deploy_job["timeout-minutes"]

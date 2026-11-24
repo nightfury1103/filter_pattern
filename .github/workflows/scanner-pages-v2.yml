@@ -267,7 +267,9 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Build ~10 min + up to three 5-minute deploy attempts + 3 min of pauses
+    # + up to 12 min of served-marker verification.
+    timeout-minutes: 60
     needs:
       - scan_d1_shard
       - scan_h4_shard
@@ -452,7 +454,10 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         continue-on-error: true
+        timeout-minutes: 6
         uses: actions/deploy-pages@v5
+        with:
+          timeout: 300000
 
       - name: Wait before Pages deploy attempt 2
         if: ${{ steps.deployment.outcome == 'failure' }}
@@ -462,7 +467,10 @@ jobs:
         id: deployment_retry
         if: ${{ steps.deployment.outcome == 'failure' }}
         continue-on-error: true
+        timeout-minutes: 6
         uses: actions/deploy-pages@v5
+        with:
+          timeout: 300000
 
       - name: Wait before Pages deploy attempt 3
         if: ${{ steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure' }}
@@ -471,7 +479,10 @@ jobs:
       - name: Deploy to GitHub Pages (attempt 3)
         id: deployment_retry2
         if: ${{ steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure' }}
+        timeout-minutes: 6
         uses: actions/deploy-pages@v5
+        with:
+          timeout: 300000
 
       - name: Verify served deployment
         shell: bash
