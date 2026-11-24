@@ -274,7 +274,7 @@ jobs:
     if: ${{ always() && (needs.scan_d1_shard.result == 'success' || needs.scan_d1_shard.result == 'skipped') && (needs.scan_h4_shard.result == 'success' || needs.scan_h4_shard.result == 'skipped') && (needs.scan_d1_shard.result == 'success' || needs.scan_h4_shard.result == 'success') }}
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url || steps.deployment_retry2.outputs.page_url }}
 
     steps:
       - name: Checkout scanner source
@@ -440,48 +440,43 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: public
+          include-hidden-files: true
 
-      - name: Wait for Pages artifact
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -uo pipefail
-          # deploy-pages sometimes runs before the API lists the artifact just
-          # uploaded and fails with "No artifacts named github-pages".
-          API_URL="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages"
-          for attempt in {1..36}; do
-            count="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API_URL" | jq -r '.total_count // 0' 2>/dev/null || echo 0)"
-            if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 1 )); then
-              echo "Pages artifact visible after attempt ${attempt}."
-              sleep 10
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::warning::Pages artifact not listed after 180s; trying the deploy anyway."
-
+      # GitHub's artifact and Pages services intermittently fail a deploy with
+      # "No artifacts named github-pages", an HTML reply to ListArtifacts, or
+      # "Failed to create deployment (status: 500)" (runs 1835-1843). These are
+      # server-side and pass on a later attempt, so deploy up to three times.
       - name: Deploy to GitHub Pages
         id: deployment
         continue-on-error: true
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
-      - name: Wait before retrying Pages deploy
+      - name: Wait before Pages deploy attempt 2
         if: ${{ steps.deployment.outcome == 'failure' }}
-        run: sleep 45
+        run: sleep 60
 
-      - name: Retry deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (attempt 2)
         id: deployment_retry
         if: ${{ steps.deployment.outcome == 'failure' }}
-        uses: actions/deploy-pages@v4
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Wait before Pages deploy attempt 3
+        if: ${{ steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure' }}
+        run: sleep 120
+
+      - name: Deploy to GitHub Pages (attempt 3)
+        id: deployment_retry2
+        if: ${{ steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure' }}
+        uses: actions/deploy-pages@v5
 
       - name: Verify served deployment
         shell: bash
         env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url || steps.deployment_retry2.outputs.page_url }}
           EXPECTED_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail

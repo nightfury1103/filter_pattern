@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 
 def test_pages_workflow_uses_broad_d1_universe_for_sp500_coverage() -> None:
     workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
@@ -93,7 +95,32 @@ def test_pages_workflow_verifies_the_served_deployment_marker() -> None:
     assert "public/deployment.json" in workflow
     assert '"run_id": "${{ github.run_id }}"' in workflow
     assert "Verify served deployment" in workflow
-    assert "PAGE_URL: ${{ steps.deployment.outputs.page_url }}" in workflow
+    assert (
+        "PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url"
+        " || steps.deployment_retry2.outputs.page_url }}"
+    ) in workflow
     assert 'MARKER_URL="${PAGE_URL%/}/deployment.json"' in workflow
     assert workflow.index("public/deployment.json") < workflow.index("actions/upload-pages-artifact")
-    assert workflow.index("actions/deploy-pages@v4") < workflow.index("Verify served deployment")
+    assert workflow.index("actions/deploy-pages@v5") < workflow.index("Verify served deployment")
+
+
+def test_pages_workflow_retries_transient_deploy_failures() -> None:
+    workflow = Path(".github/workflows/scanner-pages-v2.yml").read_text()
+    steps = yaml.safe_load(workflow)["jobs"]["deploy"]["steps"]
+    by_name = {step["name"]: step for step in steps}
+    names = [step["name"] for step in steps]
+
+    assert by_name["Upload Pages artifact"]["uses"] == "actions/upload-pages-artifact@v5"
+    assert by_name["Upload Pages artifact"]["with"]["include-hidden-files"] is True
+    attempts = ["Deploy to GitHub Pages", "Deploy to GitHub Pages (attempt 2)", "Deploy to GitHub Pages (attempt 3)"]
+    order = ["Upload Pages artifact", attempts[0], "Wait before Pages deploy attempt 2", attempts[1],
+             "Wait before Pages deploy attempt 3", attempts[2], "Verify served deployment"]
+    assert [names.index(name) for name in order] == sorted(names.index(name) for name in order)
+    assert all(by_name[name]["uses"] == "actions/deploy-pages@v5" for name in attempts)
+    assert by_name[attempts[0]].get("continue-on-error") is True
+    assert by_name[attempts[1]].get("continue-on-error") is True
+    assert "continue-on-error" not in by_name[attempts[2]]
+    assert by_name[attempts[1]]["if"] == "${{ steps.deployment.outcome == 'failure' }}"
+    assert "steps.deployment_retry.outcome == 'failure'" in by_name[attempts[2]]["if"]
+    assert "Wait for Pages artifact" not in names
+    assert "actions/deploy-pages@v4" not in workflow
