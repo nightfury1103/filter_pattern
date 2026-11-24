@@ -274,7 +274,7 @@ jobs:
     if: ${{ always() && (needs.scan_d1_shard.result == 'success' || needs.scan_d1_shard.result == 'skipped') && (needs.scan_h4_shard.result == 'success' || needs.scan_h4_shard.result == 'skipped') && (needs.scan_d1_shard.result == 'success' || needs.scan_h4_shard.result == 'success') }}
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
 
     steps:
       - name: Checkout scanner source
@@ -444,14 +444,44 @@ jobs:
         with:
           path: public
 
+      - name: Wait for Pages artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          # deploy-pages sometimes runs before the API lists the artifact just
+          # uploaded and fails with "No artifacts named github-pages".
+          API_URL="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages"
+          for attempt in {1..36}; do
+            count="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API_URL" | jq -r '.total_count // 0' 2>/dev/null || echo 0)"
+            if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 1 )); then
+              echo "Pages artifact visible after attempt ${attempt}."
+              sleep 10
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::Pages artifact not listed after 180s; trying the deploy anyway."
+
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait before retrying Pages deploy
+        if: ${{ steps.deployment.outcome == 'failure' }}
+        run: sleep 45
+
+      - name: Retry deploy to GitHub Pages
+        id: deployment_retry
+        if: ${{ steps.deployment.outcome == 'failure' }}
         uses: actions/deploy-pages@v4
 
       - name: Verify served deployment
         shell: bash
         env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
           EXPECTED_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
