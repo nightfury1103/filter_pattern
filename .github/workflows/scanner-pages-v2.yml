@@ -267,8 +267,8 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    # Build ~10 min + up to three 5-minute deploy attempts + 3 min of pauses
-    # + up to 12 min of served-marker verification.
+    # Build ~15 min + three deploy attempts capped at 6 min + 3 min of pauses
+    # + served-marker verification capped at 13 min = 49 min.
     timeout-minutes: 60
     needs:
       - scan_d1_shard
@@ -485,6 +485,9 @@ jobs:
           timeout: 300000
 
       - name: Verify served deployment
+        # 48 polls can take up to 28 min (20s curl + 15s sleep); cap it so the
+        # step, not the whole job, fails if Pages never serves this run.
+        timeout-minutes: 13
         shell: bash
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url || steps.deployment_retry2.outputs.page_url }}

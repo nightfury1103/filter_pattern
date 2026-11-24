@@ -152,7 +152,9 @@ def test_pages_deploy_attempts_fit_inside_the_job_timeout() -> None:
     pauses = sum(
         int(step["run"].split()[-1]) for step in deploy_job["steps"] if step["name"].startswith("Wait before Pages deploy")
     )
-    verify_minutes = 12
+    verify = next(step for step in deploy_job["steps"] if step["name"] == "Verify served deployment")
+    verify_minutes = verify["timeout-minutes"]
+    assert verify_minutes <= 13
     build_minutes = 15
     worst_case = build_minutes + sum(step["timeout-minutes"] for step in attempts) + pauses / 60 + verify_minutes
     assert worst_case <= deploy_job["timeout-minutes"]
